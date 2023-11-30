@@ -2,6 +2,7 @@ from .motions import hexapod, phi, acscontroller
 from .interferometers import qds
 import time
 import numpy as np
+import matplotlib.pyplot as plt
 
 def disconnect():
     hexapod.disconnect()
@@ -23,8 +24,9 @@ def fly_test(sec=2, dev=0):
     t_point = []
     k = 0
     while (t - t0) < sec:
-        rel, abs = qds.get_position()
-        relpos.append([rel[0], rel[1], rel[2]])
+        rel, a = qds.get_position()
+        r = rel[0]
+        relpos.append([r[0], r[1], r[2]])
         #abspos.append([abs[0], abs[1], abs[2]])
         time.sleep(0.0001)
         t = time.time()
@@ -37,3 +39,7 @@ def fly_test(sec=2, dev=0):
     t_point = np.asarray(t_point)
     t_point = t_point-t0
     return relpos, t_point
+
+def plotdata(t, r, col = 0):
+    plt.plot(t, r[:,col])
+    plt.show()

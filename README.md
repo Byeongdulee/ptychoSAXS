@@ -25,3 +25,8 @@ To reconnect
 ```python
 pts.connect(pts)
 ```
+Test the flyscan
+```python
+r, t = pts.fly_test(2)
+pts.plotdata(t, r, col=0)
+```
