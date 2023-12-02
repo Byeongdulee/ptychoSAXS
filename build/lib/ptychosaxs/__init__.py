@@ -43,3 +43,18 @@ def fly_test(sec=2, dev=0):
 def plotdata(t, r, col = 0):
     plt.plot(t, r[:,col])
     plt.show()
+
+def plot_qds_hex(t, r, col=0, axis = 'X', timeshift=0, filename=""):
+    data = hexapod.get_records()
+    if isinstance(data, type({})):
+        l_data = [data]
+    else:
+        l_data = data
+    for data in l_data:
+        ndata = data[axis][0].size
+        plt.plot(range(0, ndata), data[axis][1]*1000, 'b')
+        plt.plot(range(0, ndata), data[axis][0]*1000, 'r')
+    plt.plot(t*1000+timeshift, r[:, col]/1000-r[-1, col]/1000+data[axis][0][-1]*1000, 'k')        
+    plt.ylabel('Positions (um)')
+    plt.xlabel(f"Time (/{data['Sample Time']} s)")
+    plt.show()

@@ -12,6 +12,10 @@
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
+dist/
+build/
+.history
+*.pyc
 
 # Mono auto generated files
 mono_crash.*
