@@ -27,6 +27,8 @@ pts.connect(pts)
 ```
 Test the flyscan
 ```python
-r, t = pts.fly_test(2)
-pts.plotdata(t, r, col=0)
+pts.hexapod.set_traj(5, 0.01, -0.005, 50, 0.01) # total scantime: 5s, scan range: 0.01mm, scan start position: -0.005mm, points to wait until it reaches linear motion, trigger period: 0.01 s.
+pts.fly_test() # this will save qds data into rpos and tpos variables.
+pts.plot_qds_hex(timeshift= -180, filename="test2")
+pts.plot_qds_hex(timeshift= -180) # this will plot data only
 ```
