@@ -1,5 +1,5 @@
 from .motions import hexapod, phi, acscontroller
-from .interferometers import qds
+from .interferometers import qds, plot_position
 import time
 import numpy as np
 import matplotlib.pyplot as plt
