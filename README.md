@@ -9,7 +9,7 @@ python setup.py install
 
 ## Usage
 ```python
-import ptychosaxs as pts
+from ptychosaxs import pts
 pts.hexapod.get_pos()
 pts.phi.rpos
 import time
