@@ -12,9 +12,9 @@
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
-dist/
-build/
-ptychoSAXS.egg-info/
+dist
+build
+ptychoSAXS.egg-info
 .history
 *.pyc
 
