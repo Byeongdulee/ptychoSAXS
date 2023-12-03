@@ -131,34 +131,55 @@ class instruments(object):
     def posx(self):
         pos = self.hexapod.get_pos()
         return pos['X']
-
+    @posx.setter
+    def posx(self, value):
+        self.hexapod.mv('X', value)
+    
     @property
     def posy(self):
         pos = self.hexapod.get_pos()
         return pos['Y']
+    @posy.setter
+    def posy(self, value):
+        self.hexapod.mv('Y', value)
 
     @property
     def posz(self):
         pos = self.hexapod.get_pos()
         return pos['Z']
+    @posz.setter
+    def posz(self, value):
+        self.hexapod.mv('Z', value)
     
     @property
     def posu(self):
         pos = self.hexapod.get_pos()
         return pos['U']
+    @posu.setter
+    def posu(self, value):
+        self.hexapod.mv('U', value)
 
     @property
     def posv(self):
         pos = self.hexapod.get_pos()
         return pos['V']
+    @posv.setter
+    def posv(self, value):
+        self.hexapod.mv('V', value)
 
     @property
     def posw(self):
         pos = self.hexapod.get_pos()
         return pos['W']
+    @posw.setter
+    def posw(self, value):
+        self.hexapod.mv('W', value)
 
     @property
     def posphi(self):
         return self.phi.fpos
+    @posphi.setter
+    def posphi(self, value):
+        self.mvphi(value)
 
 ptychosaxs = instruments()
