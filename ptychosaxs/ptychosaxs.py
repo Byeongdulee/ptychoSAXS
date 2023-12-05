@@ -1,4 +1,4 @@
-from .motions import Hexapod, Axis, hexapodIP, acsIP, hexapod, phi, acscontroller
+from .motions import Hexapod, Axis, hexapodIP, acsIP, hexapod, phi, acscontroller, acsc
 from .interferometers import qds
 from .interferometers import plot_position
 import time
@@ -11,15 +11,19 @@ class instruments(object):
         self.phi = phi
         self.qds = qds
 
-    def mvphi(self, target, relative=False):
+    def mvphi(self, target, relative=False, wait=True):
         if relative:
             c = "relative"
         else:
             c = "absolute"        
-        self.phi.ptp(target=target, coordinates=c)
+        if wait:
+            wait = acsc.SYNCHRONOUS
+        else:
+            wait = acsc.ASYNCHRONOUS
+        self.phi.ptp(target=target, coordinates=c, wait=wait)
 
-    def mvrphi(self, val):
-        self.phimv(val, relative=True)
+    def mvrphi(self, val, wait=True):
+        self.mvphi(val, relative=True, wait=wait)
 
     def mvx(self, target, relative=False):
         if relative:
@@ -28,7 +32,7 @@ class instruments(object):
         self.hexapod.mv('X', target)
 
     def mvrx(self, target):
-        self.xmv(target, relative=True)
+        self.mvx(target, relative=True)
 
     def disconnect(self):
         self.hexapod.disconnect()
@@ -41,6 +45,37 @@ class instruments(object):
         self.qds.connect()
         #self.phi = Axis(acscontroller, 0)
 
+    def scan(self, axis, start_pos, end_pos, step):
+        '''step-scan motor axis and read interferometer positions. '''
+        pos = np.arange(start_pos, end_pos+step, step)
+        rpos = []
+        plt.ion()
+        for i, value in enumerate(pos):
+            # move to the position
+            if axis == "phi":
+                self.mvphi(value)
+            else:
+                self.mv(axis, value)
+                time.sleep(0.1)
+                while not self.hexapod.isattarget():
+                    time.sleep(0.1)
+            # read a qds value
+            r, a = self.qds.get_position()
+            rpos.append([r[0], r[1], r[2]])
+
+            # plot data
+            plt.gca().cla()
+            r = np.asarray(rpos)
+            plt.plot(pos[0:i], r[0:i,0]/1000)
+            plt.ylabel('Positions (um)')
+            plt.xlabel(f"Time (s)")
+            plt.draw()
+            plt.pause(0.1)
+        rpos = np.asarray(rpos)
+        plt.show(block=True)
+
+        return pos, rpos
+        
     def fly_test(self, sec=0, dev=0):
        
         t0 = time.time()
