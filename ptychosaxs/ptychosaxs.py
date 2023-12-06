@@ -45,32 +45,45 @@ class instruments(object):
         self.qds.connect()
         #self.phi = Axis(acscontroller, 0)
 
-    def scan(self, axis, start_pos, end_pos, step):
+    def scan(self, axis, start_pos, end_pos, step, col=0):
         '''step-scan motor axis and read interferometer positions. '''
         pos = np.arange(start_pos, end_pos+step, step)
         rpos = []
         plt.ion()
+        print(f"{axis} is moving to {start_pos}.....")
         for i, value in enumerate(pos):
             # move to the position
             if axis == "phi":
+                unit = "deg"
                 self.mvphi(value)
+                ismoving = True
+                time.sleep(0.1)
+                while ismoving:
+                    b = self.phi.motor_state
+                    ismoving = b['moving']
+                    r, a = self.qds.get_position()
+                    time.sleep(0.1)
             else:
+                unit = "mm"
                 self.mv(axis, value)
                 time.sleep(0.1)
                 while not self.hexapod.isattarget():
+                    r, a = self.qds.get_position()
                     time.sleep(0.1)
             # read a qds value
             r, a = self.qds.get_position()
+            r = r[0]
             rpos.append([r[0], r[1], r[2]])
 
             # plot data
             plt.gca().cla()
             r = np.asarray(rpos)
-            plt.plot(pos[0:i], r[0:i,0]/1000)
+            plt.plot(pos[0:i], r[0:i,col]/1000)
             plt.ylabel('Positions (um)')
-            plt.xlabel(f"Time (s)")
+            plt.xlabel(f"{axis} ({unit})")
             plt.draw()
             plt.pause(0.1)
+        print("Scan done.")
         rpos = np.asarray(rpos)
         plt.show(block=True)
 
@@ -129,6 +142,11 @@ class instruments(object):
             if len(filename)>0:
                 dt2 = np.column_stack((x, data[axis][0]*1000, data[axis][1]*1000))
                 np.savetxt(filename+"_hexapod"+".dat", dt2, fmt="%1.8e %1.8e %1.8e")
+
+    def savedata(self, filename, t, r, col=0):
+        if len(filename)>0:
+            dt = np.column_stack((t, r[:,col]))
+            np.savetxt(filename, dt, fmt='%1.8e %1.8e')
 
     def plot_qds_hex(self, col=0, axis = 'X', timeshift=0, filename=""):
     #    global rpos
