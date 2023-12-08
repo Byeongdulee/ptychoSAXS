@@ -44,7 +44,12 @@ class instruments(object):
         self.phi.controller.connect(acsIP)
         self.qds.connect()
         #self.phi = Axis(acscontroller, 0)
-
+    
+    def disp(self):
+        while self.phi.moving:
+            print(self.phi.fpos)
+            time.sleep(1)
+        
     def scan(self, axis, start_pos, end_pos, step, col=0):
         '''step-scan motor axis and read interferometer positions. '''
         pos = np.arange(start_pos, end_pos+step, step)
