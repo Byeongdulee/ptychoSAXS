@@ -16,7 +16,7 @@ import time
 from ptychosaxs import pts
 
 class tweakmotors(QMainWindow):
-    def __init__(self, pts):
+    def __init__(self):
         super(tweakmotors, self).__init__()
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         guiName = "motorGUI.ui"
@@ -37,13 +37,13 @@ class tweakmotors(QMainWindow):
         self.ui.pb_tweak6R.clicked.connect(lambda: self.mvr(5, 1))
         self.ui.pb_tweak7L.clicked.connect(lambda: self.mvr(6, -1))
         self.ui.pb_tweak7R.clicked.connect(lambda: self.mvr(6, 1))
-        self.ui.ed_1.clicked.connect(lambda: self.mv(0))
-        self.ui.ed_2.clicked.connect(lambda: self.mv(1))
-        self.ui.ed_3.clicked.connect(lambda: self.mv(2))
-        self.ui.ed_4.clicked.connect(lambda: self.mv(3))
-        self.ui.ed_5.clicked.connect(lambda: self.mv(4))
-        self.ui.ed_6.clicked.connect(lambda: self.mv(5))
-        self.ui.ed_7.clicked.connect(lambda: self.mv(6))
+        self.ui.ed_1.returnPressed.connect(lambda: self.mv(0))
+        self.ui.ed_2.returnPressed.connect(lambda: self.mv(1))
+        self.ui.ed_3.returnPressed.connect(lambda: self.mv(2))
+        self.ui.ed_4.returnPressed.connect(lambda: self.mv(3))
+        self.ui.ed_5.returnPressed.connect(lambda: self.mv(4))
+        self.ui.ed_6.returnPressed.connect(lambda: self.mv(5))
+        self.ui.ed_7.returnPressed.connect(lambda: self.mv(6))
         self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
         self.pts.signals.AxisNameSignal.connect(self.update_motorname)
 
@@ -77,6 +77,7 @@ class tweakmotors(QMainWindow):
         self.ui.lb_7.setText("%0.4f"%self.pts.posphi)
 
     def update_motorpos(self, value):
+        #print(value, " this in rungui.py")
         if self.signalmotor == 'X':
             self.ui.lb_1.setText("%0.4f"%value)
         if self.signalmotor == 'Y':
@@ -97,6 +98,7 @@ class tweakmotors(QMainWindow):
 
     def mv(self, motornumber):
         axis = self.motornames[motornumber]
+        self.signalmotor = axis
         if motornumber ==0:
             val = float(self.ui.ed_1.text())
         if motornumber ==1:
@@ -116,6 +118,7 @@ class tweakmotors(QMainWindow):
 
     def mvr(self, motornumber, sign):
         axis = self.motornames[motornumber]
+        self.signalmotor = axis
         if motornumber ==0:
             val = float(self.ui.ed_1_tweak.text())
         if motornumber ==1:
@@ -130,23 +133,25 @@ class tweakmotors(QMainWindow):
             val = float(self.ui.ed_6_tweak.text())
         if motornumber ==6:
             val = float(self.ui.ed_7_tweak.text())
+        print(sign*val)
         self.pts.mvr(axis, sign*val)
         self.updatepos()
     
-    def update_qds(self, value):
+    def update_qds(self):
         r, a = self.pts.qds.get_position()
         r = r[0]
-        self.ui.lcd_X.display("%0.3f" % r[0]/1000-self.ref_X)        
-        self.ui.lcd_Z.display("%0.3f" % r[1]/1000-self.ref_Z)
+#        print(r)
+        self.ui.lcd_X.display("%0.3f" % (r[0]/1000-self.ref_X))     
+        self.ui.lcd_Z.display("%0.3f" % (r[1]/1000-self.ref_Z))
     
     def reset_qdsX(self):
-        self.ref_X = float(self.ui.lcd_X.Text())    
+        self.ref_X = self.ui.lcd_X.value()  
 
     def reset_qdsZ(self):
-        self.ref_Z = float(self.ui.lcd_Z.Text())
+        self.ref_Z = self.ui.lcd_Z.value()
 
     def record_qdsX(self, value):
-        txt = self.ui.lcd_X.Text()
+        txt = str(self.ui.lcd_X.value())
         if value==1:
             self.ui.x1.setText(txt)
         if value==2:
@@ -155,7 +160,7 @@ class tweakmotors(QMainWindow):
             self.ui.x3.setText(txt)
 
     def record_qdsZ(self, value):
-        txt = self.ui.lcd_Z.Text()
+        txt = str(self.ui.lcd_Z.value())
         if value==1:
             self.ui.z1.setText(txt)
         if value==2:
@@ -169,5 +174,5 @@ if __name__ == "__main__":
 #    logging.basicConfig(level=logging.INFO)
     from PyQt5.QtWidgets import QMainWindow
     app = QApplication(sys.argv)
-    a = tweakmotors(QMainWindow)
+    a = tweakmotors()
     sys.exit(app.exec_())

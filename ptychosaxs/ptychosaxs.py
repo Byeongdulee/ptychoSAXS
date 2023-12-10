@@ -43,9 +43,12 @@ class instruments(object):
                 ismoving = True
                 time.sleep(0.1)
                 while ismoving:
-                    b = self.phi.motor_state
-                    self.signals.AxisPosSignal.emit(self.posphi)
-                    ismoving = b['moving']
+                    try:
+                        b = self.phi.motor_state
+                        self.signals.AxisPosSignal.emit(float(self.posphi))
+                        ismoving = b['moving']
+                    except:
+                        ismoving = True
                     time.sleep(0.1)
         else:
             self.hexapod.mv(axis, target)
@@ -53,20 +56,23 @@ class instruments(object):
                 time.sleep(0.02)
                 while not self.hexapod.isattarget():
                     pos = self.hexapod.get_pos()
-                    self.signals.AxisPosSignal.emit(pos[axis])
+                    self.signals.AxisPosSignal.emit(float(pos[axis]))
                     time.sleep(0.1)
 
     def mvr(self, axis, target, wait=True):
         if axis == "phi":
             self.mvphi(self.posphi + target)
+            #print(self.posphi, " before move")
             if wait:
                 ismoving = True
-                time.sleep(0.1)
+                time.sleep(0.2)
                 while ismoving:
                     b = self.phi.motor_state
+                    #print(self.posphi, " during move")
                     self.signals.AxisPosSignal.emit(self.posphi)
                     ismoving = b['moving']
                     time.sleep(0.02)
+            #print(self.posphi, " after move")
         else:
             pos = self.hexapod.get_pos()
             self.hexapod.mv(axis, pos[axis]+target)
@@ -74,7 +80,12 @@ class instruments(object):
                 time.sleep(0.02)
                 while not self.hexapod.isattarget():
                     pos = self.hexapod.get_pos()
-                    self.signals.AxisPosSignal.emit(pos[axis])
+                    #print(pos)
+                    try:
+                        self.signals.AxisPosSignal.emit(pos[axis])
+                    except:
+                        print(axis)
+                        print(pos)
                     time.sleep(0.02)
                     
     def disconnect(self):
@@ -93,7 +104,7 @@ class instruments(object):
             print(self.phi.fpos)
             time.sleep(1)
         
-    def scan(self, axis, start_pos, end_pos, step, col=0):
+    def scan(self, axis, start_pos, end_pos, step, col=[0,1]):
         '''step-scan motor axis and read interferometer positions. '''
         pos = np.arange(start_pos, end_pos+step, step)
         rpos = []
@@ -126,7 +137,10 @@ class instruments(object):
             # plot data
             plt.gca().cla()
             r = np.asarray(rpos)
-            plt.plot(pos[0:i], r[0:i,col]/1000)
+            if type(col) == type([]):
+                plt.plot(pos[0:i], r[0:i,col[0]]/1000, 'r', pos[0:i], r[0:i,col[1]]/1000, 'b')
+            else:
+                plt.plot(pos[0:i], r[0:i,col]/1000, 'b')
             plt.ylabel('Positions (um)')
             plt.xlabel(f"{axis} ({unit})")
             plt.draw()

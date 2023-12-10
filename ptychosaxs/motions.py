@@ -11,6 +11,6 @@ acscontroller.connect(acsIP)
 
 class motorSignals(QObject):
     AxisNameSignal = pyqtSignal(bool)
-    AxisPosSignal = pyqtSignal(list)
+    AxisPosSignal = pyqtSignal(float)
 
 phi = Axis(acscontroller, 0)
