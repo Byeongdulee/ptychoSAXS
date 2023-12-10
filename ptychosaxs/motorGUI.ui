@@ -1,0 +1,923 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1770</width>
+    <height>776</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <widget class="QFrame" name="frame">
+      <property name="frameShape">
+       <enum>QFrame::StyledPanel</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Raised</enum>
+      </property>
+      <widget class="QWidget" name="">
+       <property name="geometry">
+        <rect>
+         <x>0</x>
+         <y>10</y>
+         <width>1611</width>
+         <height>470</height>
+        </rect>
+       </property>
+       <layout class="QGridLayout" name="gridLayout_2">
+        <item row="5" column="14">
+         <widget class="QPushButton" name="pb_SAXSscan_4">
+          <property name="text">
+           <string>fly scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="0">
+         <widget class="QLabel" name="lb4">
+          <property name="text">
+           <string>U</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="1" colspan="2">
+         <widget class="QLabel" name="lb_4">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="0">
+         <widget class="QLabel" name="lb5">
+          <property name="text">
+           <string>V</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="5">
+         <widget class="QLineEdit" name="ed_5_tweak">
+          <property name="toolTip">
+           <string>in mm unit</string>
+          </property>
+          <property name="text">
+           <string>1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="1" colspan="2">
+         <widget class="QLabel" name="lb_5">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="3">
+         <widget class="QLineEdit" name="ed_4">
+          <property name="toolTip">
+           <string>Hit enter to update.</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="13">
+         <widget class="QPushButton" name="pb_lup_4">
+          <property name="text">
+           <string>lup scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="7">
+         <widget class="QLineEdit" name="ed_lup_5_L"/>
+        </item>
+        <item row="5" column="4">
+         <widget class="QPushButton" name="pb_tweak4L">
+          <property name="text">
+           <string>&lt;&lt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="6">
+         <widget class="QPushButton" name="pb_tweak5R">
+          <property name="text">
+           <string>&gt;&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="8" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_3_R">
+          <property name="text">
+           <string>0.5</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="13">
+         <widget class="QPushButton" name="pb_lup_3">
+          <property name="text">
+           <string>lup scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="7">
+         <widget class="QLineEdit" name="ed_lup_3_L">
+          <property name="text">
+           <string>-0.5</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="7">
+         <widget class="QLineEdit" name="ed_lup_4_L"/>
+        </item>
+        <item row="4" column="14">
+         <widget class="QPushButton" name="pb_SAXSscan_3">
+          <property name="text">
+           <string>fly scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="8" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_4_R"/>
+        </item>
+        <item row="5" column="10">
+         <widget class="QLineEdit" name="ed_lup_4_N"/>
+        </item>
+        <item row="6" column="3">
+         <widget class="QLineEdit" name="ed_5">
+          <property name="toolTip">
+           <string>Hit enter to update.</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="4">
+         <widget class="QPushButton" name="pb_tweak5L">
+          <property name="text">
+           <string>&lt;&lt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="11" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_3_t">
+          <property name="text">
+           <string>0.1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="5">
+         <widget class="QLineEdit" name="ed_4_tweak">
+          <property name="toolTip">
+           <string>in mm unit</string>
+          </property>
+          <property name="text">
+           <string>1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="10">
+         <widget class="QLineEdit" name="ed_lup_3_N">
+          <property name="text">
+           <string>1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="6">
+         <widget class="QPushButton" name="pb_tweak4R">
+          <property name="text">
+           <string>&gt;&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="11" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_4_t"/>
+        </item>
+        <item row="2" column="8" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_1_R">
+          <property name="text">
+           <string>4</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="14">
+         <widget class="QPushButton" name="pb_SAXSscan_1">
+          <property name="text">
+           <string>fly scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="lb2">
+          <property name="text">
+           <string>Y</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1" colspan="2">
+         <widget class="QLabel" name="lb_2">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="7">
+         <widget class="QLineEdit" name="ed_lup_1_L">
+          <property name="text">
+           <string>-4</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1" colspan="2">
+         <widget class="QLabel" name="lb_1">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="6">
+         <widget class="QPushButton" name="pb_tweak1R">
+          <property name="text">
+           <string>&gt;&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="11" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_1_t">
+          <property name="text">
+           <string>0.1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="13">
+         <widget class="QPushButton" name="pb_lup_1">
+          <property name="text">
+           <string>lup scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="3">
+         <widget class="QLineEdit" name="ed_2">
+          <property name="toolTip">
+           <string>Hit enter to update.</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="5">
+         <widget class="QLineEdit" name="ed_1_tweak">
+          <property name="toolTip">
+           <string>in mm unit</string>
+          </property>
+          <property name="text">
+           <string>0.1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="4">
+         <widget class="QPushButton" name="pb_tweak2L">
+          <property name="text">
+           <string>&lt;&lt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="5">
+         <widget class="QLineEdit" name="ed_2_tweak">
+          <property name="toolTip">
+           <string>in mm unit</string>
+          </property>
+          <property name="text">
+           <string>0.1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="6">
+         <widget class="QPushButton" name="pb_tweak2R">
+          <property name="text">
+           <string>&gt;&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="3">
+         <widget class="QLineEdit" name="ed_1">
+          <property name="toolTip">
+           <string>Hit enter to update.</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="4">
+         <widget class="QPushButton" name="pb_tweak1L">
+          <property name="text">
+           <string>&lt;&lt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="10">
+         <widget class="QLineEdit" name="ed_lup_1_N">
+          <property name="text">
+           <string>1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="11" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_2_t">
+          <property name="text">
+           <string>0.1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1" colspan="2">
+         <widget class="QLabel" name="lb_3">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="4">
+         <widget class="QPushButton" name="pb_tweak3L">
+          <property name="text">
+           <string>&lt;&lt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="5">
+         <widget class="QLineEdit" name="ed_3_tweak">
+          <property name="toolTip">
+           <string>in mm unit</string>
+          </property>
+          <property name="text">
+           <string>0.1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="8" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_2_R">
+          <property name="text">
+           <string>1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="10">
+         <widget class="QLineEdit" name="ed_lup_2_N">
+          <property name="text">
+           <string>1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="13">
+         <widget class="QPushButton" name="pb_lup_2">
+          <property name="text">
+           <string>lup scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="lb3">
+          <property name="text">
+           <string>Z</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="7">
+         <widget class="QLineEdit" name="ed_lup_2_L">
+          <property name="text">
+           <string>-1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="14">
+         <widget class="QPushButton" name="pb_SAXSscan_2">
+          <property name="text">
+           <string>fly scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="6">
+         <widget class="QPushButton" name="pb_tweak3R">
+          <property name="text">
+           <string>&gt;&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="3">
+         <widget class="QLineEdit" name="ed_3">
+          <property name="toolTip">
+           <string>Hit enter to update.</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="8" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_6_R"/>
+        </item>
+        <item row="6" column="8" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_5_R"/>
+        </item>
+        <item row="7" column="10">
+         <widget class="QLineEdit" name="ed_lup_6_N"/>
+        </item>
+        <item row="6" column="14">
+         <widget class="QPushButton" name="pb_SAXSscan_5">
+          <property name="text">
+           <string>fly scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="11" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_5_t"/>
+        </item>
+        <item row="7" column="11" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_6_t"/>
+        </item>
+        <item row="7" column="5">
+         <widget class="QLineEdit" name="ed_6_tweak">
+          <property name="toolTip">
+           <string>in mm unit</string>
+          </property>
+          <property name="text">
+           <string>1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="4">
+         <widget class="QPushButton" name="pb_tweak6L">
+          <property name="text">
+           <string>&lt;&lt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="3">
+         <widget class="QLineEdit" name="ed_6">
+          <property name="toolTip">
+           <string>Hit enter to update.</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="13">
+         <widget class="QPushButton" name="pb_lup_6">
+          <property name="text">
+           <string>lup scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="14">
+         <widget class="QPushButton" name="pb_SAXSscan_6">
+          <property name="text">
+           <string>fly scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="13">
+         <widget class="QPushButton" name="pb_lup_5">
+          <property name="text">
+           <string>lup scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="6">
+         <widget class="QPushButton" name="pb_tweak6R">
+          <property name="text">
+           <string>&gt;&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="0">
+         <widget class="QLabel" name="lb6">
+          <property name="text">
+           <string>W</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="10">
+         <widget class="QLineEdit" name="ed_lup_5_N"/>
+        </item>
+        <item row="7" column="1" colspan="2">
+         <widget class="QLabel" name="lb_6">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="7">
+         <widget class="QLineEdit" name="ed_lup_6_L"/>
+        </item>
+        <item row="8" column="11" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_7_t"/>
+        </item>
+        <item row="8" column="1" colspan="2">
+         <widget class="QLabel" name="lb_7">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="8" column="5">
+         <widget class="QLineEdit" name="ed_7_tweak">
+          <property name="toolTip">
+           <string>in mm unit</string>
+          </property>
+          <property name="text">
+           <string>1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="8" column="0">
+         <widget class="QLabel" name="lb7">
+          <property name="text">
+           <string>phi</string>
+          </property>
+         </widget>
+        </item>
+        <item row="8" column="6">
+         <widget class="QPushButton" name="pb_tweak7R">
+          <property name="text">
+           <string>&gt;&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="8" column="4">
+         <widget class="QPushButton" name="pb_tweak7L">
+          <property name="text">
+           <string>&lt;&lt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="8" column="10">
+         <widget class="QLineEdit" name="ed_lup_7_N"/>
+        </item>
+        <item row="8" column="7">
+         <widget class="QLineEdit" name="ed_lup_7_L"/>
+        </item>
+        <item row="8" column="8" colspan="2">
+         <widget class="QLineEdit" name="ed_lup_7_R"/>
+        </item>
+        <item row="8" column="14">
+         <widget class="QPushButton" name="pb_SAXSscan_7">
+          <property name="text">
+           <string>fly scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="8" column="13">
+         <widget class="QPushButton" name="pb_lup_7">
+          <property name="text">
+           <string>lup scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="8" column="3">
+         <widget class="QLineEdit" name="ed_7">
+          <property name="toolTip">
+           <string>Hit enter to update.</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="7" colspan="4">
+         <widget class="QLabel" name="label_19">
+          <property name="font">
+           <font>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>Motors lup Scan</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0" colspan="2">
+         <widget class="QLabel" name="label_8">
+          <property name="text">
+           <string>Name</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="QLabel" name="label_20">
+          <property name="text">
+           <string>Position</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="4" colspan="3">
+         <widget class="QLabel" name="label_11">
+          <property name="text">
+           <string>Tweek step</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="7">
+         <widget class="QLabel" name="label_15">
+          <property name="text">
+           <string>from</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="10">
+         <widget class="QLabel" name="label_17">
+          <property name="text">
+           <string>step</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="11" colspan="2">
+         <widget class="QLabel" name="label_18">
+          <property name="text">
+           <string>time</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="8" colspan="2">
+         <widget class="QLabel" name="label_16">
+          <property name="text">
+           <string>To</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0" colspan="3">
+         <widget class="QLabel" name="label_7">
+          <property name="font">
+           <font>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>Motors</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="3">
+         <widget class="QLabel" name="label_9">
+          <property name="text">
+           <string>Move to</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="lb1">
+          <property name="text">
+           <string>X</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="layoutWidget">
+       <property name="geometry">
+        <rect>
+         <x>1120</x>
+         <y>500</y>
+         <width>301</width>
+         <height>164</height>
+        </rect>
+       </property>
+       <layout class="QGridLayout" name="gridLayout_4">
+        <item row="0" column="0">
+         <widget class="QPushButton" name="pb_recordz1">
+          <property name="text">
+           <string>Record</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="z1">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QPushButton" name="pb_recordz2">
+          <property name="text">
+           <string>Record</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLabel" name="z2">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QPushButton" name="pb_recordz3">
+          <property name="text">
+           <string>Record</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QLabel" name="z3">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="">
+       <property name="geometry">
+        <rect>
+         <x>420</x>
+         <y>500</y>
+         <width>301</width>
+         <height>164</height>
+        </rect>
+       </property>
+       <layout class="QGridLayout" name="gridLayout_3">
+        <item row="0" column="0">
+         <widget class="QPushButton" name="pb_recordx1">
+          <property name="text">
+           <string>Record</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="x1">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QPushButton" name="pb_recordx2">
+          <property name="text">
+           <string>Record</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLabel" name="x2">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QPushButton" name="pb_recordx3">
+          <property name="text">
+           <string>Record</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QLabel" name="x3">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="">
+       <property name="geometry">
+        <rect>
+         <x>843</x>
+         <y>500</y>
+         <width>261</width>
+         <height>161</height>
+        </rect>
+       </property>
+       <layout class="QGridLayout" name="gridLayout_5">
+        <item row="0" column="0">
+         <widget class="QLCDNumber" name="lcd_Z">
+          <property name="minimumSize">
+           <size>
+            <width>150</width>
+            <height>40</height>
+           </size>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>15</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="smallDecimalPoint">
+           <bool>true</bool>
+          </property>
+          <property name="digitCount">
+           <number>5</number>
+          </property>
+          <property name="value" stdset="0">
+           <double>25.000000000000000</double>
+          </property>
+          <property name="intValue" stdset="0">
+           <number>25</number>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="label_2">
+          <property name="maximumSize">
+           <size>
+            <width>50</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>12</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>um</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0" colspan="2">
+         <widget class="QPushButton" name="pb_resetz">
+          <property name="text">
+           <string>Reset</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="">
+       <property name="geometry">
+        <rect>
+         <x>133</x>
+         <y>500</y>
+         <width>261</width>
+         <height>161</height>
+        </rect>
+       </property>
+       <layout class="QGridLayout" name="gridLayout_6">
+        <item row="0" column="0">
+         <widget class="QLCDNumber" name="lcd_X">
+          <property name="minimumSize">
+           <size>
+            <width>150</width>
+            <height>40</height>
+           </size>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>15</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="smallDecimalPoint">
+           <bool>true</bool>
+          </property>
+          <property name="digitCount">
+           <number>5</number>
+          </property>
+          <property name="value" stdset="0">
+           <double>25.000000000000000</double>
+          </property>
+          <property name="intValue" stdset="0">
+           <number>25</number>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="label">
+          <property name="maximumSize">
+           <size>
+            <width>50</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>12</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>um</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0" colspan="2">
+         <widget class="QPushButton" name="pb_resetx">
+          <property name="text">
+           <string>Reset</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1770</width>
+     <height>38</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

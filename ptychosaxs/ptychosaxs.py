@@ -1,4 +1,4 @@
-from .motions import Hexapod, Axis, hexapodIP, acsIP, hexapod, phi, acscontroller, acsc
+from .motions import Hexapod, Axis, hexapodIP, acsIP, hexapod, phi, acscontroller, acsc, motorSignals
 from .interferometers import qds
 from .interferometers import plot_position
 import time
@@ -10,6 +10,7 @@ class instruments(object):
         self.hexapod = hexapod
         self.phi = phi
         self.qds = qds
+        self.signals = motorSignals()
 
     def mvphi(self, target, relative=False, wait=True):
         if relative:
@@ -34,6 +35,48 @@ class instruments(object):
     def mvrx(self, target):
         self.mvx(target, relative=True)
 
+    def mv(self, axis, target, wait=True):
+        self.signals.AxisNameSignal.emit(axis)
+        if axis == "phi":
+            self.mvphi(target)
+            if wait:
+                ismoving = True
+                time.sleep(0.1)
+                while ismoving:
+                    b = self.phi.motor_state
+                    self.signals.AxisPosSignal.emit(self.posphi)
+                    ismoving = b['moving']
+                    time.sleep(0.1)
+        else:
+            self.hexapod.mv(axis, target)
+            if wait:
+                time.sleep(0.02)
+                while not self.hexapod.isattarget():
+                    pos = self.hexapod.get_pos()
+                    self.signals.AxisPosSignal.emit(pos[axis])
+                    time.sleep(0.1)
+
+    def mvr(self, axis, target, wait=True):
+        if axis == "phi":
+            self.mvphi(self.posphi + target)
+            if wait:
+                ismoving = True
+                time.sleep(0.1)
+                while ismoving:
+                    b = self.phi.motor_state
+                    self.signals.AxisPosSignal.emit(self.posphi)
+                    ismoving = b['moving']
+                    time.sleep(0.02)
+        else:
+            pos = self.hexapod.get_pos()
+            self.hexapod.mv(axis, pos[axis]+target)
+            if wait:
+                time.sleep(0.02)
+                while not self.hexapod.isattarget():
+                    pos = self.hexapod.get_pos()
+                    self.signals.AxisPosSignal.emit(pos[axis])
+                    time.sleep(0.02)
+                    
     def disconnect(self):
         self.hexapod.disconnect()
         self.phi.controller.disconnect()
