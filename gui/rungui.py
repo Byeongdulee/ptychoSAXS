@@ -10,10 +10,15 @@ import sys
 import os
 
 from PyQt5 import uic, QtCore
-from PyQt5.QtWidgets import QMainWindow, QApplication
+from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton
 from PyQt5.QtCore import QTimer
 import time
 from ptychosaxs import pts
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+import matplotlib.pyplot as plt
+
 
 class tweakmotors(QMainWindow):
     def __init__(self):
@@ -61,6 +66,30 @@ class tweakmotors(QMainWindow):
         self.ui.pb_recordz2.clicked.connect(lambda: self.record_qdsZ(2))
         self.ui.pb_recordz3.clicked.connect(lambda: self.record_qdsZ(3))
         
+        # figure to plot
+        # a figure instance to plot on
+        self.figure = plt.figure()
+
+        # this is the Canvas Widget that displays the `figure`
+        # it takes the `figure` instance as a parameter to __init__
+        self.canvas = FigureCanvas(self.figure)
+
+        # this is the Navigation widget
+        # it takes the Canvas widget and a parent
+        self.toolbar = NavigationToolbar(self.canvas, self)
+
+        # Just some button connected to `plot` method
+        self.button = QPushButton('Plot')
+        self.button.clicked.connect(self.plot)
+
+        # set the layout
+        
+        self.ui.vlayout_plot.addWidget(self.toolbar)
+        self.ui.vlayout_plot.addWidget(self.canvas)
+        self.ui.vlayout_plot.addWidget(self.button)
+        #self.setLayout(layout)
+
+
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_qds)
         self.timer.start(500)        
@@ -167,6 +196,29 @@ class tweakmotors(QMainWindow):
             self.ui.z2.setText(txt)
         if value==3:
             self.ui.z3.setText(txt)
+
+    def plot(self):
+        
+        import random
+        ''' plot some random stuff '''
+        # random data
+        data = [random.random() for i in range(10)]
+
+        # instead of ax.hold(False)
+        self.figure.clear()
+
+        # create an axis
+        ax = self.figure.add_subplot(111)
+
+        # discards the old graph
+        # ax.hold(False) # deprecated, see above
+
+        # plot data
+        ax.plot(data, '*-')
+
+        # refresh canvas
+        self.canvas.draw()
+
 
 
 if __name__ == "__main__":

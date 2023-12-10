@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1770</width>
-    <height>776</height>
+    <height>1358</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -23,7 +23,7 @@
       <property name="frameShadow">
        <enum>QFrame::Raised</enum>
       </property>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>0</x>
@@ -716,7 +716,7 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>420</x>
@@ -770,7 +770,7 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>843</x>
@@ -836,7 +836,7 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
          <x>133</x>
@@ -901,6 +901,17 @@
          </widget>
         </item>
        </layout>
+      </widget>
+      <widget class="QWidget" name="verticalLayoutWidget">
+       <property name="geometry">
+        <rect>
+         <x>0</x>
+         <y>670</y>
+         <width>1611</width>
+         <height>571</height>
+        </rect>
+       </property>
+       <layout class="QVBoxLayout" name="vlayout_plot"/>
       </widget>
      </widget>
     </item>
