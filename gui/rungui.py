@@ -341,10 +341,14 @@ class tweakmotors(QMainWindow):
             self.plot()
 
     def reset_qdsX(self):
-        self.ref_X = self.ui.lcd_X.value()  
+        r = self.get_qds_pos()
+        self.ref_X = r[0]
+        #self.ref_X = self.ui.lcd_X.value()  
 
     def reset_qdsZ(self):
-        self.ref_Z = self.ui.lcd_Z.value()
+        r = self.get_qds_pos()
+        self.ref_Z = r[1]
+#        self.ref_Z = self.ui.lcd_Z.value()
 
     def record_qdsX(self, value):
         txt = str(self.ui.lcd_X.value())
