@@ -257,7 +257,7 @@ class tweakmotors(QMainWindow):
                 self.pts.acc = self.pts.vel*10
                 print(f"Speed of phi is set to {self.pts.vel}.")
                 self.pts.mv('phi', st)
-                self.pts.vel = (fe-st)/tm
+                self.pts.vel = abs(fe-st)/tm
                 self.pts.acc = self.pts.vel*10
                 print(f"Speed of phi is set to {self.pts.vel}.")
                 self.pts.mv('phi', fe)
