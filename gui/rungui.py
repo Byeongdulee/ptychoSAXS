@@ -18,7 +18,7 @@ from ptychosaxs import pts
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
-
+import numpy as np
 
 class tweakmotors(QMainWindow):
     def __init__(self):
@@ -28,6 +28,7 @@ class tweakmotors(QMainWindow):
         self.pts = pts
         self.ui = uic.loadUi(guiName)
         self.motornames = ['X', 'Y', 'Z', 'U', 'V', 'W', 'phi']
+        self.motorunits = ['mm', 'mm', 'mm', 'deg', 'deg', 'deg', 'deg']
         self.ui.pb_tweak1L.clicked.connect(lambda: self.mvr(0, -1))
         self.ui.pb_tweak1R.clicked.connect(lambda: self.mvr(0, 1))
         self.ui.pb_tweak2L.clicked.connect(lambda: self.mvr(1, -1))
@@ -49,6 +50,25 @@ class tweakmotors(QMainWindow):
         self.ui.ed_5.returnPressed.connect(lambda: self.mv(4))
         self.ui.ed_6.returnPressed.connect(lambda: self.mv(5))
         self.ui.ed_7.returnPressed.connect(lambda: self.mv(6))
+
+        self.ui.pb_SAXSscan_1.setEnabled(False)
+        self.ui.pb_SAXSscan_2.setEnabled(False)
+        self.ui.pb_SAXSscan_3.setEnabled(False)
+        self.ui.pb_SAXSscan_4.setEnabled(False)
+        self.ui.pb_SAXSscan_5.setEnabled(False)
+        self.ui.pb_SAXSscan_6.setEnabled(False)
+        self.ui.pb_SAXSscan_7.setEnabled(True)
+
+        self.ui.pb_lup_1.clicked.connect(lambda: self.fly(0, 0))
+        self.ui.pb_lup_2.clicked.connect(lambda: self.fly(1, 0))
+        self.ui.pb_lup_3.clicked.connect(lambda: self.fly(2, 0))
+        self.ui.pb_lup_4.clicked.connect(lambda: self.fly(3, 0))
+        self.ui.pb_lup_5.clicked.connect(lambda: self.fly(4, 0))
+        self.ui.pb_lup_6.clicked.connect(lambda: self.fly(5, 0))
+        self.ui.pb_lup_7.clicked.connect(lambda: self.fly(6, 0))
+        self.ui.pb_SAXSscan_7.clicked.connect(lambda: self.fly(6, 1))
+        self.ui.actionClear.triggered.connect(self.clearplot)
+        self.ui.actionSet_default_speed.triggered.connect(self.setphivel_default)
         self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
         self.pts.signals.AxisNameSignal.connect(self.update_motorname)
 
@@ -89,12 +109,29 @@ class tweakmotors(QMainWindow):
         self.ui.vlayout_plot.addWidget(self.button)
         #self.setLayout(layout)
 
+        self.updatepos()
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_qds)
-        self.timer.start(500)        
+        self.timer.start(100)        
         self.ui.show()
-    
+
+    def get_motorpos(self, axis):
+        if axis == 'X':
+            return self.pts.posx
+        if axis == 'Y':
+            return self.pts.posy
+        if axis == 'Z':
+            return self.pts.posz
+        if axis == 'U':
+            return self.pts.posu
+        if axis == 'V':
+            return self.pts.posv
+        if axis == 'W':
+            return self.pts.posv
+        if axis == 'phi':
+            return self.pts.posphi
+        
     def updatepos(self):
         
         self.ui.lb_1.setText("%0.4f"%self.pts.posx)
@@ -124,10 +161,48 @@ class tweakmotors(QMainWindow):
 
     def update_motorname(self, axis):
         self.signalmotor = axis
+    
+    def setphivel_default(self):
+        self.pts.vel = 36
+        self.pts.acc = self.pts.vel*10
+
+    def fly(self, motornumber, type):
+        axis = self.motornames[motornumber]
+        self.signalmotor = axis
+        self.signalmotorunit = self.motorunits[motornumber]
+        self.rpos = []
+        self.mpos = []
+        self.isscan = True
+        if type == 0:
+            if motornumber ==6:
+                st = float(self.ui.ed_lup_7_L.text())
+                fe = float(self.ui.ed_lup_7_R.text())
+                tm = float(self.ui.ed_lup_7_t.text())
+                step = float(self.ui.ed_lup_7_N.text())
+            
+            self.pts.mv(axis, st)
+            pos = st
+            while (abs(pos - fe)/(fe-st)*100 > 0.1):
+                time.sleep(0.1)
+                self.pts.mv(axis, pos+step)
+
+        if type == 1:
+            if motornumber ==6:
+                st = float(self.ui.ed_lup_7_L.text())
+                fe = float(self.ui.ed_lup_7_R.text())
+                tm = float(self.ui.ed_lup_7_t.text())
+                self.pts.mv('phi', st)
+                self.pts.vel = (fe-st)/tm
+                self.pts.acc = self.pts.vel*10
+                self.pts.mv('phi', fe)
+
+    def clearplot(self):
+        self.isscan = False
 
     def mv(self, motornumber):
         axis = self.motornames[motornumber]
         self.signalmotor = axis
+        self.signalmotorunit = self.motorunits[motornumber]
         if motornumber ==0:
             val = float(self.ui.ed_1.text())
         if motornumber ==1:
@@ -148,6 +223,7 @@ class tweakmotors(QMainWindow):
     def mvr(self, motornumber, sign):
         axis = self.motornames[motornumber]
         self.signalmotor = axis
+        self.signalmotorunit = self.motorunits[motornumber]
         if motornumber ==0:
             val = float(self.ui.ed_1_tweak.text())
         if motornumber ==1:
@@ -162,7 +238,7 @@ class tweakmotors(QMainWindow):
             val = float(self.ui.ed_6_tweak.text())
         if motornumber ==6:
             val = float(self.ui.ed_7_tweak.text())
-        print(sign*val)
+        #print(sign*val)
         self.pts.mvr(axis, sign*val)
         self.updatepos()
     
@@ -172,7 +248,16 @@ class tweakmotors(QMainWindow):
 #        print(r)
         self.ui.lcd_X.display("%0.3f" % (r[0]/1000-self.ref_X))     
         self.ui.lcd_Z.display("%0.3f" % (r[1]/1000-self.ref_Z))
-    
+        
+        if self.isscan:
+            self.signalmotor
+            self.rpos.append([r[0], r[1], r[2]])
+            self.mpos.append(self.get_motorpos(self.signalmotor))
+
+            self.plot()
+
+
+
     def reset_qdsX(self):
         self.ref_X = self.ui.lcd_X.value()  
 
@@ -199,22 +284,36 @@ class tweakmotors(QMainWindow):
 
     def plot(self):
         
-        import random
+        #import random
         ''' plot some random stuff '''
         # random data
-        data = [random.random() for i in range(10)]
+        #data = [random.random() for i in range(10)]
 
         # instead of ax.hold(False)
         self.figure.clear()
 
         # create an axis
-        ax = self.figure.add_subplot(111)
+        ax = self.figure.add_subplot(211)
+        ax2 = self.figure.add_subplot(212)
 
         # discards the old graph
         # ax.hold(False) # deprecated, see above
 
+
+        r = np.asarray(self.rpos)
+        pos = np.asarray(self.mpos)
+        ax.plot(pos, r[:,0]/1000, 'r')
+        ax2.plot(pos, r[:,1]/1000, 'b')
+        ax.ylabel('Positions (um)')
+        ax.xlabel(f"{self.signalmotor} ({self.signalmotorunit})")
+        #plt.draw()
+        #plt.pause(0.1)
+
+
+
+
         # plot data
-        ax.plot(data, '*-')
+        #ax.plot(data, '*-')
 
         # refresh canvas
         self.canvas.draw()
