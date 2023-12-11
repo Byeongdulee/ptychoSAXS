@@ -205,10 +205,17 @@ class instruments(object):
                 dt2 = np.column_stack((x, data[axis][0]*1000, data[axis][1]*1000))
                 np.savetxt(filename+"_hexapod"+".dat", dt2, fmt="%1.8e %1.8e %1.8e")
 
-    def savedata(self, filename, t, r, col=0):
+    def savedata(self, filename, t, r, col=[0,1]):
+        tp = np.asarray(t)
+        rp = np.asarray(r)
         if len(filename)>0:
-            dt = np.column_stack((t, r[:,col]))
-            np.savetxt(filename, dt, fmt='%1.8e %1.8e')
+            if type(col)==type([]):
+                dt = np.column_stack((tp, rp[:,col[0]], rp[:,col[1]]))
+                myfmt = '%1.8e %1.8e %1.8e'
+            else:
+                dt = np.column_stack((tp, rp[:,col]))
+                myfmt = '%1.8e %1.8e'
+            np.savetxt(filename, dt, fmt=myfmt)
 
     def plot_qds_hex(self, col=0, axis = 'X', timeshift=0, filename=""):
     #    global rpos

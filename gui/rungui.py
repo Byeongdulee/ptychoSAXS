@@ -10,8 +10,8 @@ import sys
 import os
 
 from PyQt5 import uic, QtCore
-from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton
-from PyQt5.QtCore import QTimer
+from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget
+from PyQt5.QtCore import QTimer, QObject, QThread, pyqtSlot, pyqtSignal, QRunnable, QThreadPool
 import time
 from ptychosaxs import pts
 
@@ -19,6 +19,21 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
 import numpy as np
+
+# Step 1: Create a worker class
+class Worker(QRunnable):
+    finished = pyqtSignal()
+    progress = pyqtSignal(int)
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+    
+    @pyqtSlot()
+    def run(self):
+        """Long-running task."""
+        self.fn(*self.args, **self.kwargs)
 
 class tweakmotors(QMainWindow):
     def __init__(self):
@@ -67,14 +82,22 @@ class tweakmotors(QMainWindow):
         self.ui.pb_lup_6.clicked.connect(lambda: self.fly(5, 0))
         self.ui.pb_lup_7.clicked.connect(lambda: self.fly(6, 0))
         self.ui.pb_SAXSscan_7.clicked.connect(lambda: self.fly(6, 1))
+        self.ui.actionRun.triggered.connect(self.timescan)
+        self.ui.actionStop.triggered.connect(self.timescanstop)
         self.ui.actionClear.triggered.connect(self.clearplot)
         self.ui.actionSet_default_speed.triggered.connect(self.setphivel_default)
+        self.ui.actionSave.triggered.connect(self.save_qds)
         self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
         self.pts.signals.AxisNameSignal.connect(self.update_motorname)
 
+        self.rpos = []
+        self.mpos = []
+        self.threadpool = QThreadPool()
         # qds
         self.ref_X = 0
         self.ref_Z = 0
+        self.isscan = False
+        self.isfly = False
         self.ui.pb_resetx.clicked.connect(self.reset_qdsX)
         self.ui.pb_resetz.clicked.connect(self.reset_qdsZ)
 
@@ -99,14 +122,14 @@ class tweakmotors(QMainWindow):
         self.toolbar = NavigationToolbar(self.canvas, self)
 
         # Just some button connected to `plot` method
-        self.button = QPushButton('Plot')
-        self.button.clicked.connect(self.plot)
+        #self.button = QPushButton('Plot')
+        #self.button.clicked.connect(self.plot)
 
         # set the layout
         
         self.ui.vlayout_plot.addWidget(self.toolbar)
         self.ui.vlayout_plot.addWidget(self.canvas)
-        self.ui.vlayout_plot.addWidget(self.button)
+        #self.ui.vlayout_plot.addWidget(self.button)
         #self.setLayout(layout)
 
         self.updatepos()
@@ -167,13 +190,48 @@ class tweakmotors(QMainWindow):
         self.pts.acc = self.pts.vel*10
 
     def fly(self, motornumber, type):
+        w = Worker(self.fly0, motornumber, type)
+        self.threadpool.start(w)
+    
+    def timescanstop(self):
+        self.isscan = False
+
+    def timescan(self):
+        self.t0 = time.time()
+        self.signalmotor = "Time"
+        self.signalmotorunit = "s"
+
+        self.mpos = []
+        self.rpos = []
+
+        self.isscan = True
+        w = Worker(self.timescan0)
+        self.threadpool.start(w)
+
+    def timescan0(self):
+        while self.isscan:
+            r = self.get_qds_pos()
+            self.rpos.append([r[0], r[1], r[2]])
+            t = time.time()-self.t0
+            self.mpos.append(t)
+            time.sleep(0.1)
+
+    def get_qds_pos(self):
+        r, a = self.pts.qds.get_position()
+        r = r[0]
+        r = [r[0]/1000-self.ref_X, r[1]/1000-self.ref_Z, r[2]]
+        return r
+    
+    def fly0(self, motornumber, type):
         axis = self.motornames[motornumber]
         self.signalmotor = axis
         self.signalmotorunit = self.motorunits[motornumber]
         self.rpos = []
         self.mpos = []
         self.isscan = True
+        
         if type == 0:
+            self.isfly = False
             if motornumber ==6:
                 st = float(self.ui.ed_lup_7_L.text())
                 fe = float(self.ui.ed_lup_7_R.text())
@@ -183,21 +241,47 @@ class tweakmotors(QMainWindow):
             self.pts.mv(axis, st)
             pos = st
             while (abs(pos - fe)/(fe-st)*100 > 0.1):
-                time.sleep(0.1)
                 self.pts.mv(axis, pos+step)
+                r = self.get_qds_pos()
+                self.rpos.append([r[0], r[1], r[2]])
+                pos = self.get_motorpos(self.signalmotor)
+                self.mpos.append(pos)
 
         if type == 1:
+            self.isfly = True
             if motornumber ==6:
                 st = float(self.ui.ed_lup_7_L.text())
                 fe = float(self.ui.ed_lup_7_R.text())
                 tm = float(self.ui.ed_lup_7_t.text())
+                self.pts.vel = 36
+                self.pts.acc = self.pts.vel*10
+                print(f"Speed of phi is set to {self.pts.vel}.")
                 self.pts.mv('phi', st)
                 self.pts.vel = (fe-st)/tm
                 self.pts.acc = self.pts.vel*10
+                print(f"Speed of phi is set to {self.pts.vel}.")
                 self.pts.mv('phi', fe)
+        self.isscan = False
+
+    def save_qds(self):
+        w = QWidget()
+        w.resize(320, 240)
+        # Set window title
+        w.setWindowTitle("Save QDS Data As")
+        fn = QFileDialog.getSaveFileName(w, 'Save File', '', 'Text (*.txt *.dat)',None, QFileDialog.DontUseNativeDialog)
+        filename = fn[0]
+        if filename == "":
+            return 0
+        if ".txt" not in filename:
+            filename = filename + ".txt"
+        self.pts.savedata(filename, self.mpos, self.rpos, col=[0,1])
 
     def clearplot(self):
         self.isscan = False
+        ax = self.figure.get_axes()
+        for a in ax:
+            a.clear()
+        self.canvas.draw()
 
     def mv(self, motornumber):
         axis = self.motornames[motornumber]
@@ -243,20 +327,18 @@ class tweakmotors(QMainWindow):
         self.updatepos()
     
     def update_qds(self):
-        r, a = self.pts.qds.get_position()
-        r = r[0]
+        r = self.get_qds_pos()
 #        print(r)
-        self.ui.lcd_X.display("%0.3f" % (r[0]/1000-self.ref_X))     
-        self.ui.lcd_Z.display("%0.3f" % (r[1]/1000-self.ref_Z))
-        
+        self.ui.lcd_X.display("%0.3f" % (r[0]))     
+        self.ui.lcd_Z.display("%0.3f" % (r[1]))
+        #self.rpos = []
+        #self.mpos = []
+
         if self.isscan:
-            self.signalmotor
-            self.rpos.append([r[0], r[1], r[2]])
-            self.mpos.append(self.get_motorpos(self.signalmotor))
-
+            if self.isfly:
+                self.rpos.append([r[0], r[1], r[2]])
+                self.mpos.append(self.get_motorpos(self.signalmotor))
             self.plot()
-
-
 
     def reset_qdsX(self):
         self.ref_X = self.ui.lcd_X.value()  
@@ -293,8 +375,8 @@ class tweakmotors(QMainWindow):
         self.figure.clear()
 
         # create an axis
-        ax = self.figure.add_subplot(211)
-        ax2 = self.figure.add_subplot(212)
+        ax = self.figure.add_subplot(121)
+        ax2 = self.figure.add_subplot(122)
 
         # discards the old graph
         # ax.hold(False) # deprecated, see above
@@ -302,10 +384,24 @@ class tweakmotors(QMainWindow):
 
         r = np.asarray(self.rpos)
         pos = np.asarray(self.mpos)
-        ax.plot(pos, r[:,0]/1000, 'r')
-        ax2.plot(pos, r[:,1]/1000, 'b')
-        ax.ylabel('Positions (um)')
-        ax.xlabel(f"{self.signalmotor} ({self.signalmotorunit})")
+        xl = f"{self.signalmotor} ({self.signalmotorunit})"
+        
+
+        try:
+            #ax.plot(xl, yl, xdata=pos, ydata=r[:,0]/1000, color='r')
+            #ax2.plot(xl, yl, xdata=pos, ydata=r[:,1]/1000, color='b')
+            ax.plot(pos, r[:,0], 'r')
+            ax.set_xlabel(xl)
+            yl = 'X position (um)'
+            ax.set_ylabel(yl)
+            ax2.plot(pos, r[:,1], 'b')
+            ax2.set_xlabel(xl)
+            yl = 'Z position (um)'
+            ax2.set_ylabel(yl)
+        except:
+            pass
+        #ax.ylabel()
+        #ax.xlabel()
         #plt.draw()
         #plt.pause(0.1)
 

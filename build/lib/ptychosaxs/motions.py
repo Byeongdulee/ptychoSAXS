@@ -10,7 +10,7 @@ acscontroller = Controller("ethernet", 1)
 acscontroller.connect(acsIP)
 
 class motorSignals(QObject):
-    AxisNameSignal = pyqtSignal(bool)
+    AxisNameSignal = pyqtSignal(str)
     AxisPosSignal = pyqtSignal(float)
 
 phi = Axis(acscontroller, 0)
