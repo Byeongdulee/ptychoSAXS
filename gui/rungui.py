@@ -133,10 +133,12 @@ class tweakmotors(QMainWindow):
         # qds
         self.ref_X = 0
         self.ref_Z = 0
+        self.ref_Z2 = 0
         self.isscan = False
         self.isfly = False
         self.ui.pb_resetx.clicked.connect(self.reset_qdsX)
         self.ui.pb_resetz.clicked.connect(self.reset_qdsZ)
+        self.ui.pb_resetz_2.clicked.connect(self.reset_qdsZ2)
 
         self.ui.pb_recordx1.clicked.connect(lambda: self.record_qdsX(1))
         self.ui.pb_recordx2.clicked.connect(lambda: self.record_qdsX(2))
@@ -145,6 +147,10 @@ class tweakmotors(QMainWindow):
         self.ui.pb_recordz1.clicked.connect(lambda: self.record_qdsZ(1))
         self.ui.pb_recordz2.clicked.connect(lambda: self.record_qdsZ(2))
         self.ui.pb_recordz3.clicked.connect(lambda: self.record_qdsZ(3))
+
+        self.ui.pb_recordz1_2.clicked.connect(lambda: self.record_qdsZ(4))
+        self.ui.pb_recordz2_2.clicked.connect(lambda: self.record_qdsZ(5))
+        self.ui.pb_recordz3_2.clicked.connect(lambda: self.record_qdsZ(6))
         
         # figure to plot
         # a figure instance to plot on
@@ -302,7 +308,7 @@ class tweakmotors(QMainWindow):
         r, a = self.pts.qds.get_position()
         r = r[0]
         if isrefavailable:
-            r = [r[0]/1000-self.ref_X, r[1]/1000-self.ref_Z, r[2]/1000]
+            r = [r[0]/1000-self.ref_X, r[1]/1000-self.ref_Z, r[2]/1000-self.ref_Z2]
         else:
             r = [r[0]/1000, r[1]/1000, r[2]/1000]
         return r
@@ -343,13 +349,14 @@ class tweakmotors(QMainWindow):
                 #time.sleep(0.1)
                 print(f"Speed of phi is set to {self.pts.phi.vel}.")
                 self.pts.mv('phi', st, wait=True)
-                time.sleep(0.2)
+                time.sleep(0.5)
                 self.pts.phi.vel = abs(fe-st)/tm
                 #time.sleep(0.1)
                 self.pts.phi.acc = self.pts.phi.vel*10
                 #time.sleep(0.1)
                 print(f"Speed of phi is set to {self.pts.phi.vel}.")
                 self.pts.mv('phi', fe, wait=True)
+                print("Should be in run.")
         #self.isscan = False
 
     def save_qds(self):
@@ -425,6 +432,7 @@ class tweakmotors(QMainWindow):
 #        print(r)
         self.ui.lcd_X.display("%0.3f" % (r[0]))     
         self.ui.lcd_Z.display("%0.3f" % (r[1]))
+        self.ui.lcd_Z_2.display("%0.3f" % (r[2]))
         #self.rpos = []
         #self.mpos = []
 #        print(self.isscan, " isscan...")
@@ -444,6 +452,11 @@ class tweakmotors(QMainWindow):
         self.ref_Z = r[1]
 #        self.ref_Z = self.ui.lcd_Z.value()
 
+    def reset_qdsZ2(self):
+        r = self.get_qds_pos(False)
+        self.ref_Z2 = r[2]
+#        self.ref_Z = self.ui.lcd_Z.value()
+
     def record_qdsX(self, value):
         txt = str(self.ui.lcd_X.value())
         if value==1:
@@ -461,6 +474,14 @@ class tweakmotors(QMainWindow):
             self.ui.z2.setText(txt)
         if value==3:
             self.ui.z3.setText(txt)
+        if val>3:
+            txt = str(self.ui.lcd_Z_2.value())
+            if value==1:
+                self.ui.z1_2.setText(txt)
+            if value==2:
+                self.ui.z2_2.setText(txt)
+            if value==3:
+                self.ui.z3_2.setText(txt)
 
     def plot(self):
         
@@ -473,8 +494,9 @@ class tweakmotors(QMainWindow):
         self.figure.clear()
 
         # create an axis
-        ax = self.figure.add_subplot(121)
-        ax2 = self.figure.add_subplot(122)
+        ax = self.figure.add_subplot(131)
+        ax2 = self.figure.add_subplot(132)
+        ax3 = self.figure.add_subplot(133)
 
         # discards the old graph
         # ax.hold(False) # deprecated, see above
@@ -492,8 +514,11 @@ class tweakmotors(QMainWindow):
             ax.set_ylabel(yl)
             ax2.plot(pos, r[:,1], 'b')
             ax2.set_xlabel(xl)
+            ax3.plot(pos, r[:,2], 'k')
+            ax3.set_xlabel(xl)
             yl = 'Z position (um)'
             ax2.set_ylabel(yl)
+            ax3.set_ylabel(yl)
         except:
             print("There was error in the plot")
             pass
