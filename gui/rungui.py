@@ -388,27 +388,27 @@ class tweakmotors(QMainWindow):
         
         self.isfly = True
         if motornumber ==0:
-            st = float(self.ui.ed_lup_7_L.text())
-            fe = float(self.ui.ed_lup_7_R.text())
-            tm = float(self.ui.ed_lup_7_t.text())
-            step = float(self.ui.ed_lup_7_N.text())
+            st = float(self.ui.ed_lup_1_L.text())
+            fe = float(self.ui.ed_lup_1_R.text())
+            tm = float(self.ui.ed_lup_1_t.text())
+            step = float(self.ui.ed_lup_1_N.text())
             self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
+            #self.pts, axis, self.pts.hexapod.wave_start)
 
-
-            t0 = time.time()
-            t = 0
+            #t0 = time.time()
+            #t = 0
             #k = 0
-            self.hexapod.run_traj()
-            #if sec<=0:
-            sec = self.pts.hexapod.scantime + 1
-            while (t - t0) < sec:
-                r = self.get_qds_pos()
-                self.rpos.append([r[0], r[1], r[2]])
-                time.sleep(0.0001)
-                t = time.time()
-                self.mpos.append(t)
-#                k = k +1
-#                if k==10:
+            self.pts.hexapod.run_traj()
+            while self.pts.ismoving(axis):
+                time.sleep(0.01)
+            # sec = self.pts.hexapod.scantime + 1
+            # while (t - t0) < sec:
+            #     r = self.get_qds_pos()
+            #     self.rpos.append([r[0], r[1], r[2]])
+            #     time.sleep(0.0001)
+            #     t = time.time()
+            #     self.mpos.append(t)
+
         if motornumber ==6:
             st = float(self.ui.ed_lup_7_L.text())
             fe = float(self.ui.ed_lup_7_R.text())
