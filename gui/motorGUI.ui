@@ -1004,7 +1004,7 @@
                  </size>
                 </property>
                 <property name="text">
-                 <string>PushButton</string>
+                 <string>Record</string>
                 </property>
                </widget>
               </item>
@@ -1017,7 +1017,7 @@
                  </size>
                 </property>
                 <property name="text">
-                 <string>PushButton</string>
+                 <string>Record</string>
                 </property>
                </widget>
               </item>
@@ -1030,7 +1030,7 @@
                  </size>
                 </property>
                 <property name="text">
-                 <string>PushButton</string>
+                 <string>Record</string>
                 </property>
                </widget>
               </item>
@@ -1272,7 +1272,7 @@
      <x>0</x>
      <y>0</y>
      <width>1544</width>
-     <height>21</height>
+     <height>38</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
