@@ -241,6 +241,7 @@ class tweakmotors(QMainWindow):
 
     def scandone(self, value):
         self.isscan = False
+        self.updatepos()
         print("scan done.......")
     
     def timescanstop(self):
