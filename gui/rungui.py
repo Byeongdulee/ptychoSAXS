@@ -56,6 +56,7 @@ class move(QRunnable):
         """Long-running task."""
         self.pts.mv(self.axis, self.pos)
         self.signal.finished.emit(True)
+
 # Step 1: Create a move class
 class mover(QRunnable):
 
@@ -111,14 +112,14 @@ class tweakmotors(QMainWindow):
         self.ui.pb_SAXSscan_6.setEnabled(False)
         self.ui.pb_SAXSscan_7.setEnabled(True)
 
-        self.ui.pb_lup_1.clicked.connect(lambda: self.fly(0, 0))
-        self.ui.pb_lup_2.clicked.connect(lambda: self.fly(1, 0))
-        self.ui.pb_lup_3.clicked.connect(lambda: self.fly(2, 0))
-        self.ui.pb_lup_4.clicked.connect(lambda: self.fly(3, 0))
-        self.ui.pb_lup_5.clicked.connect(lambda: self.fly(4, 0))
-        self.ui.pb_lup_6.clicked.connect(lambda: self.fly(5, 0))
-        self.ui.pb_lup_7.clicked.connect(lambda: self.fly(6, 0))
-        self.ui.pb_SAXSscan_7.clicked.connect(lambda: self.fly(6, 1))
+        self.ui.pb_lup_1.clicked.connect(lambda: self.stepscan(0))
+        self.ui.pb_lup_2.clicked.connect(lambda: self.stepscan(1))
+        self.ui.pb_lup_3.clicked.connect(lambda: self.stepscan(2))
+        self.ui.pb_lup_4.clicked.connect(lambda: self.stepscan(3))
+        self.ui.pb_lup_5.clicked.connect(lambda: self.stepscan(4))
+        self.ui.pb_lup_6.clicked.connect(lambda: self.stepscan(5))
+        self.ui.pb_lup_7.clicked.connect(lambda: self.stepscan(6))
+        self.ui.pb_SAXSscan_7.clicked.connect(lambda: self.fly(6))
         self.ui.actionRun.triggered.connect(self.timescan)
         self.ui.actionStop.triggered.connect(self.timescanstop)
         self.ui.actionClear.triggered.connect(self.clearplot)
@@ -272,12 +273,21 @@ class tweakmotors(QMainWindow):
     #     thread.finished.connect(thread.deleteLater)
     #     return thread
     
-    def fly(self, motornumber, type):
+    def fly(self, motornumber):
         self.clearplot()
         self.isscan = True
         #self.thread = self.createflyscanthread(motornumber, type)
         #self.thread.start()
-        w = Worker(self.fly0, motornumber, type)
+        w = Worker(self.fly0, motornumber)
+        w.signal.finished.connect(self.scandone)
+        self.threadpool.start(w)
+
+    def stepscan(self, motornumber):
+        self.clearplot()
+        self.isscan = True
+        #self.thread = self.createflyscanthread(motornumber, type)
+        #self.thread.start()
+        w = Worker(self.stepscan0, motornumber)
         w.signal.finished.connect(self.scandone)
         self.threadpool.start(w)
     
@@ -313,50 +323,55 @@ class tweakmotors(QMainWindow):
             r = [r[0]/1000, r[1]/1000, r[2]/1000]
         return r
     
-    def fly0(self, motornumber, type):
+    def stepscan0(self, motornumber):
         axis = self.motornames[motornumber]
         self.signalmotor = axis
         self.signalmotorunit = self.motorunits[motornumber]
         self.rpos = []
         self.mpos = []
         
-        if type == 0:
-            self.isfly = False
-            if motornumber ==6:
-                st = float(self.ui.ed_lup_7_L.text())
-                fe = float(self.ui.ed_lup_7_R.text())
-                tm = float(self.ui.ed_lup_7_t.text())
-                step = float(self.ui.ed_lup_7_N.text())
-            
-            self.pts.mv(axis, st)
-            pos = st
-            while (abs(pos - fe)/(fe-st)*100 > 0.1):
-                self.pts.mv(axis, pos+step)
-                r = self.get_qds_pos()
-                self.rpos.append([r[0], r[1], r[2]])
-                pos = self.get_motorpos(self.signalmotor)
-                self.mpos.append(pos)
+        self.isfly = False
+        if motornumber ==6:
+            st = float(self.ui.ed_lup_7_L.text())
+            fe = float(self.ui.ed_lup_7_R.text())
+            tm = float(self.ui.ed_lup_7_t.text())
+            step = float(self.ui.ed_lup_7_N.text())
+        
+        self.pts.mv(axis, st)
+        pos = st
+        while (abs(pos - fe)/(fe-st)*100 > 0.1):
+            self.pts.mv(axis, pos+step)
+            r = self.get_qds_pos()
+            self.rpos.append([r[0], r[1], r[2]])
+            pos = self.get_motorpos(self.signalmotor)
+            self.mpos.append(pos)
 
-        if type == 1:
-            self.isfly = True
-            if motornumber ==6:
-                st = float(self.ui.ed_lup_7_L.text())
-                fe = float(self.ui.ed_lup_7_R.text())
-                tm = float(self.ui.ed_lup_7_t.text())
-                self.pts.phi.vel = 36/2
-                #time.sleep(0.1)
-                self.pts.phi.acc = self.pts.phi.vel*10
-                #time.sleep(0.1)
-                print(f"Speed of phi is set to {self.pts.phi.vel}.")
-                self.pts.mv('phi', st, wait=True)
-                time.sleep(0.5)
-                self.pts.phi.vel = abs(fe-st)/tm
-                #time.sleep(0.1)
-                self.pts.phi.acc = self.pts.phi.vel*10
-                #time.sleep(0.1)
-                print(f"Speed of phi is set to {self.pts.phi.vel}.")
-                self.pts.mv('phi', fe, wait=True)
-                print("Should be in run.")
+    def fly0(self, motornumber):
+        axis = self.motornames[motornumber]
+        self.signalmotor = axis
+        self.signalmotorunit = self.motorunits[motornumber]
+        self.rpos = []
+        self.mpos = []
+        
+        self.isfly = True
+        if motornumber ==6:
+            st = float(self.ui.ed_lup_7_L.text())
+            fe = float(self.ui.ed_lup_7_R.text())
+            tm = float(self.ui.ed_lup_7_t.text())
+            self.pts.phi.vel = 36/2
+            #time.sleep(0.1)
+            self.pts.phi.acc = self.pts.phi.vel*10
+            #time.sleep(0.1)
+            print(f"Speed of phi is set to {self.pts.phi.vel}.")
+            self.pts.mv('phi', st, wait=True)
+            time.sleep(0.5)
+            self.pts.phi.vel = abs(fe-st)/tm
+            #time.sleep(0.1)
+            self.pts.phi.acc = self.pts.phi.vel*10
+            #time.sleep(0.1)
+            print(f"Speed of phi is set to {self.pts.phi.vel}.")
+            self.pts.mv('phi', fe, wait=True)
+            print("Should be in run.")
         #self.isscan = False
 
     def save_qds(self):
