@@ -35,6 +35,8 @@ class instruments(object):
     def mvrx(self, target):
         self.mvx(target, relative=True)
 
+    #def ismove(self, axis):
+
     def mv(self, axis, target, wait=True):
         self.signals.AxisNameSignal.emit(axis)
         if axis == "phi":
@@ -43,13 +45,17 @@ class instruments(object):
                 ismoving = True
                 time.sleep(0.1)
                 while ismoving:
-                    try:
-                        b = self.phi.motor_state
-                        self.signals.AxisPosSignal.emit(float(self.posphi))
-                        ismoving = b['moving']
-                    except:
-                        ismoving = True
+#                    print(ismoving)
+                    b = self.phi.motor_state
+                    self.signals.AxisPosSignal.emit(float(self.posphi))
+                    ismoving = b['moving']
+                    if not ismoving:
+                        if abs(self.posphi - target)<0.00001:
+                            ismoving = False
+                        else:
+                            ismoving = True
                     time.sleep(0.1)
+            print(ismoving, "out of wait..")
         else:
             self.hexapod.mv(axis, target)
             if wait:
