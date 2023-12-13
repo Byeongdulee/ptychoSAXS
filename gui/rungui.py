@@ -13,6 +13,9 @@ from PyQt5 import uic, QtCore
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget
 from PyQt5.QtCore import QTimer, QObject, QThread, pyqtSlot, pyqtSignal, QRunnable, QThreadPool
 import time
+
+sys.path.append('..')
+
 from ptychosaxs import pts
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -104,7 +107,7 @@ class tweakmotors(QMainWindow):
         self.ui.ed_6.returnPressed.connect(lambda: self.mv(5))
         self.ui.ed_7.returnPressed.connect(lambda: self.mv(6))
 
-        self.ui.pb_SAXSscan_1.setEnabled(False)
+        self.ui.pb_SAXSscan_1.setEnabled(True)
         self.ui.pb_SAXSscan_2.setEnabled(False)
         self.ui.pb_SAXSscan_3.setEnabled(False)
         self.ui.pb_SAXSscan_4.setEnabled(False)
@@ -119,6 +122,7 @@ class tweakmotors(QMainWindow):
         self.ui.pb_lup_5.clicked.connect(lambda: self.stepscan(4))
         self.ui.pb_lup_6.clicked.connect(lambda: self.stepscan(5))
         self.ui.pb_lup_7.clicked.connect(lambda: self.stepscan(6))
+        self.ui.pb_SAXSscan_1.clicked.connect(lambda: self.fly(0))
         self.ui.pb_SAXSscan_7.clicked.connect(lambda: self.fly(6))
         self.ui.actionRun.triggered.connect(self.timescan)
         self.ui.actionStop.triggered.connect(self.timescanstop)
@@ -383,6 +387,28 @@ class tweakmotors(QMainWindow):
         self.mpos = []
         
         self.isfly = True
+        if motornumber ==0:
+            st = float(self.ui.ed_lup_7_L.text())
+            fe = float(self.ui.ed_lup_7_R.text())
+            tm = float(self.ui.ed_lup_7_t.text())
+            step = float(self.ui.ed_lup_7_N.text())
+            self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
+
+
+            t0 = time.time()
+            t = 0
+            #k = 0
+            self.hexapod.run_traj()
+            #if sec<=0:
+            sec = self.pts.hexapod.scantime + 1
+            while (t - t0) < sec:
+                r = self.get_qds_pos()
+                self.rpos.append([r[0], r[1], r[2]])
+                time.sleep(0.0001)
+                t = time.time()
+                self.mpos.append(t)
+#                k = k +1
+#                if k==10:
         if motornumber ==6:
             st = float(self.ui.ed_lup_7_L.text())
             fe = float(self.ui.ed_lup_7_R.text())
