@@ -343,7 +343,7 @@ class tweakmotors(QMainWindow):
                 st = float(self.ui.ed_lup_7_L.text())
                 fe = float(self.ui.ed_lup_7_R.text())
                 tm = float(self.ui.ed_lup_7_t.text())
-                self.pts.phi.vel = 36*2
+                self.pts.phi.vel = 36/2
                 #time.sleep(0.1)
                 self.pts.phi.acc = self.pts.phi.vel*10
                 #time.sleep(0.1)
@@ -474,7 +474,7 @@ class tweakmotors(QMainWindow):
             self.ui.z2.setText(txt)
         if value==3:
             self.ui.z3.setText(txt)
-        if val>3:
+        if value>3:
             txt = str(self.ui.lcd_Z_2.value())
             if value==1:
                 self.ui.z1_2.setText(txt)
