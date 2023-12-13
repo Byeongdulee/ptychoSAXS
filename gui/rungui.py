@@ -331,20 +331,49 @@ class tweakmotors(QMainWindow):
         self.mpos = []
         
         self.isfly = False
+        if motornumber ==0:
+            st = float(self.ui.ed_lup_1_L.text())
+            fe = float(self.ui.ed_lup_1_R.text())
+            step = float(self.ui.ed_lup_1_N.text())
+        
+        if motornumber ==1:
+            st = float(self.ui.ed_lup_2_L.text())
+            fe = float(self.ui.ed_lup_2_R.text())
+            step = float(self.ui.ed_lup_2_N.text())
+        
+        if motornumber ==2:
+            st = float(self.ui.ed_lup_3_L.text())
+            fe = float(self.ui.ed_lup_3_R.text())
+            step = float(self.ui.ed_lup_3_N.text())
+        
+        if motornumber ==3:
+            st = float(self.ui.ed_lup_4_L.text())
+            fe = float(self.ui.ed_lup_4_R.text())
+            step = float(self.ui.ed_lup_4_N.text())
+        
+        if motornumber ==4:
+            st = float(self.ui.ed_lup_5_L.text())
+            fe = float(self.ui.ed_lup_5_R.text())
+            step = float(self.ui.ed_lup_5_N.text())
+        
+        if motornumber ==5:
+            st = float(self.ui.ed_lup_6_L.text())
+            fe = float(self.ui.ed_lup_6_R.text())
+            step = float(self.ui.ed_lup_6_N.text())
+        
         if motornumber ==6:
             st = float(self.ui.ed_lup_7_L.text())
             fe = float(self.ui.ed_lup_7_R.text())
-            tm = float(self.ui.ed_lup_7_t.text())
             step = float(self.ui.ed_lup_7_N.text())
         
         self.pts.mv(axis, st)
-        pos = st
-        while (abs(pos - fe)/(fe-st)*100 > 0.1):
-            self.pts.mv(axis, pos+step)
+        pos = np.arange(st, fe+step, step)
+        for i, value in enumerate(pos):
+            self.pts.mv(axis, value)
             r = self.get_qds_pos()
             self.rpos.append([r[0], r[1], r[2]])
-            pos = self.get_motorpos(self.signalmotor)
-            self.mpos.append(pos)
+            #pos = self.get_motorpos(self.signalmotor)
+            self.mpos.append(value)
 
     def fly0(self, motornumber):
         axis = self.motornames[motornumber]
@@ -385,7 +414,7 @@ class tweakmotors(QMainWindow):
             return 0
         if ".txt" not in filename:
             filename = filename + ".txt"
-        self.pts.savedata(filename, self.mpos, self.rpos, col=[0,1])
+        self.pts.savedata(filename, self.mpos, self.rpos, col=[0,1,2])
 
     def clearplot(self):
         self.isscan = False

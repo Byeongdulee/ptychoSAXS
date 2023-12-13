@@ -137,20 +137,16 @@ class instruments(object):
                 ismoving = True
                 time.sleep(0.1)
                 while ismoving:
-                    b = self.phi.motor_state
-                    ismoving = b['moving']
-                    if not ismoving:
-                        if abs(self.phi.fpos - value)<0.0001:
-                            ismoving = True
-                    r, a = self.qds.get_position()
+                    ismoving = self.ismoving(axis)
                     time.sleep(0.1)
+                r, a = self.qds.get_position()
             else:
                 unit = "mm"
                 self.mv(axis, value)
                 time.sleep(0.1)
                 while not self.hexapod.isattarget():
-                    r, a = self.qds.get_position()
                     time.sleep(0.1)
+                r, a = self.qds.get_position()
             # read a qds value
             r, a = self.qds.get_position()
             r = r[0]
@@ -160,7 +156,9 @@ class instruments(object):
             plt.gca().cla()
             r = np.asarray(rpos)
             if type(col) == type([]):
-                plt.plot(pos[0:i], r[0:i,col[0]]/1000, 'r', pos[0:i], r[0:i,col[1]]/1000, 'b')
+                plt.plot(pos[0:i], r[0:i,col[0]]/1000, 'r', 
+                         pos[0:i], r[0:i,col[1]]/1000, 'b', 
+                         pos[0:i], r[0:i,col[2]]/1000, 'k')
             else:
                 plt.plot(pos[0:i], r[0:i,col]/1000, 'b')
             plt.ylabel('Positions (um)')
@@ -227,13 +225,16 @@ class instruments(object):
                 dt2 = np.column_stack((x, data[axis][0]*1000, data[axis][1]*1000))
                 np.savetxt(filename+"_hexapod"+".dat", dt2, fmt="%1.8e %1.8e %1.8e")
 
-    def savedata(self, filename, t, r, col=[0,1]):
+    def savedata(self, filename, t, r, col=[0,1,2]):
         tp = np.asarray(t)
         rp = np.asarray(r)
         if len(filename)>0:
             if type(col)==type([]):
-                dt = np.column_stack((tp, rp[:,col[0]], rp[:,col[1]]))
-                myfmt = '%1.8e %1.8e %1.8e'
+                dt = tp
+                myfmt = '%1.8e'
+                for i in col:
+                    dt = np.column_stack((dt, rp[:,i]))
+                    myfmt = '%s %s' % (myfmt, '%1.8e')
             else:
                 dt = np.column_stack((tp, rp[:,col]))
                 myfmt = '%1.8e %1.8e'
