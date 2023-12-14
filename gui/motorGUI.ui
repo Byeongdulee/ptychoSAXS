@@ -53,32 +53,15 @@
        <layout class="QVBoxLayout" name="verticalLayout_2">
         <item>
          <layout class="QGridLayout" name="gridLayout_2">
-          <item row="5" column="13">
-           <widget class="QPushButton" name="pb_lup_4">
-            <property name="text">
-             <string>lup scan</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="7">
-           <widget class="QLineEdit" name="ed_lup_5_L"/>
-          </item>
-          <item row="5" column="14">
-           <widget class="QPushButton" name="pb_SAXSscan_4">
-            <property name="text">
-             <string>fly scan</string>
-            </property>
-           </widget>
-          </item>
-          <item row="5" column="7">
-           <widget class="QLineEdit" name="ed_lup_4_L"/>
-          </item>
           <item row="5" column="4">
            <widget class="QPushButton" name="pb_tweak4L">
             <property name="text">
              <string>&lt;&lt;</string>
             </property>
            </widget>
+          </item>
+          <item row="5" column="7">
+           <widget class="QLineEdit" name="ed_lup_4_L"/>
           </item>
           <item row="4" column="7">
            <widget class="QLineEdit" name="ed_lup_3_L">
@@ -87,6 +70,9 @@
             </property>
            </widget>
           </item>
+          <item row="6" column="7">
+           <widget class="QLineEdit" name="ed_lup_5_L"/>
+          </item>
           <item row="4" column="14">
            <widget class="QPushButton" name="pb_SAXSscan_3">
             <property name="text">
@@ -94,23 +80,24 @@
             </property>
            </widget>
           </item>
-          <item row="5" column="8" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_4_R"/>
-          </item>
-          <item row="5" column="10">
-           <widget class="QLineEdit" name="ed_lup_4_N"/>
-          </item>
-          <item row="5" column="1" colspan="2">
-           <widget class="QLabel" name="lb_4">
+          <item row="5" column="14">
+           <widget class="QPushButton" name="pb_SAXSscan_4">
             <property name="text">
-             <string>TextLabel</string>
+             <string>fly scan</string>
             </property>
            </widget>
           </item>
-          <item row="5" column="3">
-           <widget class="QLineEdit" name="ed_4">
-            <property name="toolTip">
-             <string>Hit enter to update.</string>
+          <item row="5" column="13">
+           <widget class="QPushButton" name="pb_lup_4">
+            <property name="text">
+             <string>lup scan</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="4">
+           <widget class="QPushButton" name="pb_tweak3L">
+            <property name="text">
+             <string>&lt;&lt;</string>
             </property>
            </widget>
           </item>
@@ -121,54 +108,10 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="13">
-           <widget class="QPushButton" name="pb_lup_3">
-            <property name="text">
-             <string>lup scan</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="6">
-           <widget class="QPushButton" name="pb_tweak5R">
-            <property name="text">
-             <string>&gt;&gt;</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="5">
-           <widget class="QLineEdit" name="ed_5_tweak">
-            <property name="maximumSize">
-             <size>
-              <width>1500</width>
-              <height>16777215</height>
-             </size>
-            </property>
-            <property name="toolTip">
-             <string>in mm unit</string>
-            </property>
+          <item row="4" column="10">
+           <widget class="QLineEdit" name="ed_lup_3_N">
             <property name="text">
              <string>1</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="0">
-           <widget class="QLabel" name="lb5">
-            <property name="text">
-             <string>V</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="1" colspan="2">
-           <widget class="QLabel" name="lb_5">
-            <property name="text">
-             <string>TextLabel</string>
-            </property>
-           </widget>
-          </item>
-          <item row="5" column="0">
-           <widget class="QLabel" name="lb4">
-            <property name="text">
-             <string>U</string>
             </property>
            </widget>
           </item>
@@ -195,40 +138,10 @@
             </property>
            </widget>
           </item>
-          <item row="2" column="3">
-           <widget class="QLineEdit" name="ed_1">
-            <property name="toolTip">
-             <string>Hit enter to update.</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="1" colspan="2">
-           <widget class="QLabel" name="lb_2">
+          <item row="3" column="4">
+           <widget class="QPushButton" name="pb_tweak2L">
             <property name="text">
-             <string>TextLabel</string>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="5">
-           <widget class="QLineEdit" name="ed_3_tweak">
-            <property name="maximumSize">
-             <size>
-              <width>1500</width>
-              <height>16777215</height>
-             </size>
-            </property>
-            <property name="toolTip">
-             <string>in mm unit</string>
-            </property>
-            <property name="text">
-             <string>0.1</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="14">
-           <widget class="QPushButton" name="pb_SAXSscan_1">
-            <property name="text">
-             <string>fly scan</string>
+             <string>&lt;&lt;</string>
             </property>
            </widget>
           </item>
@@ -239,15 +152,15 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="4">
-           <widget class="QPushButton" name="pb_tweak3L">
+          <item row="3" column="0">
+           <widget class="QLabel" name="lb2">
             <property name="text">
-             <string>&lt;&lt;</string>
+             <string>Y</string>
             </property>
            </widget>
           </item>
-          <item row="3" column="3">
-           <widget class="QLineEdit" name="ed_2">
+          <item row="2" column="3">
+           <widget class="QLineEdit" name="ed_1">
             <property name="toolTip">
              <string>Hit enter to update.</string>
             </property>
@@ -269,26 +182,41 @@
             </property>
            </widget>
           </item>
-          <item row="5" column="5">
-           <widget class="QLineEdit" name="ed_4_tweak">
-            <property name="maximumSize">
-             <size>
-              <width>1500</width>
-              <height>16777215</height>
-             </size>
-            </property>
-            <property name="toolTip">
-             <string>in mm unit</string>
-            </property>
+          <item row="5" column="8" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_4_R"/>
+          </item>
+          <item row="2" column="6">
+           <widget class="QPushButton" name="pb_tweak1R">
             <property name="text">
-             <string>1</string>
+             <string>&gt;&gt;</string>
             </property>
            </widget>
           </item>
-          <item row="2" column="8" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_1_R">
+          <item row="3" column="11" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_2_t">
             <property name="text">
-             <string>4</string>
+             <string>2</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="0">
+           <widget class="QLabel" name="lb5">
+            <property name="text">
+             <string>V</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="1" colspan="2">
+           <widget class="QLabel" name="lb_5">
+            <property name="text">
+             <string>TextLabel</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0">
+           <widget class="QLabel" name="lb4">
+            <property name="text">
+             <string>U</string>
             </property>
            </widget>
           </item>
@@ -313,17 +241,89 @@
             </property>
            </widget>
           </item>
-          <item row="2" column="6">
-           <widget class="QPushButton" name="pb_tweak1R">
+          <item row="5" column="1" colspan="2">
+           <widget class="QLabel" name="lb_4">
             <property name="text">
-             <string>&gt;&gt;</string>
+             <string>TextLabel</string>
             </property>
            </widget>
           </item>
-          <item row="3" column="4">
-           <widget class="QPushButton" name="pb_tweak2L">
+          <item row="5" column="10">
+           <widget class="QLineEdit" name="ed_lup_4_N"/>
+          </item>
+          <item row="4" column="5">
+           <widget class="QLineEdit" name="ed_3_tweak">
+            <property name="maximumSize">
+             <size>
+              <width>1500</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>in mm unit</string>
+            </property>
             <property name="text">
-             <string>&lt;&lt;</string>
+             <string>0.1</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="5">
+           <widget class="QLineEdit" name="ed_5_tweak">
+            <property name="maximumSize">
+             <size>
+              <width>1500</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>in mm unit</string>
+            </property>
+            <property name="text">
+             <string>1</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="5">
+           <widget class="QLineEdit" name="ed_4_tweak">
+            <property name="maximumSize">
+             <size>
+              <width>1500</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>in mm unit</string>
+            </property>
+            <property name="text">
+             <string>1</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="3">
+           <widget class="QLineEdit" name="ed_2">
+            <property name="toolTip">
+             <string>Hit enter to update.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="3">
+           <widget class="QLineEdit" name="ed_4">
+            <property name="toolTip">
+             <string>Hit enter to update.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="14">
+           <widget class="QPushButton" name="pb_SAXSscan_1">
+            <property name="text">
+             <string>fly scan</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="8" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_1_R">
+            <property name="text">
+             <string>4</string>
             </property>
            </widget>
           </item>
@@ -334,146 +334,24 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="10">
-           <widget class="QLineEdit" name="ed_lup_3_N">
-            <property name="text">
-             <string>1</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="0">
-           <widget class="QLabel" name="lb2">
-            <property name="text">
-             <string>Y</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="11" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_2_t">
-            <property name="text">
-             <string>2</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="8" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_2_R">
-            <property name="text">
-             <string>1</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="11" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_1_t">
-            <property name="text">
-             <string>2</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="6">
-           <widget class="QPushButton" name="pb_tweak2R">
-            <property name="text">
-             <string>&gt;&gt;</string>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="11" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_3_t">
-            <property name="text">
-             <string>2</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="4">
-           <widget class="QPushButton" name="pb_tweak1L">
-            <property name="text">
-             <string>&lt;&lt;</string>
-            </property>
-           </widget>
-          </item>
-          <item row="5" column="6">
-           <widget class="QPushButton" name="pb_tweak4R">
-            <property name="text">
-             <string>&gt;&gt;</string>
-            </property>
-           </widget>
-          </item>
-          <item row="5" column="11" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_4_t">
-            <property name="text">
-             <string>2</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="3">
-           <widget class="QLineEdit" name="ed_5">
-            <property name="toolTip">
-             <string>Hit enter to update.</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="4">
-           <widget class="QPushButton" name="pb_tweak5L">
-            <property name="text">
-             <string>&lt;&lt;</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="7">
-           <widget class="QLineEdit" name="ed_lup_1_L">
-            <property name="text">
-             <string>-4</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="13">
-           <widget class="QPushButton" name="pb_lup_2">
+          <item row="4" column="13">
+           <widget class="QPushButton" name="pb_lup_3">
             <property name="text">
              <string>lup scan</string>
             </property>
            </widget>
           </item>
-          <item row="7" column="1" colspan="2">
-           <widget class="QLabel" name="lb_6">
+          <item row="3" column="1" colspan="2">
+           <widget class="QLabel" name="lb_2">
             <property name="text">
              <string>TextLabel</string>
             </property>
            </widget>
           </item>
-          <item row="8" column="8" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_7_R"/>
-          </item>
-          <item row="8" column="14">
-           <widget class="QPushButton" name="pb_SAXSscan_7">
+          <item row="6" column="6">
+           <widget class="QPushButton" name="pb_tweak5R">
             <property name="text">
-             <string>fly scan</string>
-            </property>
-           </widget>
-          </item>
-          <item row="7" column="0">
-           <widget class="QLabel" name="lb6">
-            <property name="text">
-             <string>W</string>
-            </property>
-           </widget>
-          </item>
-          <item row="8" column="0">
-           <widget class="QLabel" name="lb7">
-            <property name="text">
-             <string>phi</string>
-            </property>
-           </widget>
-          </item>
-          <item row="7" column="13">
-           <widget class="QPushButton" name="pb_lup_6">
-            <property name="text">
-             <string>lup scan</string>
-            </property>
-           </widget>
-          </item>
-          <item row="6" column="11" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_5_t">
-            <property name="text">
-             <string>2</string>
+             <string>&gt;&gt;</string>
             </property>
            </widget>
           </item>
@@ -484,21 +362,22 @@
             </property>
            </widget>
           </item>
-          <item row="3" column="14">
-           <widget class="QPushButton" name="pb_SAXSscan_2">
-            <property name="text">
-             <string>fly scan</string>
+          <item row="7" column="3">
+           <widget class="QLineEdit" name="ed_6">
+            <property name="toolTip">
+             <string>Hit enter to update.</string>
             </property>
            </widget>
           </item>
-          <item row="7" column="8" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_6_R"/>
+          <item row="7" column="0">
+           <widget class="QLabel" name="lb6">
+            <property name="text">
+             <string>W</string>
+            </property>
+           </widget>
           </item>
-          <item row="6" column="8" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_5_R"/>
-          </item>
-          <item row="7" column="3">
-           <widget class="QLineEdit" name="ed_6">
+          <item row="4" column="3">
+           <widget class="QLineEdit" name="ed_3">
             <property name="toolTip">
              <string>Hit enter to update.</string>
             </property>
@@ -511,10 +390,13 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="3">
-           <widget class="QLineEdit" name="ed_3">
-            <property name="toolTip">
-             <string>Hit enter to update.</string>
+          <item row="7" column="8" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_6_R"/>
+          </item>
+          <item row="3" column="14">
+           <widget class="QPushButton" name="pb_SAXSscan_2">
+            <property name="text">
+             <string>fly scan</string>
             </property>
            </widget>
           </item>
@@ -528,17 +410,10 @@
           <item row="6" column="10">
            <widget class="QLineEdit" name="ed_lup_5_N"/>
           </item>
-          <item row="7" column="6">
-           <widget class="QPushButton" name="pb_tweak6R">
+          <item row="5" column="6">
+           <widget class="QPushButton" name="pb_tweak4R">
             <property name="text">
              <string>&gt;&gt;</string>
-            </property>
-           </widget>
-          </item>
-          <item row="8" column="1" colspan="2">
-           <widget class="QLabel" name="lb_7">
-            <property name="text">
-             <string>TextLabel</string>
             </property>
            </widget>
           </item>
@@ -549,6 +424,37 @@
             </property>
            </widget>
           </item>
+          <item row="6" column="4">
+           <widget class="QPushButton" name="pb_tweak5L">
+            <property name="text">
+             <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="8" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_2_R">
+            <property name="text">
+             <string>1</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="8" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_5_R"/>
+          </item>
+          <item row="3" column="13">
+           <widget class="QPushButton" name="pb_lup_2">
+            <property name="text">
+             <string>lup scan</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="11" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_3_t">
+            <property name="text">
+             <string>2</string>
+            </property>
+           </widget>
+          </item>
           <item row="8" column="4">
            <widget class="QPushButton" name="pb_tweak7L">
             <property name="text">
@@ -556,8 +462,201 @@
             </property>
            </widget>
           </item>
+          <item row="7" column="1" colspan="2">
+           <widget class="QLabel" name="lb_6">
+            <property name="text">
+             <string>TextLabel</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="8" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_7_R"/>
+          </item>
+          <item row="5" column="11" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_4_t">
+            <property name="text">
+             <string>2</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="1" colspan="2">
+           <widget class="QLabel" name="lb_7">
+            <property name="text">
+             <string>TextLabel</string>
+            </property>
+           </widget>
+          </item>
           <item row="8" column="10">
            <widget class="QLineEdit" name="ed_lup_7_N"/>
+          </item>
+          <item row="2" column="7">
+           <widget class="QLineEdit" name="ed_lup_1_L">
+            <property name="text">
+             <string>-4</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="6">
+           <widget class="QPushButton" name="pb_tweak6R">
+            <property name="text">
+             <string>&gt;&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="6">
+           <widget class="QPushButton" name="pb_tweak2R">
+            <property name="text">
+             <string>&gt;&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="0">
+           <widget class="QLabel" name="lb7">
+            <property name="text">
+             <string>phi</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="11" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_1_t">
+            <property name="text">
+             <string>2</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="13">
+           <widget class="QPushButton" name="pb_lup_6">
+            <property name="text">
+             <string>lup scan</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="4">
+           <widget class="QPushButton" name="pb_tweak1L">
+            <property name="text">
+             <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="3">
+           <widget class="QLineEdit" name="ed_5">
+            <property name="toolTip">
+             <string>Hit enter to update.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="14">
+           <widget class="QPushButton" name="pb_SAXSscan_7">
+            <property name="text">
+             <string>fly scan</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="11" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_5_t">
+            <property name="text">
+             <string>2</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0" colspan="2">
+           <widget class="QLabel" name="label_8">
+            <property name="text">
+             <string>Name</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="7">
+           <widget class="QLineEdit" name="ed_lup_2_L">
+            <property name="text">
+             <string>-1</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="10">
+           <widget class="QLineEdit" name="ed_lup_6_N"/>
+          </item>
+          <item row="1" column="14">
+           <widget class="QLabel" name="label_4">
+            <property name="text">
+             <string>Fly Scan</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="4">
+           <widget class="QPushButton" name="pb_tweak6L">
+            <property name="text">
+             <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QLabel" name="label_20">
+            <property name="text">
+             <string>Position</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="4" colspan="3">
+           <widget class="QLabel" name="label_11">
+            <property name="text">
+             <string>Tweek step</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="7">
+           <widget class="QLineEdit" name="ed_lup_7_L"/>
+          </item>
+          <item row="0" column="0" colspan="3">
+           <widget class="QLabel" name="label_7">
+            <property name="font">
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="text">
+             <string>Motors</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="3">
+           <widget class="QLabel" name="label_9">
+            <property name="text">
+             <string>Move to</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="11" colspan="2">
+           <widget class="QLineEdit" name="ed_lup_6_t">
+            <property name="text">
+             <string>2</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="8" colspan="2">
+           <widget class="QLabel" name="label_16">
+            <property name="text">
+             <string>To</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="7">
+           <widget class="QLineEdit" name="ed_lup_6_L"/>
+          </item>
+          <item row="1" column="13">
+           <widget class="QLabel" name="label_3">
+            <property name="text">
+             <string>Step Scan</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="3">
+           <widget class="QLineEdit" name="ed_7">
+            <property name="toolTip">
+             <string>Hit enter to update.</string>
+            </property>
+           </widget>
           </item>
           <item row="7" column="5">
            <widget class="QLineEdit" name="ed_6_tweak">
@@ -575,20 +674,6 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="6">
-           <widget class="QPushButton" name="pb_tweak3R">
-            <property name="text">
-             <string>&gt;&gt;</string>
-            </property>
-           </widget>
-          </item>
-          <item row="7" column="4">
-           <widget class="QPushButton" name="pb_tweak6L">
-            <property name="text">
-             <string>&lt;&lt;</string>
-            </property>
-           </widget>
-          </item>
           <item row="7" column="14">
            <widget class="QPushButton" name="pb_SAXSscan_6">
             <property name="text">
@@ -596,10 +681,31 @@
             </property>
            </widget>
           </item>
-          <item row="3" column="7">
-           <widget class="QLineEdit" name="ed_lup_2_L">
+          <item row="1" column="11" colspan="2">
+           <widget class="QLabel" name="label_18">
             <property name="text">
-             <string>-1</string>
+             <string>run time [fly]</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="6">
+           <widget class="QPushButton" name="pb_tweak3R">
+            <property name="text">
+             <string>&gt;&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="lb1">
+            <property name="text">
+             <string>X</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="7">
+           <widget class="QLabel" name="label_15">
+            <property name="text">
+             <string>from</string>
             </property>
            </widget>
           </item>
@@ -607,6 +713,26 @@
            <widget class="QPushButton" name="pb_SAXSscan_5">
             <property name="text">
              <string>fly scan</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="15">
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item row="1" column="10">
+           <widget class="QLabel" name="label_17">
+            <property name="text">
+             <string>step or step time [fly]</string>
             </property>
            </widget>
           </item>
@@ -626,106 +752,7 @@
             </property>
            </widget>
           </item>
-          <item row="8" column="7">
-           <widget class="QLineEdit" name="ed_lup_7_L"/>
-          </item>
-          <item row="7" column="7">
-           <widget class="QLineEdit" name="ed_lup_6_L"/>
-          </item>
-          <item row="7" column="10">
-           <widget class="QLineEdit" name="ed_lup_6_N"/>
-          </item>
-          <item row="7" column="11" colspan="2">
-           <widget class="QLineEdit" name="ed_lup_6_t">
-            <property name="text">
-             <string>2</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="13">
-           <widget class="QLabel" name="label_3">
-            <property name="text">
-             <string>Step Scan</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="2">
-           <widget class="QLabel" name="label_20">
-            <property name="text">
-             <string>Position</string>
-            </property>
-           </widget>
-          </item>
-          <item row="8" column="3">
-           <widget class="QLineEdit" name="ed_7">
-            <property name="toolTip">
-             <string>Hit enter to update.</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="4" colspan="3">
-           <widget class="QLabel" name="label_11">
-            <property name="text">
-             <string>Tweek step</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="8" colspan="2">
-           <widget class="QLabel" name="label_16">
-            <property name="text">
-             <string>To</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="lb1">
-            <property name="text">
-             <string>X</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="11" colspan="2">
-           <widget class="QLabel" name="label_18">
-            <property name="text">
-             <string>run time [fly]</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="0" colspan="2">
-           <widget class="QLabel" name="label_8">
-            <property name="text">
-             <string>Name</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="7">
-           <widget class="QLabel" name="label_15">
-            <property name="text">
-             <string>from</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="0" colspan="3">
-           <widget class="QLabel" name="label_7">
-            <property name="font">
-             <font>
-              <weight>75</weight>
-              <bold>true</bold>
-             </font>
-            </property>
-            <property name="text">
-             <string>Motors</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="14">
-           <widget class="QLabel" name="label_4">
-            <property name="text">
-             <string>Fly Scan</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="7" colspan="4">
+          <item row="0" column="7" colspan="3">
            <widget class="QLabel" name="label_19">
             <property name="font">
              <font>
@@ -738,32 +765,19 @@
             </property>
            </widget>
           </item>
-          <item row="1" column="10">
-           <widget class="QLabel" name="label_17">
+          <item row="0" column="10">
+           <widget class="QCheckBox" name="cb_keepprevscan">
             <property name="text">
-             <string>step or step time [fly]</string>
+             <string>Keep the previous scan</string>
             </property>
            </widget>
           </item>
-          <item row="1" column="3">
-           <widget class="QLabel" name="label_9">
+          <item row="0" column="11" colspan="2">
+           <widget class="QCheckBox" name="cb_reversescandir">
             <property name="text">
-             <string>Move to</string>
+             <string>Reverse scan direction</string>
             </property>
            </widget>
-          </item>
-          <item row="6" column="15">
-           <spacer name="horizontalSpacer">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
           </item>
          </layout>
         </item>
@@ -1326,6 +1340,92 @@
    </property>
   </action>
  </widget>
+ <tabstops>
+  <tabstop>ed_1</tabstop>
+  <tabstop>pb_tweak1L</tabstop>
+  <tabstop>ed_1_tweak</tabstop>
+  <tabstop>pb_tweak1R</tabstop>
+  <tabstop>ed_lup_1_L</tabstop>
+  <tabstop>ed_lup_1_R</tabstop>
+  <tabstop>ed_lup_1_N</tabstop>
+  <tabstop>ed_lup_1_t</tabstop>
+  <tabstop>pb_lup_1</tabstop>
+  <tabstop>pb_SAXSscan_1</tabstop>
+  <tabstop>ed_2</tabstop>
+  <tabstop>pb_tweak2L</tabstop>
+  <tabstop>ed_2_tweak</tabstop>
+  <tabstop>pb_tweak2R</tabstop>
+  <tabstop>ed_lup_2_L</tabstop>
+  <tabstop>ed_lup_2_R</tabstop>
+  <tabstop>ed_lup_2_N</tabstop>
+  <tabstop>ed_lup_2_t</tabstop>
+  <tabstop>pb_lup_2</tabstop>
+  <tabstop>pb_SAXSscan_2</tabstop>
+  <tabstop>ed_3</tabstop>
+  <tabstop>pb_tweak3L</tabstop>
+  <tabstop>ed_3_tweak</tabstop>
+  <tabstop>pb_tweak3R</tabstop>
+  <tabstop>ed_lup_3_L</tabstop>
+  <tabstop>ed_lup_3_R</tabstop>
+  <tabstop>ed_lup_3_N</tabstop>
+  <tabstop>ed_lup_3_t</tabstop>
+  <tabstop>pb_lup_3</tabstop>
+  <tabstop>pb_SAXSscan_3</tabstop>
+  <tabstop>ed_4</tabstop>
+  <tabstop>pb_tweak4L</tabstop>
+  <tabstop>ed_4_tweak</tabstop>
+  <tabstop>pb_tweak4R</tabstop>
+  <tabstop>ed_lup_4_L</tabstop>
+  <tabstop>ed_lup_4_R</tabstop>
+  <tabstop>ed_lup_4_N</tabstop>
+  <tabstop>ed_lup_4_t</tabstop>
+  <tabstop>pb_lup_4</tabstop>
+  <tabstop>pb_SAXSscan_4</tabstop>
+  <tabstop>ed_5</tabstop>
+  <tabstop>pb_tweak5L</tabstop>
+  <tabstop>ed_5_tweak</tabstop>
+  <tabstop>pb_tweak5R</tabstop>
+  <tabstop>ed_lup_5_L</tabstop>
+  <tabstop>ed_lup_5_R</tabstop>
+  <tabstop>ed_lup_5_N</tabstop>
+  <tabstop>ed_lup_5_t</tabstop>
+  <tabstop>pb_lup_5</tabstop>
+  <tabstop>pb_SAXSscan_5</tabstop>
+  <tabstop>ed_6</tabstop>
+  <tabstop>pb_tweak6L</tabstop>
+  <tabstop>ed_6_tweak</tabstop>
+  <tabstop>pb_tweak6R</tabstop>
+  <tabstop>ed_lup_6_L</tabstop>
+  <tabstop>ed_lup_6_R</tabstop>
+  <tabstop>ed_lup_6_N</tabstop>
+  <tabstop>ed_lup_6_t</tabstop>
+  <tabstop>pb_lup_6</tabstop>
+  <tabstop>pb_SAXSscan_6</tabstop>
+  <tabstop>ed_7</tabstop>
+  <tabstop>pb_tweak7L</tabstop>
+  <tabstop>ed_7_tweak</tabstop>
+  <tabstop>pb_tweak7R</tabstop>
+  <tabstop>ed_lup_7_L</tabstop>
+  <tabstop>ed_lup_7_R</tabstop>
+  <tabstop>ed_lup_7_N</tabstop>
+  <tabstop>ed_lup_7_t</tabstop>
+  <tabstop>pb_lup_7</tabstop>
+  <tabstop>pb_SAXSscan_7</tabstop>
+  <tabstop>cb_keepprevscan</tabstop>
+  <tabstop>cb_reversescandir</tabstop>
+  <tabstop>pb_resetx</tabstop>
+  <tabstop>pb_recordx1</tabstop>
+  <tabstop>pb_recordx2</tabstop>
+  <tabstop>pb_recordx3</tabstop>
+  <tabstop>pb_resetz</tabstop>
+  <tabstop>pb_recordz1</tabstop>
+  <tabstop>pb_recordz2</tabstop>
+  <tabstop>pb_recordz3</tabstop>
+  <tabstop>pb_resetz_2</tabstop>
+  <tabstop>pb_recordz1_2</tabstop>
+  <tabstop>pb_recordz2_2</tabstop>
+  <tabstop>pb_recordz3_2</tabstop>
+ </tabstops>
  <resources/>
  <connections/>
 </ui>

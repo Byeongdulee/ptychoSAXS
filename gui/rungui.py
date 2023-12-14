@@ -179,6 +179,13 @@ class tweakmotors(QMainWindow):
         self.ui.vlayout_plot.addWidget(self.canvas)
         #self.ui.vlayout_plot.addWidget(self.button)
         #self.setLayout(layout)
+        # instead of ax.hold(False)
+        self.figure.clear()
+
+        # create an axis
+        self.ax = self.figure.add_subplot(131)
+        self.ax2 = self.figure.add_subplot(132)
+        self.ax3 = self.figure.add_subplot(133)
 
         self.updatepos()
 
@@ -248,7 +255,8 @@ class tweakmotors(QMainWindow):
         self.isscan = False
 
     def timescan(self):
-        self.clearplot()
+        if not self.ui.cb_keepprevscan.isChecked():
+            self.clearplot()
         #if self.isscan:
         #    print("Stop the scan first.")
         #    return
@@ -279,16 +287,19 @@ class tweakmotors(QMainWindow):
     #     return thread
     
     def fly(self, motornumber):
-        self.clearplot()
+        if not self.ui.cb_keepprevscan.isChecked():
+            self.clearplot()
         self.isscan = True
         #self.thread = self.createflyscanthread(motornumber, type)
         #self.thread.start()
+        #self.timer.set_interval(100)
         w = Worker(self.fly0, motornumber)
         w.signal.finished.connect(self.scandone)
         self.threadpool.start(w)
 
     def stepscan(self, motornumber):
-        self.clearplot()
+        if not self.ui.cb_keepprevscan.isChecked():
+            self.clearplot()
         self.isscan = True
         #self.thread = self.createflyscanthread(motornumber, type)
         #self.thread.start()
@@ -370,7 +381,11 @@ class tweakmotors(QMainWindow):
             st = float(self.ui.ed_lup_7_L.text())
             fe = float(self.ui.ed_lup_7_R.text())
             step = float(self.ui.ed_lup_7_N.text())
-        
+        if self.ui.cb_reversescandir.isChecked():
+            t = fe
+            fe = st
+            st = t 
+            step = -step
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step, step)
         for i, value in enumerate(pos):
@@ -393,6 +408,12 @@ class tweakmotors(QMainWindow):
             fe = float(self.ui.ed_lup_1_R.text())
             tm = float(self.ui.ed_lup_1_t.text())
             step = float(self.ui.ed_lup_1_N.text())
+            if self.ui.cb_reversescandir.isChecked():
+                t = fe
+                fe = st
+                st = t 
+                step = -step
+
             self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
             #self.pts, axis, self.pts.hexapod.wave_start)
 
@@ -414,6 +435,10 @@ class tweakmotors(QMainWindow):
             st = float(self.ui.ed_lup_7_L.text())
             fe = float(self.ui.ed_lup_7_R.text())
             tm = float(self.ui.ed_lup_7_t.text())
+            if self.ui.cb_reversescandir.isChecked():
+                t = fe
+                fe = st
+                st = t 
             self.pts.phi.vel = 36/2
             #time.sleep(0.1)
             self.pts.phi.acc = self.pts.phi.vel*10
@@ -511,6 +536,7 @@ class tweakmotors(QMainWindow):
             if self.isfly:
                 self.rpos.append([r[0], r[1], r[2]])
                 self.mpos.append(self.get_motorpos(self.signalmotor))
+            self.updatepos()
             self.plot()
 
     def reset_qdsX(self):
@@ -561,14 +587,6 @@ class tweakmotors(QMainWindow):
         # random data
         #data = [random.random() for i in range(10)]
 
-        # instead of ax.hold(False)
-        self.figure.clear()
-
-        # create an axis
-        ax = self.figure.add_subplot(131)
-        ax2 = self.figure.add_subplot(132)
-        ax3 = self.figure.add_subplot(133)
-
         # discards the old graph
         # ax.hold(False) # deprecated, see above
 
@@ -576,20 +594,23 @@ class tweakmotors(QMainWindow):
         r = np.asarray(self.rpos)
         pos = np.asarray(self.mpos)
         xl = f"{self.signalmotor} ({self.signalmotorunit})"
-        
 
+        if not self.ui.cb_keepprevscan.isChecked():
+            self.ax.cla()
+            self.ax2.cla()
+            self.ax3.cla()
         try:
-            ax.plot(pos, r[:,0], 'r')
-            ax.set_xlabel(xl)
+            self.ax.plot(pos, r[:,0], 'r')
+            self.ax.set_xlabel(xl)
             yl = 'X position (um)'
-            ax.set_ylabel(yl)
-            ax2.plot(pos, r[:,1], 'b')
-            ax2.set_xlabel(xl)
-            ax3.plot(pos, r[:,2], 'k')
-            ax3.set_xlabel(xl)
+            self.ax.set_ylabel(yl)
+            self.ax2.plot(pos, r[:,1], 'b')
+            self.ax2.set_xlabel(xl)
+            self.ax3.plot(pos, r[:,2], 'k')
+            self.ax3.set_xlabel(xl)
             yl = 'Z position (um)'
-            ax2.set_ylabel(yl)
-            ax3.set_ylabel(yl)
+            self.ax2.set_ylabel(yl)
+            self.ax3.set_ylabel(yl)
         except:
             print("There was error in the plot")
             pass
