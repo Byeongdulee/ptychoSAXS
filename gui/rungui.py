@@ -23,6 +23,19 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import matplotlib.pyplot as plt
 import numpy as np
 
+# panda box...
+import asyncio
+#import sys
+from pandablocks.blocking import BlockingClient
+from pandablocks.commands import Put
+pandaip = "164.54.122.90"
+from pandablocks.asyncio import AsyncioClient
+from pandablocks.commands import Put
+from pandablocks.hdf import write_hdf_files
+import h5py
+
+
+
 class workerSignals(QObject):
     finished = pyqtSignal(bool)
     progress = pyqtSignal(int)
@@ -75,6 +88,33 @@ class mover(QRunnable):
         """Long-running task."""
         self.pts.mvr(self.axis, self.pos)
         self.signal.finished.emit(True)
+
+def disarm_panda():
+
+    with BlockingClient(pandaip) as client:
+        client.send(Put("BITS.A", 0))
+
+
+pandafn = "C:/Users/s12idc/Documents/GitHub/panda-capture.h5"
+
+async def arm_and_hdf():
+    # Create a client and connect the control and data ports
+    async with AsyncioClient(pandaip) as client:
+        try:
+            # Put to 2 fields simultaneously
+            await asyncio.gather(
+                client.send(Put("BITS.A", 1)),
+            )
+            # Listen for data, arming the PandA at the beginning
+            
+            await write_hdf_files(client, file_names=iter((pandafn,)), arm=True)
+        except:
+            pass
+
+def get_pandadata():
+    h = h5py.File(pandafn, "r")
+    d = h["INENC2.VAL.Value"][()]
+    return d
 
 class tweakmotors(QMainWindow):
     def __init__(self):
@@ -129,6 +169,7 @@ class tweakmotors(QMainWindow):
         self.ui.actionClear.triggered.connect(self.clearplot)
         self.ui.actionSet_default_speed.triggered.connect(self.setphivel_default)
         self.ui.actionSave.triggered.connect(self.save_qds)
+        self.ui.actionSave_flyscan_result.triggered.connect(self.fly_result)
         self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
         self.pts.signals.AxisNameSignal.connect(self.update_motorname)
 
@@ -249,6 +290,7 @@ class tweakmotors(QMainWindow):
     def scandone(self, value):
         self.isscan = False
         self.updatepos()
+        disarm_panda()
         print("scan done.......")
     
     def timescanstop(self):
@@ -467,6 +509,47 @@ class tweakmotors(QMainWindow):
         if ".txt" not in filename:
             filename = filename + ".txt"
         self.pts.savedata(filename, self.mpos, self.rpos, col=[0,1,2])
+
+    def fly_result(self):
+
+        w = QWidget()
+        w.resize(320, 240)
+        # Set window title
+        w.setWindowTitle("Save QDS Data As")
+        fn = QFileDialog.getSaveFileName(w, 'Save File', '', 'Text (*.txt *.dat)',None, QFileDialog.DontUseNativeDialog)
+        filename = fn[0]
+        if filename == "":
+            return 0
+        if ".txt" not in filename:
+            filename = filename + ".txt"
+
+
+        data = self.pts.hexapod.get_records()
+        print("Done.. Preparing to plot.")
+        if isinstance(data, type({})):
+            l_data = [data]
+        else:
+            l_data = data
+        qds_data = get_pandadata()
+        qds_data = qds_data/1000
+        print(self.pts.hexapod.wave_start, " wave_start position")
+        qds_data = qds_data[-1]-qds_data-self.pts.hexapod.wave_start*1000
+        axis = "X"
+        for data in l_data:
+            #ndata = data[axis][0].size
+            #x = range(0, ndata)
+            if len(filename)>0:
+                target = data[axis][0]*1000
+                encoded = data[axis][1]*1000
+                target = target[self.pts.hexapod.pulse_positions_index]
+                encoded = encoded[self.pts.hexapod.pulse_positions_index]
+                try:
+                    dt2 = np.column_stack((target, encoded, qds_data))
+                    np.savetxt(filename, dt2, fmt="%1.8e %1.8e %1.8e")
+                except:
+                    print(target.shape, " encoded data")
+                    print(encoded.shape, " encoded data")
+                    print(qds_data.shape, " qds data")
 
     def clearplot(self):
         self.isscan = False

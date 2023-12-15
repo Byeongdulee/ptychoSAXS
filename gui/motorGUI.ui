@@ -1293,6 +1293,7 @@
     <property name="title">
      <string>Hexapod</string>
     </property>
+    <addaction name="actionSave_flyscan_result"/>
    </widget>
    <widget class="QMenu" name="menuACS">
     <property name="title">
@@ -1337,6 +1338,11 @@
   <action name="actionSave">
    <property name="text">
     <string>Save</string>
+   </property>
+  </action>
+  <action name="actionSave_flyscan_result">
+   <property name="text">
+    <string>Save flyscan result</string>
    </property>
   </action>
  </widget>
