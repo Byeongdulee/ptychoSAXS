@@ -1,4 +1,6 @@
 import smaract.ctl as ctl
+import sys
+import time
 
 smaract = None
 
@@ -91,18 +93,25 @@ def findReference(channel):
     # The "ChannelState.REFERENCING" flag in the channel state can be monitored to determine
     # the end of the referencing sequence.
 
+def mv(ax, target, wait=True):
+    #ax = channels[chname]
+    move(ax, target=target, absolute=True, wait=wait)
+    
+def mvr(ax, target, wait=True):
+    #ax = channels[chname]
+    move(ax, target=target, absolute=False, wait=wait)
+    
 # MOVE
 # The move command instructs a positioner to perform a movement.
 # The given "move_value" parameter is interpreted according to the previously configured move mode.
 # It can be a position value (in case of closed loop movement mode), a scan value (in case of scan move mode)
 # or a number of steps (in case of step move mode).
 def move(channel, target=0.001, absolute=True, wait=True):
-    # input target is in mm
-    # this stage requires pm...
-    target = target*1E9
+    # input target is in mm or deg.
+    target = int(target*1E9)
     # Set move mode depending properties for the next movement.
     if absolute:
-        #move_mode = ctl.MoveMode.CL_ABSOLUTE
+        move_mode = ctl.MoveMode.CL_ABSOLUTE
         # Set move velocity [in pm/s].
         ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_VELOCITY, 1000000000)
         # Set move acceleration [in pm/s2].
@@ -112,7 +121,7 @@ def move(channel, target=0.001, absolute=True, wait=True):
 
         print("MCS2 move channel {} to absolute position: {} pm.".format(channel, target))
     else:
-        #move_mode = ctl.MoveMode.CL_RELATIVE
+        move_mode = ctl.MoveMode.CL_RELATIVE
         # Set move velocity [in pm/s].
         ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_VELOCITY, 500000000)
         # Set move acceleration [in pm/s2].
@@ -122,10 +131,12 @@ def move(channel, target=0.001, absolute=True, wait=True):
         print("MCS2 move channel {} relative: {} pm.".format(channel, target))
 
     # Start actual movement.
+    ctl.SetProperty_i32(smaract, channel, ctl.Property.MOVE_MODE, move_mode)
     ctl.Move(smaract, channel, target, 0)
     # Note that the function call returns immediately, without waiting for the movement to complete.
     if wait:
-        ctl.ChannelState()
+        while ismoving(channel):
+            time.sleep(0.01)
     # The "ChannelState.ACTIVELY_MOVING" (and "ChannelState.CLOSED_LOOP_ACTIVE") flag in the channel state
     # can be monitored to determine the end of the movement.
 
@@ -169,11 +180,12 @@ for ch in channels:
     base_units.append(base_unit)
 
     # The move mode states the type of movement performed when sending the "Move" command.
-move_mode = ctl.MoveMode.CL_ABSOLUTE
-def get_status():
+#move_mode = ctl.MoveMode.CL_ABSOLUTE
+
+def get_connect_status():
     # Now we read the state for all available channels.
     # The passed "idx" parameter (the channel index in this case) is zero-based.
-    for channel in range(channels):
+    for channel in channels:
         state = ctl.GetProperty_i32(smaract, channel, ctl.Property.CHANNEL_STATE)
         # The returned channel state holds a bit field of several state flags.
         # See the MCS2 Programmers Guide for the meaning of all state flags.
@@ -237,37 +249,49 @@ def get_status():
 #     print("Unexpected error: {}, {} in line: {}".format(ex, type(ex), (sys.exc_info()[-1].tb_lineno)))
 #     raise
     
-r_pos_handle = []
-r_state_handle = []
+# r_pos_handle = []
+# r_state_handle = []
 
-def _set_poshandles():
-    # Issue requests for the two properties "position" and "channel state".
-    for ch in channels:
-        r_id1 = ctl.RequestReadProperty(smaract, ch, ctl.Property.POSITION, 0)
-    # The function call returns immediately, allowing the application to issue another request or to perform other tasks.
-    # We simply request a second property. (the channel state in this case)
-        r_id2 = ctl.RequestReadProperty(smaract, ch, ctl.Property.CHANNEL_STATE, 0)
-        r_pos_handle.append(r_id1)
-        r_state_handle.append(r_id2)
+# def _set_poshandles():
+#     # Issue requests for the two properties "position" and "channel state".
+#     for ch in channels:
+#         r_id1 = ctl.RequestReadProperty(smaract, ch, ctl.Property.POSITION, 0)
+#     # The function call returns immediately, allowing the application to issue another request or to perform other tasks.
+#     # We simply request a second property. (the channel state in this case)
+#         r_id2 = ctl.RequestReadProperty(smaract, ch, ctl.Property.CHANNEL_STATE, 0)
+#         r_pos_handle.append(r_id1)
+#         r_state_handle.append(r_id2)
 
-    # ...process other tasks...
+#     # ...process other tasks...
 
-    # Receive the results
-    # While the request-function is non-blocking the read-functions block until the desired data has arrived.
-    # Note that we must use the correct "ReadProperty_ixx" function depending on the datatype of the requested property.
-    # Otherwise a ctl.ErrorCode.INVALID_DATA_TYPE error is returned.
+#     # Receive the results
+#     # While the request-function is non-blocking the read-functions block until the desired data has arrived.
+#     # Note that we must use the correct "ReadProperty_ixx" function depending on the datatype of the requested property.
+#     # Otherwise a ctl.ErrorCode.INVALID_DATA_TYPE error is returned.
 
-_set_poshandles()
+# _set_poshandles()
 
 def get_pos(ax):
-    position = ctl.ReadProperty_i64(smaract, r_pos_handle[ax])
-    state = ctl.ReadProperty_i32(smaract, r_state_handle[ax])
+    # return position in deg or mm
+    try:
+        r_id1 = ctl.RequestReadProperty(smaract, ax, ctl.Property.POSITION, 0)
+        position = ctl.ReadProperty_i64(smaract, r_id1)
 
-    # Print the results
-    print("MCS2 current position of channel {}: {}".format(ax, position), end='')
-    print("pm.") if base_units[ax] == ctl.BaseUnit.METER else print("ndeg.")
-    if (state & ctl.ChannelState.ACTIVELY_MOVING) == 0:
-        print("MCS2 channel {} is stopped.".format(ax))
+        # Print the results
+        print("MCS2 current position of channel {}: {}".format(ax, position), end='')
+        print("pm.") if base_units[ax] == ctl.BaseUnit.METER else print("ndeg.")
+        return position/1E9
+    except ctl.Error as e:
+        # Catching the "ctl.Error" exceptions may be used to handle errors of SmarActCTL function calls.
+        # The "e.func" element holds the name of the function that caused the error and
+        # the "e.code" element holds the error code.
+        # Passing an error code to "GetResultInfo" returns a human readable string specifying the error.
+        print("MCS2 {}: {}, error: {} (0x{:04X}) in line: {}."
+            .format(e.func, ctl.GetResultInfo(e.code), ctl.ErrorCode(e.code).name, e.code, (sys.exc_info()[-1].tb_lineno)))
+
+    except Exception as ex:
+        print("Unexpected error: {}, {} in line: {}".format(ex, type(ex), (sys.exc_info()[-1].tb_lineno)))
+        raise
 
 def set_pos(ax, pos=-100000000):
     # For the sake of completeness, finally we use the asynchronous (non-blocking) write function to
@@ -294,3 +318,13 @@ def set_pos(ax, pos=-100000000):
 #    ctl.RequestWriteProperty_i64(d_handle, channel, ctl.Property.POSITION, position, pass_rID = False)
     # No result must be requested with the WaitForWrite function in this case.
 
+def ismoving(ax):
+    if type(ax) == str:
+        ax = channels.index(ax)
+    r_id2 = ctl.RequestReadProperty(smaract, ax, ctl.Property.CHANNEL_STATE, 0)
+    state = ctl.ReadProperty_i32(smaract, r_id2)
+    if (state & ctl.ChannelState.ACTIVELY_MOVING) == 0:
+        return False
+#        print("MCS2 channel {} is stopped.".format(ax))
+    else:
+        return True

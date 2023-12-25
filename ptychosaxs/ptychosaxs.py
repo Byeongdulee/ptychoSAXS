@@ -62,13 +62,11 @@ class instruments(object):
                     self.signals.AxisPosSignal.emit(float(pos[axis]))
                     time.sleep(0.1)
         if axis in ["trans1","trans2","tilt1","tilt2"]:
-            self.smaract.mv(axis, target)
+            self.gonio.mv(axis, target, wait=False)
             if wait:
                 time.sleep(0.02)
-                while not self.hexapod.isattarget():
-                    pos = self.hexapod.get_pos()
-                    self.signals.AxisPosSignal.emit(float(pos[axis]))
-                    time.sleep(0.1)
+                while not self.gonio.ismoving():
+                    time.sleep(0.01)
 
     def mvr(self, axis, target, wait=True):
         if axis == "phi":
