@@ -38,13 +38,6 @@ class instruments(object):
     def ismoving(self, axis):
         if axis == "phi":
             ismoving = not self.phi.in_position
-            # b = self.phi.motor_state
-            # ismoving = b['moving']
-            # if not ismoving:
-            #     if abs(self.posphi - target)<0.00001:
-            #         ismoving = False
-            #     else:
-            #         ismoving = True
         else:
             ismoving = not self.hexapod.isattarget()
         return ismoving
@@ -57,20 +50,19 @@ class instruments(object):
                 ismoving = True
                 time.sleep(0.1)
                 while ismoving:
-#                    print(ismoving)
                     self.signals.AxisPosSignal.emit(float(self.posphi))
                     ismoving = self.ismoving(axis)
-                    # b = self.phi.motor_state
-                    # ismoving = b['moving']
-                    # if not ismoving:
-                    #     if abs(self.posphi - target)<0.00001:
-                    #         ismoving = False
-                    #     else:
-                    #         ismoving = True
                     time.sleep(0.1)
-            #print(ismoving, "out of wait..")
-        else:
+        if axis in ["X","Y","Z","U","V","W"]:
             self.hexapod.mv(axis, target)
+            if wait:
+                time.sleep(0.02)
+                while not self.hexapod.isattarget():
+                    pos = self.hexapod.get_pos()
+                    self.signals.AxisPosSignal.emit(float(pos[axis]))
+                    time.sleep(0.1)
+        if axis in ["trans1","trans2","tilt1","tilt2"]:
+            self.smaract.mv(axis, target)
             if wait:
                 time.sleep(0.02)
                 while not self.hexapod.isattarget():
@@ -87,11 +79,9 @@ class instruments(object):
                 time.sleep(0.2)
                 while ismoving:
                     b = self.phi.motor_state
-                    #print(self.posphi, " during move")
                     self.signals.AxisPosSignal.emit(self.posphi)
                     ismoving = b['moving']
                     time.sleep(0.02)
-            #print(self.posphi, " after move")
         else:
             pos = self.hexapod.get_pos()
             self.hexapod.mv(axis, pos[axis]+target)
@@ -99,7 +89,6 @@ class instruments(object):
                 time.sleep(0.02)
                 while not self.hexapod.isattarget():
                     pos = self.hexapod.get_pos()
-                    #print(pos)
                     try:
                         self.signals.AxisPosSignal.emit(pos[axis])
                     except:
