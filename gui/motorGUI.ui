@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1544</width>
-    <height>1326</height>
+    <width>1074</width>
+    <height>946</height>
    </rect>
   </property>
   <property name="maximumSize">
@@ -27,8 +27,14 @@
     </size>
    </property>
    <layout class="QGridLayout" name="gridLayout">
-    <item row="0" column="0" colspan="2">
+    <item row="0" column="0">
      <widget class="QFrame" name="frame">
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>0</height>
+       </size>
+      </property>
       <property name="maximumSize">
        <size>
         <width>1600</width>
@@ -46,11 +52,14 @@
         <rect>
          <x>0</x>
          <y>10</y>
-         <width>1501</width>
-         <height>811</height>
+         <width>1092</width>
+         <height>871</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_2">
+        <property name="sizeConstraint">
+         <enum>QLayout::SetMinAndMaxSize</enum>
+        </property>
         <item>
          <layout class="QGridLayout" name="gridLayout_2">
           <item row="8" column="0" colspan="2">
@@ -1974,13 +1983,10 @@
           <property name="sizeHint" stdset="0">
            <size>
             <width>20</width>
-            <height>40</height>
+            <height>60</height>
            </size>
           </property>
          </spacer>
-        </item>
-        <item>
-         <layout class="QVBoxLayout" name="vlayout_plot"/>
         </item>
        </layout>
       </widget>
@@ -1993,7 +1999,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1544</width>
+     <width>1074</width>
      <height>21</height>
     </rect>
    </property>
@@ -2001,7 +2007,10 @@
     <property name="title">
      <string>Hexapod</string>
     </property>
+    <addaction name="actionEnable_fly_with_controller"/>
     <addaction name="actionSave_flyscan_result"/>
+    <addaction name="separator"/>
+    <addaction name="actionSet_the_default_vel_acc"/>
    </widget>
    <widget class="QMenu" name="menuACS">
     <property name="title">
@@ -2013,11 +2022,28 @@
     <property name="title">
      <string>QDS</string>
     </property>
+    <addaction name="actionSelect_units"/>
+    <addaction name="actionSelect_QDS_for_X"/>
+    <addaction name="actionSelect_QDS_for_Y"/>
+    <addaction name="separator"/>
     <addaction name="actionRun"/>
     <addaction name="actionStop"/>
     <addaction name="actionClear"/>
     <addaction name="actionSave"/>
+    <addaction name="separator"/>
+    <addaction name="actionFit_QDS_phi"/>
    </widget>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionLoad_eccentricity_data"/>
+    <addaction name="actionLoad_wobble_data"/>
+    <addaction name="actionLoad_scan"/>
+    <addaction name="separator"/>
+    <addaction name="actionSave_scan"/>
+   </widget>
+   <addaction name="menuFile"/>
    <addaction name="menuHexapod"/>
    <addaction name="menuACS"/>
    <addaction name="menuQDS"/>
@@ -2025,7 +2051,7 @@
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionSet_default_speed">
    <property name="text">
-    <string>Set default speed</string>
+    <string>Set the default vel/acc</string>
    </property>
   </action>
   <action name="actionRun">
@@ -2050,7 +2076,67 @@
   </action>
   <action name="actionSave_flyscan_result">
    <property name="text">
-    <string>Save flyscan result</string>
+    <string>Save trj_scan (fly X)</string>
+   </property>
+  </action>
+  <action name="actionEnable_fly_with_controller">
+   <property name="text">
+    <string>Enable fly with controller</string>
+   </property>
+  </action>
+  <action name="actionSet_the_default_vel_acc">
+   <property name="text">
+    <string>Set the default vel/acc</string>
+   </property>
+  </action>
+  <action name="actionLoad_eccentricity_data">
+   <property name="text">
+    <string>Load eccentricity data</string>
+   </property>
+  </action>
+  <action name="actionLoad_wobble_data">
+   <property name="text">
+    <string>Load wobble data</string>
+   </property>
+  </action>
+  <action name="actionSelect_units">
+   <property name="text">
+    <string>Select units</string>
+   </property>
+  </action>
+  <action name="actionSave_wobble">
+   <property name="text">
+    <string>Save wobble scan</string>
+   </property>
+  </action>
+  <action name="actionSave_eccentricity">
+   <property name="text">
+    <string>Save eccentricity scan</string>
+   </property>
+  </action>
+  <action name="actionSave_scan">
+   <property name="text">
+    <string>Save scan (pos, qds1, qds2)</string>
+   </property>
+  </action>
+  <action name="actionLoad_scan">
+   <property name="text">
+    <string>Load scan</string>
+   </property>
+  </action>
+  <action name="actionFit_QDS_phi">
+   <property name="text">
+    <string>Fit QDS(phi) in plot</string>
+   </property>
+  </action>
+  <action name="actionSelect_QDS_for_X">
+   <property name="text">
+    <string>Select QDS for X</string>
+   </property>
+  </action>
+  <action name="actionSelect_QDS_for_Y">
+   <property name="text">
+    <string>Select QDS for Y</string>
    </property>
   </action>
  </widget>

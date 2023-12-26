@@ -10,9 +10,9 @@ import sys
 import os
 
 from PyQt5 import uic, QtCore
-from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget, QListWidget
-from PyQt5.QtWidgets import QLabel, QLineEdit, QMessageBox
-from PyQt5.QtCore import QTimer, QObject, QThread, pyqtSlot, pyqtSignal, QRunnable, QThreadPool
+from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget
+from PyQt5.QtWidgets import QLabel, QLineEdit, QMessageBox, QInputDialog
+from PyQt5.QtCore import QTimer, QObject, pyqtSlot, pyqtSignal, QRunnable, QThreadPool
 
 import time
 
@@ -36,7 +36,14 @@ from pandablocks.commands import Put
 from pandablocks.hdf import write_hdf_files
 import h5py
 import re
+import analysis.planeeqn as eqn
 
+HEXAPOD_FLYMODE_WAVELET = 0
+HEXAPOD_FLYMODE_STANDARD = 1
+QDS_UNIT_NM = 0
+QDS_UNIT_UM = 1
+QDS_UNIT_MM = 2
+QDS_UNIT_DEFAULT = QDS_UNIT_UM  # default QDS output is um
 
 def showerror(msg):
     dlg = QMessageBox()
@@ -140,6 +147,10 @@ class tweakmotors(QMainWindow):
         # this should came from the pts.
         motornames = ['X', 'Y', 'Z', 'U', 'V', 'W', 'phi']
         motorunits = ['mm', 'mm', 'mm', 'deg', 'deg', 'deg', 'deg']
+        self.hexapod_flymode = HEXAPOD_FLYMODE_STANDARD
+        self._qds_unit = QDS_UNIT_DEFAULT
+        self._qds_x_sensor = 0
+        self._qds_y_sensor = 1
         for i, name in enumerate(self.pts.gonio.channel_names):
             #if self.pts.gonio.connected[i]:
             motornames.append(name)
@@ -184,6 +195,11 @@ class tweakmotors(QMainWindow):
             self.ui.findChild(QPushButton, "pb_lup_%i"%n).setEnabled(enable)
             self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).setEnabled(enable)
             self.ui.findChild(QLineEdit, "ed_%i"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setEnabled(enable)               
         # self.ui.pb_tweak1L.clicked.connect(lambda: self.mvr(0, -1))
         # self.ui.pb_tweak1R.clicked.connect(lambda: self.mvr(0, 1))
         # self.ui.pb_tweak2L.clicked.connect(lambda: self.mvr(1, -1))
@@ -206,13 +222,13 @@ class tweakmotors(QMainWindow):
         # self.ui.ed_6.returnPressed.connect(lambda: self.mv(5))
         # self.ui.ed_7.returnPressed.connect(lambda: self.mv(6))
 
-        self.ui.pb_SAXSscan_1.setEnabled(True)
-        self.ui.pb_SAXSscan_2.setEnabled(False)
-        self.ui.pb_SAXSscan_3.setEnabled(False)
-        self.ui.pb_SAXSscan_4.setEnabled(False)
-        self.ui.pb_SAXSscan_5.setEnabled(False)
-        self.ui.pb_SAXSscan_6.setEnabled(False)
-        self.ui.pb_SAXSscan_7.setEnabled(True)
+        # self.ui.pb_SAXSscan_1.setEnabled(True)
+        # self.ui.pb_SAXSscan_2.setEnabled(False)
+        # self.ui.pb_SAXSscan_3.setEnabled(False)
+        # self.ui.pb_SAXSscan_4.setEnabled(False)
+        # self.ui.pb_SAXSscan_5.setEnabled(False)
+        # self.ui.pb_SAXSscan_6.setEnabled(False)
+        # self.ui.pb_SAXSscan_7.setEnabled(True)
 
         # self.ui.pb_lup_1.clicked.connect(lambda: self.stepscan(0))
         # self.ui.pb_lup_2.clicked.connect(lambda: self.stepscan(1))
@@ -226,9 +242,22 @@ class tweakmotors(QMainWindow):
         self.ui.actionRun.triggered.connect(self.timescan)
         self.ui.actionStop.triggered.connect(self.timescanstop)
         self.ui.actionClear.triggered.connect(self.clearplot)
+        self.ui.actionEnable_fly_with_controller.setCheckable(True)
+        self.ui.actionEnable_fly_with_controller.setChecked(False)
+        self.ui.actionEnable_fly_with_controller.triggered.connect(self.select_flymode) # hexapod flyscan type.
+        self.ui.actionSet_the_default_vel_acc.triggered.connect(self.sethexapodvel_default)  # hexapod set vel acc into default
         self.ui.actionSet_default_speed.triggered.connect(self.setphivel_default)
         self.ui.actionSave.triggered.connect(self.save_qds)
         self.ui.actionSave_flyscan_result.triggered.connect(self.fly_result)
+        self.ui.actionFit_QDS_phi.setEnabled(False)
+        self.ui.actionFit_QDS_phi.triggered.connect(self.fit_wobble_eccentricity)
+        self.ui.actionLoad_eccentricity_data.triggered.connect(self.load_plot_eccentricity)
+        self.ui.actionLoad_wobble_data.triggered.connect(self.load_plot_wobble)
+        self.ui.actionSave_scan.triggered.connect(self.savescan)
+        self.ui.actionLoad_scan.triggered.connect(self.loadscan)
+        self.ui.actionSelect_units.triggered.connect(self.select_qds_units)
+        self.ui.actionSelect_QDS_for_X.triggered.connect(self.select_qds_x)
+        self.ui.actionSelect_QDS_for_Y.triggered.connect(self.select_qds_y)
         self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
         self.pts.signals.AxisNameSignal.connect(self.update_motorname)
 
@@ -275,8 +304,8 @@ class tweakmotors(QMainWindow):
 
         # set the layout
         
-        self.ui.vlayout_plot.addWidget(self.toolbar)
-        self.ui.vlayout_plot.addWidget(self.canvas)
+        self.ui.verticalLayout_2.addWidget(self.toolbar)
+        self.ui.verticalLayout_2.addWidget(self.canvas)
         #self.ui.vlayout_plot.addWidget(self.button)
         #self.setLayout(layout)
         # instead of ax.hold(False)
@@ -294,22 +323,111 @@ class tweakmotors(QMainWindow):
         self.timer.start(100)        
         self.ui.show()
 
+    def select_qds_units(self):
+        text, ok = QInputDialog().getItem(self, "Select QDS units",
+                                            "Units:", ('nm', 'um', 'mm'), current=1, editable=False)
+        if text =="nm":
+            self._qds_unit = QDS_UNIT_NM
+        if text =="um":
+            self._qds_unit = QDS_UNIT_UM
+        if text =="mm":
+            self._qds_unit = QDS_UNIT_MM
+    
+    def select_qds_x(self):
+        text, ok = QInputDialog().getItem(self, "Select QDS units",
+                                            "Units:", ('0', '1', '2'), current=1, editable=False)
+        self._qds_x_sensor = int(text)
+
+    def select_qds_y(self):
+        text, ok = QInputDialog().getItem(self, "Select QDS units",
+                                            "Units:", ('0', '1', '2'), current=1, editable=False)
+        self._qds_y_sensor = int(text)
+
+    def fit_wobble_eccentricity(self):
+        tp = np.asarray(self.mpos)
+        rp = np.asarray(self.rpos)
+        self.fitdata(xd=tp, yd=rp[:,self._qds_x_sensor], dtype="eccent")
+        self.fitdata(xd=tp, yd=rp[:,self._qds_y_sensor], dtype="wob")
+
+    def loadscan(self):
+        w = QWidget()
+        w.resize(320, 240)
+        # Set window title
+        w.setWindowTitle("Load phi vs QDS[0,1,2] Data")
+        fn = QFileDialog.getOpenFileName(w, 'Open File', '', 'Text (*.txt *.dat)',None, QFileDialog.DontUseNativeDialog)
+        filename = fn[0]
+        if filename == "":
+            return 0
+        self.fitdata(filename=filename, datacolumn=self._qds_x_sensor+1, dtype="eccent")
+        self.fitdata(filename=filename, datacolumn=self._qds_y_sensor+1, dtype="wob")
+
+    def fitdata(self, filename="", datacolumn=2, xd = [], yd = [], dtype="wobble"):
+        if self._qds_unit == QDS_UNIT_MM:
+            eqn.POSITION_UNIT = eqn.POSITION_UNIT_MM
+        if self._qds_unit == QDS_UNIT_UM:
+            eqn.POSITION_UNIT = eqn.POSITION_UNIT_UM
+        if self._qds_unit == QDS_UNIT_NM:
+            eqn.POSITION_UNIT = eqn.POSITION_UNIT_NM
+        if len(filename)>0:
+            xd, yd = eqn.loadata(filename=filename, datacolumn=datacolumn)
+        else:
+            xd, yd = eqn.loadata(xdata=xd, ydata=yd)
+
+        if dtype in "eccentricity":
+            popt, pconv = eqn.fit_eccentricity(xd, yd)
+            cv, lb = eqn.get_eccen_fitcurve(xd, popt)
+            self.plotfits(xd, yd, cv, lb, ax=1)    
+        if dtype in "wobble":
+            popt, pconv = eqn.fit_wobble(xd, yd)
+            cv, lb = eqn.get_wobble_fitcurve(xd, popt)
+            self.plotfits(xd, yd, cv, lb, ax=2) 
+
+    def load_plot_eccentricity(self):
+        # this is multiple column data where the last column is the sensor data.
+        w = QWidget()
+        w.resize(320, 240)
+        # Set window title
+        w.setWindowTitle("Load phi vs QDS Eccentricity(X) Data")
+        fn = QFileDialog.getOpenFileName(w, 'Open File', '', 'Text (*.txt *.dat)',None, QFileDialog.DontUseNativeDialog)
+        filename = fn[0]
+        if filename == "":
+            return 0
+        self.fitdata(filename=filename, datacolumn=-1, dtype="eccent")    
+
+    def load_plot_wobble(self):
+        # this is multiple column data where the last column is the sensor data.
+        w = QWidget()
+        w.resize(320, 240)
+        # Set window title
+        w.setWindowTitle("Load phi vs QDS Wobble(Y) Data")
+        fn = QFileDialog.getOpenFileName(w, 'Open File', '', 'Text (*.txt *.dat)',None, QFileDialog.DontUseNativeDialog)
+        filename = fn[0]
+        if filename == "":
+            return 0
+        self.fitdata(filename=filename, datacolumn=-1, dtype="wob")        
+
+    def plotfits(self, xd, yd, curve, lbl, ax=2):
+        # dt should be two colum data [phi, pos]
+        # where phi is the phi angle in radian and pos is the QDS position in mm.
+        #plt.figure()
+        if ax==2:
+            ax = self.ax2
+        if ax==1:
+            ax = self.ax
+        ax.cla()
+        ax.plot(xd, yd, 'b', label='data')
+        ax.plot(xd, curve, 'g--', label=lbl)
+        if 'xc=' in lbl:
+            ylbl = 'x-x_mean (mm)'
+        else:
+            ylbl = 'y-y_mean (mm)'
+        ax.set_xlabel('phi (radian)')
+        ax.set_ylabel(ylbl)
+        ax.legend()
+        self.canvas.draw()
+
     def get_motorpos(self, axis):
         return self.pts.get_pos(axis)
-        if axis == 'X':
-            return self.pts.posx
-        if axis == 'Y':
-            return self.pts.posy
-        if axis == 'Z':
-            return self.pts.posz
-        if axis == 'U':
-            return self.pts.posu
-        if axis == 'V':
-            return self.pts.posv
-        if axis == 'W':
-            return self.pts.posv
-        if axis == 'phi':
-            return self.pts.posphi
         
     def updatepos(self, axis = "", val=None):
         if len(axis)==0:
@@ -325,33 +443,9 @@ class tweakmotors(QMainWindow):
             i = self.motornames.index(axis)
             #self.ui.findChild(QLineEdit, "ed_%i"%(i+1)).setText("%0.4f"%val)
             self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText("%0.4f"%val)
-            #print(val)
-        
-        # self.ui.lb_1.setText("%0.4f"%self.pts.posx)
-        # self.ui.lb_2.setText("%0.4f"%self.pts.posy)
-        # self.ui.lb_3.setText("%0.4f"%self.pts.posz)
-        # self.ui.lb_4.setText("%0.4f"%self.pts.posu)
-        # self.ui.lb_5.setText("%0.4f"%self.pts.posv)
-        # self.ui.lb_6.setText("%0.4f"%self.pts.posw)
-        # self.ui.lb_7.setText("%0.4f"%self.pts.posphi)
 
     def update_motorpos(self, value):
         self.updatepos(self.signalmotor, value)
-        # #print(value, " this in rungui.py")
-        # if self.signalmotor == 'X':
-        #     self.ui.lb_1.setText("%0.4f"%value)
-        # if self.signalmotor == 'Y':
-        #     self.ui.lb_2.setText("%0.4f"%value)
-        # if self.signalmotor == 'Z':
-        #     self.ui.lb_3.setText("%0.4f"%value)
-        # if self.signalmotor == 'U':
-        #     self.ui.lb_4.setText("%0.4f"%value)
-        # if self.signalmotor == 'V':
-        #     self.ui.lb_5.setText("%0.4f"%value)
-        # if self.signalmotor == 'W':
-        #     self.ui.lb_6.setText("%0.4f"%value)
-        # if self.signalmotor == 'phi':
-        #     self.ui.lb_7.setText("%0.4f"%value)
 
     def update_motorname(self, axis):
         self.signalmotor = axis
@@ -363,11 +457,23 @@ class tweakmotors(QMainWindow):
         self.pts.phi.acc = self.pts.phi.vel*10
 #        self.pts.set_speed()
 
+    def sethexapodvel_default(self):
+#        print(self.pts.phi.vel, " This was vel value")
+        self.pts.set_speed(self.pts.hexapod.axes[0], 5, None)
+
     def scandone(self, value):
         self.isscan = False
         self.updatepos()
         print("scan done.......")
     
+    def select_flymode(self):
+        if self.ui.actionEnable_fly_with_controller.isChecked():  # when checked, this value is False
+            self.ui.actionEnable_fly_with_controller.setChecked(True)
+            self.hexapod_flymode = HEXAPOD_FLYMODE_WAVELET
+        else:
+            self.hexapod_flymode = HEXAPOD_FLYMODE_STANDARD
+            self.ui.actionEnable_fly_with_controller.setChecked(False)
+
     def flydone(self, value):
         self.isscan = False
         self.updatepos()
@@ -417,10 +523,15 @@ class tweakmotors(QMainWindow):
         motornumber = n-1
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
+        try:
+            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+            tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        except:
+            showerror("Check scan paramters.")
+            return 0
+        
         self.isscan = True
-        #self.thread = self.createflyscanthread(motornumber, type)
-        #self.thread.start()
-        #self.timer.set_interval(100)
         w = Worker(self.fly0, motornumber)
         w.signal.finished.connect(self.flydone)
         self.threadpool.start(w)
@@ -432,9 +543,18 @@ class tweakmotors(QMainWindow):
         motornumber = n-1
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
+        
+        try:
+            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+            #tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+            step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        except:
+            showerror("Check scan parameters.")
+            return 0
+        
         self.isscan = True
-        #self.thread = self.createflyscanthread(motornumber, type)
-        #self.thread.start()
+        
         w = Worker(self.stepscan0, motornumber)
         w.signal.finished.connect(self.scandone)
         self.threadpool.start(w)
@@ -484,6 +604,12 @@ class tweakmotors(QMainWindow):
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
         #tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
         step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+
+        # disable fit menu
+        self.ui.actionFit_QDS_phi.setEnabled(False)
+        # enable fit menu
+        if axis == "phi":
+            self.ui.actionFit_QDS_phi.setEnabled(True)
         if st>fe:
             step = -1*abs(step)
         if st<fe:
@@ -511,6 +637,9 @@ class tweakmotors(QMainWindow):
         self.mpos = []
         
         self.isfly = True
+        # disable fit menu
+        self.ui.actionFit_QDS_phi.setEnabled(False)
+
         n = motornumber+1
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
@@ -521,30 +650,31 @@ class tweakmotors(QMainWindow):
             step = 0.1
             self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText("%0.3f"%step)
         pos = self.pts.get_pos(axis)
-        if motornumber ==0:
+        if axis in self.pts.hexapod.axes:
             if self.ui.cb_reversescandir.isChecked():
                 if abs(st-pos)>abs(fe-pos):
                     t = fe
                     fe = st
                     st = t 
                     step = -step
+#            print(self.hexapod_flymode, "fly mode")
+            if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
+                print("Run the fly scan with controller")
+                self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
+                self.pts.hexapod.run_traj()
+                while self.pts.ismoving(axis):
+                    time.sleep(0.01)
 
-            self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
-            #self.pts, axis, self.pts.hexapod.wave_start)
-
-            #t0 = time.time()
-            #t = 0
-            #k = 0
-            self.pts.hexapod.run_traj()
-            while self.pts.ismoving(axis):
-                time.sleep(0.01)
-            # sec = self.pts.hexapod.scantime + 1
-            # while (t - t0) < sec:
-            #     r = self.get_qds_pos()
-            #     self.rpos.append([r[0], r[1], r[2]])
-            #     time.sleep(0.0001)
-            #     t = time.time()
-            #     self.mpos.append(t)
+            if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD) or (axis != "X"):
+                print("Run the fly scan without controller")
+                self.pts.mv(axis, st, wait=True)
+                self._prev_vel,self._prev_acc = self.pts.get_speed(axis)
+                print("prev speed was ", self._prev_vel)
+                print("speed should be ", abs(fe-st)/tm)
+                self.pts.set_speed(axis, abs(fe-st)/tm, None)
+                time.sleep(0.02)
+                self.pts.mv(axis, fe, wait=True)
+                print("Should be in run.")
 
         if motornumber >=6:
             # st = float(self.ui.ed_lup_7_L.text())
@@ -556,11 +686,14 @@ class tweakmotors(QMainWindow):
                     fe = st
                     st = t 
             if motornumber ==6:
+                # enable fit menu
+                self.ui.actionFit_QDS_phi.setEnabled(True)
+                # scan start
                 self._prev_vel, self._prev_acc = self.pts.get_speed(axis)
                 self.pts.set_speed(axis, 36/2, 36/2*10)
 #                print(f"Speed of phi is set to {self.pts.phi.vel}.")
                 self.pts.mv('phi', st, wait=True)
-                time.sleep(0.5)
+                time.sleep(0.2)
                 self.pts.set_speed(axis, abs(fe-st)/tm,abs(fe-st)/tm*10)
 #                print(f"Speed of phi is set to {self.pts.phi.vel}.")
                 self.pts.mv('phi', fe, wait=True)
@@ -572,7 +705,7 @@ class tweakmotors(QMainWindow):
                 print("prev speed was ", self._prev_vel)
                 print("speed should be ", abs(fe-st)/tm)
                 self.pts.set_speed(axis, abs(fe-st)/tm, abs(fe-st)/tm*10)
-                time.sleep(0.5)
+                time.sleep(0.02)
                 self.pts.mv(axis, fe, wait=True)
                 print("Should be in run.")
         #self.isscan = False
@@ -588,10 +721,18 @@ class tweakmotors(QMainWindow):
             return 0
         if ".txt" not in filename:
             filename = filename + ".txt"
+        if self._qds_unit == QDS_UNIT_MM:
+            self.rpos = self.rpos/1E3
+        if self._qds_unit == QDS_UNIT_UM:
+            pass
+        if self._qds_unit == QDS_UNIT_NM:
+            self.rpos = self.rpos*1E3
         self.pts.savedata(filename, self.mpos, self.rpos, col=[0,1,2])
 
-    def fly_result(self):
+    def savescan(self):
+        self.save_qds()
 
+    def fly_result(self):
         w = QWidget()
         w.resize(320, 240)
         # Set window title
@@ -610,7 +751,11 @@ class tweakmotors(QMainWindow):
             l_data = [data]
         else:
             l_data = data
-        qds_data = get_pandadata()
+        try:
+            qds_data = get_pandadata()
+        except:
+            showerror("PanDA is needed.")
+            return
         qds_data = qds_data/1000
         print(self.pts.hexapod.wave_start, " wave_start position")
         qds_data = qds_data[-1]-qds_data-self.pts.hexapod.wave_start*1000
