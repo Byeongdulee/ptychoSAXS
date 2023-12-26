@@ -11,7 +11,7 @@ import os
 
 from PyQt5 import uic, QtCore
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget, QListWidget
-from PyQt5.QtWidgets import QLabel, QLineEdit, QErrorMessage
+from PyQt5.QtWidgets import QLabel, QLineEdit, QMessageBox
 from PyQt5.QtCore import QTimer, QObject, QThread, pyqtSlot, pyqtSignal, QRunnable, QThreadPool
 
 import time
@@ -36,6 +36,16 @@ from pandablocks.commands import Put
 from pandablocks.hdf import write_hdf_files
 import h5py
 import re
+
+
+def showerror(msg):
+    dlg = QMessageBox()
+    dlg.setIcon(QMessageBox.Warning)
+    dlg.setText(msg)
+    dlg.setWindowTitle("Error")
+    dlg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+    result = dlg.exec_()
+    return result
 
 
 class workerSignals(QObject):
@@ -641,8 +651,7 @@ class tweakmotors(QMainWindow):
         try:
             val = float(pb.text())
         except:
-            error_dialog = QErrorMessage()
-            error_dialog.showMessage('Text box is empty.')
+            showerror('Text box is empty.')
             return
         #print(f"Move {axis} to {val}")
         w = move(self.pts, axis, val)

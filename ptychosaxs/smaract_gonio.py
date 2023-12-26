@@ -4,12 +4,8 @@ import time
 
 smaract = None
 
-# SmarAct MCS2 programming example: Movement
-#
-# This programming example shows you how to
-# find available MCS2 devices to connect to
-# and how to perform different movement commands.
-# For a full command reference see the MCS2 Programmers Guide.
+# These codes are based on SmarAct MCS2 programming examples
+# Some codes are used without modification
 
 def assert_lib_compatibility():
     """
@@ -127,22 +123,22 @@ def move(channel, target=0.001, absolute=True, wait=True):
     if absolute:
         move_mode = ctl.MoveMode.CL_ABSOLUTE
         # Set move velocity [in pm/s].
-        ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_VELOCITY, 1000000000)
+#        ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_VELOCITY, 1000000000)
         # Set move acceleration [in pm/s2].
-        ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_ACCELERATION, 1000000000)
+#        ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_ACCELERATION, 1000000000)
         # Specify absolute position [in pm].
         # (For Piezo Scanner channels adjust to valid value within move range, e.g. +-10000000.)
 
-        print("MCS2 move channel {} to absolute position: {} pm.".format(channel, target))
+#        print("MCS2 move channel {} to absolute position: {} pm.".format(channel, target))
     else:
         move_mode = ctl.MoveMode.CL_RELATIVE
         # Set move velocity [in pm/s].
-        ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_VELOCITY, 500000000)
+#        ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_VELOCITY, 500000000)
         # Set move acceleration [in pm/s2].
-        ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_ACCELERATION, 10000000000)
+#        ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_ACCELERATION, 10000000000)
         # Specify relative position distance [in pm] and direction.
         # (For Piezo Scanner channels adjust to valid value within move range, e.g. 10000000.)
-        print("MCS2 move channel {} relative: {} pm.".format(channel, target))
+#        print("MCS2 move channel {} relative: {} pm.".format(channel, target))
 
     # Start actual movement.
     ctl.SetProperty_i32(smaract, channel, ctl.Property.MOVE_MODE, move_mode)
@@ -191,6 +187,7 @@ units = []
 for ch in channels:
     ctl.SetProperty_i32(smaract, ch, ctl.Property.MAX_CL_FREQUENCY, 6000)
     ctl.SetProperty_i32(smaract, ch, ctl.Property.HOLD_TIME, 1000)
+    set_speed(ch)  # return the speed and acc to defaults (1mm/s, 10mm/s2)
     base_unit = ctl.GetProperty_i32(smaract, ch, ctl.Property.POS_BASE_UNIT)
     base_units.append(base_unit)
     if base_unit == ctl.BaseUnit.METER:
