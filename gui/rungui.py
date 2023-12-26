@@ -10,8 +10,10 @@ import sys
 import os
 
 from PyQt5 import uic, QtCore
-from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget
+from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget, QListWidget
+from PyQt5.QtWidgets import QLabel, QLineEdit, QErrorMessage
 from PyQt5.QtCore import QTimer, QObject, QThread, pyqtSlot, pyqtSignal, QRunnable, QThreadPool
+
 import time
 
 sys.path.append('..')
@@ -33,7 +35,7 @@ from pandablocks.asyncio import AsyncioClient
 from pandablocks.commands import Put
 from pandablocks.hdf import write_hdf_files
 import h5py
-
+import re
 
 
 class workerSignals(QObject):
@@ -123,29 +125,76 @@ class tweakmotors(QMainWindow):
         guiName = "motorGUI.ui"
         self.pts = pts
         self.ui = uic.loadUi(guiName)
-        self.motornames = ['X', 'Y', 'Z', 'U', 'V', 'W', 'phi']
-        self.motorunits = ['mm', 'mm', 'mm', 'deg', 'deg', 'deg', 'deg']
-        self.ui.pb_tweak1L.clicked.connect(lambda: self.mvr(0, -1))
-        self.ui.pb_tweak1R.clicked.connect(lambda: self.mvr(0, 1))
-        self.ui.pb_tweak2L.clicked.connect(lambda: self.mvr(1, -1))
-        self.ui.pb_tweak2R.clicked.connect(lambda: self.mvr(1, 1))
-        self.ui.pb_tweak3L.clicked.connect(lambda: self.mvr(2, -1))
-        self.ui.pb_tweak3R.clicked.connect(lambda: self.mvr(2, 1))
-        self.ui.pb_tweak4L.clicked.connect(lambda: self.mvr(3, -1))
-        self.ui.pb_tweak4R.clicked.connect(lambda: self.mvr(3, 1))
-        self.ui.pb_tweak5L.clicked.connect(lambda: self.mvr(4, -1))
-        self.ui.pb_tweak5R.clicked.connect(lambda: self.mvr(4, 1))
-        self.ui.pb_tweak6L.clicked.connect(lambda: self.mvr(5, -1))
-        self.ui.pb_tweak6R.clicked.connect(lambda: self.mvr(5, 1))
-        self.ui.pb_tweak7L.clicked.connect(lambda: self.mvr(6, -1))
-        self.ui.pb_tweak7R.clicked.connect(lambda: self.mvr(6, 1))
-        self.ui.ed_1.returnPressed.connect(lambda: self.mv(0))
-        self.ui.ed_2.returnPressed.connect(lambda: self.mv(1))
-        self.ui.ed_3.returnPressed.connect(lambda: self.mv(2))
-        self.ui.ed_4.returnPressed.connect(lambda: self.mv(3))
-        self.ui.ed_5.returnPressed.connect(lambda: self.mv(4))
-        self.ui.ed_6.returnPressed.connect(lambda: self.mv(5))
-        self.ui.ed_7.returnPressed.connect(lambda: self.mv(6))
+        
+        # list all possible motors
+        # this should came from the pts.
+        motornames = ['X', 'Y', 'Z', 'U', 'V', 'W', 'phi']
+        motorunits = ['mm', 'mm', 'mm', 'deg', 'deg', 'deg', 'deg']
+        for i, name in enumerate(self.pts.gonio.channel_names):
+            #if self.pts.gonio.connected[i]:
+            motornames.append(name)
+        for name in self.pts.gonio.units:
+            motorunits.append(name)
+
+        enable = False
+        for i, name in enumerate(motornames):
+            n = i+1
+            self.ui.findChild(QLabel, "lb%i"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_tweak%iL"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_tweak%iR"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_lup_%i"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).setEnabled(enable)
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setEnabled(enable)   
+
+        # checking only the connected motors.. 
+        # if not done, later it will try to update the position of disconnected motors    
+        self.motornames = []
+        self.motorunits = []
+        for i, name in enumerate(motornames):
+            if self.pts.isconnected(name):
+                self.motornames.append(name)
+                self.motorunits.append(motorunits[i])
+        
+        # update GUI
+        for i, name in enumerate(self.motornames):
+            n = i+1
+            self.ui.findChild(QLabel, "lb%i"%n).setText(name)
+            self.ui.findChild(QPushButton, "pb_tweak%iL"%n).clicked.connect(lambda: self.mvr(None, -1))
+            self.ui.findChild(QPushButton, "pb_tweak%iR"%n).clicked.connect(lambda: self.mvr(None, 1))
+            self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stepscan(None))
+            self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).clicked.connect(lambda: self.fly(None))
+            self.ui.findChild(QLineEdit, "ed_%i"%n).returnPressed.connect(lambda: self.mv(None))
+            if self.pts.isconnected(name):
+                enable = True
+            else:
+                enable = False
+            self.ui.findChild(QLabel, "lb%i"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_tweak%iL"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_tweak%iR"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_lup_%i"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).setEnabled(enable)
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setEnabled(enable)               
+        # self.ui.pb_tweak1L.clicked.connect(lambda: self.mvr(0, -1))
+        # self.ui.pb_tweak1R.clicked.connect(lambda: self.mvr(0, 1))
+        # self.ui.pb_tweak2L.clicked.connect(lambda: self.mvr(1, -1))
+        # self.ui.pb_tweak2R.clicked.connect(lambda: self.mvr(1, 1))
+        # self.ui.pb_tweak3L.clicked.connect(lambda: self.mvr(2, -1))
+        # self.ui.pb_tweak3R.clicked.connect(lambda: self.mvr(2, 1))
+        # self.ui.pb_tweak4L.clicked.connect(lambda: self.mvr(3, -1))
+        # self.ui.pb_tweak4R.clicked.connect(lambda: self.mvr(3, 1))
+        # self.ui.pb_tweak5L.clicked.connect(lambda: self.mvr(4, -1))
+        # self.ui.pb_tweak5R.clicked.connect(lambda: self.mvr(4, 1))
+        # self.ui.pb_tweak6L.clicked.connect(lambda: self.mvr(5, -1))
+        # self.ui.pb_tweak6R.clicked.connect(lambda: self.mvr(5, 1))
+        # self.ui.pb_tweak7L.clicked.connect(lambda: self.mvr(6, -1))
+        # self.ui.pb_tweak7R.clicked.connect(lambda: self.mvr(6, 1))
+        # self.ui.ed_1.returnPressed.connect(lambda: self.mv(0))
+        # self.ui.ed_2.returnPressed.connect(lambda: self.mv(1))
+        # self.ui.ed_3.returnPressed.connect(lambda: self.mv(2))
+        # self.ui.ed_4.returnPressed.connect(lambda: self.mv(3))
+        # self.ui.ed_5.returnPressed.connect(lambda: self.mv(4))
+        # self.ui.ed_6.returnPressed.connect(lambda: self.mv(5))
+        # self.ui.ed_7.returnPressed.connect(lambda: self.mv(6))
 
         self.ui.pb_SAXSscan_1.setEnabled(True)
         self.ui.pb_SAXSscan_2.setEnabled(False)
@@ -155,15 +204,15 @@ class tweakmotors(QMainWindow):
         self.ui.pb_SAXSscan_6.setEnabled(False)
         self.ui.pb_SAXSscan_7.setEnabled(True)
 
-        self.ui.pb_lup_1.clicked.connect(lambda: self.stepscan(0))
-        self.ui.pb_lup_2.clicked.connect(lambda: self.stepscan(1))
-        self.ui.pb_lup_3.clicked.connect(lambda: self.stepscan(2))
-        self.ui.pb_lup_4.clicked.connect(lambda: self.stepscan(3))
-        self.ui.pb_lup_5.clicked.connect(lambda: self.stepscan(4))
-        self.ui.pb_lup_6.clicked.connect(lambda: self.stepscan(5))
-        self.ui.pb_lup_7.clicked.connect(lambda: self.stepscan(6))
-        self.ui.pb_SAXSscan_1.clicked.connect(lambda: self.fly(0))
-        self.ui.pb_SAXSscan_7.clicked.connect(lambda: self.fly(6))
+        # self.ui.pb_lup_1.clicked.connect(lambda: self.stepscan(0))
+        # self.ui.pb_lup_2.clicked.connect(lambda: self.stepscan(1))
+        # self.ui.pb_lup_3.clicked.connect(lambda: self.stepscan(2))
+        # self.ui.pb_lup_4.clicked.connect(lambda: self.stepscan(3))
+        # self.ui.pb_lup_5.clicked.connect(lambda: self.stepscan(4))
+        # self.ui.pb_lup_6.clicked.connect(lambda: self.stepscan(5))
+        # self.ui.pb_lup_7.clicked.connect(lambda: self.stepscan(6))
+        # self.ui.pb_SAXSscan_1.clicked.connect(lambda: self.fly(0))
+        # self.ui.pb_SAXSscan_7.clicked.connect(lambda: self.fly(6))
         self.ui.actionRun.triggered.connect(self.timescan)
         self.ui.actionStop.triggered.connect(self.timescanstop)
         self.ui.actionClear.triggered.connect(self.clearplot)
@@ -236,6 +285,7 @@ class tweakmotors(QMainWindow):
         self.ui.show()
 
     def get_motorpos(self, axis):
+        return self.pts.get_pos(axis)
         if axis == 'X':
             return self.pts.posx
         if axis == 'Y':
@@ -251,47 +301,69 @@ class tweakmotors(QMainWindow):
         if axis == 'phi':
             return self.pts.posphi
         
-    def updatepos(self):
+    def updatepos(self, axis = "", val=None):
+        if len(axis)==0:
+            for i, name in enumerate(self.motornames):
+                if val is None:
+                    val = self.pts.get_pos(name)
+                #self.ui.findChild(QLineEdit, "ed_%i"%(i+1)).setText("%0.4f"%val)
+                self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText("%0.4f"%val)
+                val = None
+        else:
+            if val is None:
+                val = self.pts.get_pos(axis)
+            i = self.motornames.index(axis)
+            #self.ui.findChild(QLineEdit, "ed_%i"%(i+1)).setText("%0.4f"%val)
+            self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText("%0.4f"%val)
+            #print(val)
         
-        self.ui.lb_1.setText("%0.4f"%self.pts.posx)
-        self.ui.lb_2.setText("%0.4f"%self.pts.posy)
-        self.ui.lb_3.setText("%0.4f"%self.pts.posz)
-        self.ui.lb_4.setText("%0.4f"%self.pts.posu)
-        self.ui.lb_5.setText("%0.4f"%self.pts.posv)
-        self.ui.lb_6.setText("%0.4f"%self.pts.posw)
-        self.ui.lb_7.setText("%0.4f"%self.pts.posphi)
+        # self.ui.lb_1.setText("%0.4f"%self.pts.posx)
+        # self.ui.lb_2.setText("%0.4f"%self.pts.posy)
+        # self.ui.lb_3.setText("%0.4f"%self.pts.posz)
+        # self.ui.lb_4.setText("%0.4f"%self.pts.posu)
+        # self.ui.lb_5.setText("%0.4f"%self.pts.posv)
+        # self.ui.lb_6.setText("%0.4f"%self.pts.posw)
+        # self.ui.lb_7.setText("%0.4f"%self.pts.posphi)
 
     def update_motorpos(self, value):
-        #print(value, " this in rungui.py")
-        if self.signalmotor == 'X':
-            self.ui.lb_1.setText("%0.4f"%value)
-        if self.signalmotor == 'Y':
-            self.ui.lb_2.setText("%0.4f"%value)
-        if self.signalmotor == 'Z':
-            self.ui.lb_3.setText("%0.4f"%value)
-        if self.signalmotor == 'U':
-            self.ui.lb_4.setText("%0.4f"%value)
-        if self.signalmotor == 'V':
-            self.ui.lb_5.setText("%0.4f"%value)
-        if self.signalmotor == 'W':
-            self.ui.lb_6.setText("%0.4f"%value)
-        if self.signalmotor == 'phi':
-            self.ui.lb_7.setText("%0.4f"%value)
+        self.updatepos(self.signalmotor, value)
+        # #print(value, " this in rungui.py")
+        # if self.signalmotor == 'X':
+        #     self.ui.lb_1.setText("%0.4f"%value)
+        # if self.signalmotor == 'Y':
+        #     self.ui.lb_2.setText("%0.4f"%value)
+        # if self.signalmotor == 'Z':
+        #     self.ui.lb_3.setText("%0.4f"%value)
+        # if self.signalmotor == 'U':
+        #     self.ui.lb_4.setText("%0.4f"%value)
+        # if self.signalmotor == 'V':
+        #     self.ui.lb_5.setText("%0.4f"%value)
+        # if self.signalmotor == 'W':
+        #     self.ui.lb_6.setText("%0.4f"%value)
+        # if self.signalmotor == 'phi':
+        #     self.ui.lb_7.setText("%0.4f"%value)
 
     def update_motorname(self, axis):
         self.signalmotor = axis
     
     def setphivel_default(self):
-        print(self.pts.phi.vel, " This was vel value")
+#        print(self.pts.phi.vel, " This was vel value")
         self.pts.phi.vel = 36
         time.sleep(0.1)
         self.pts.phi.acc = self.pts.phi.vel*10
+#        self.pts.set_speed()
 
     def scandone(self, value):
         self.isscan = False
         self.updatepos()
-        #disarm_panda()
         print("scan done.......")
+    
+    def flydone(self, value):
+        self.isscan = False
+        self.updatepos()
+        if self.signalmotor not in self.pts.hexapod.axes:        
+            self.pts.set_speed(self.signalmotor, self._prev_vel, self._prev_acc)
+        print("fly done.......")
     
     def timescanstop(self):
         self.isscan = False
@@ -329,6 +401,10 @@ class tweakmotors(QMainWindow):
     #     return thread
     
     def fly(self, motornumber):
+        pb = self.sender()
+        objname = pb.objectName()
+        n = int(re.findall(r'\d+', objname)[0])
+        motornumber = n-1
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
         self.isscan = True
@@ -336,10 +412,14 @@ class tweakmotors(QMainWindow):
         #self.thread.start()
         #self.timer.set_interval(100)
         w = Worker(self.fly0, motornumber)
-        w.signal.finished.connect(self.scandone)
+        w.signal.finished.connect(self.flydone)
         self.threadpool.start(w)
 
     def stepscan(self, motornumber):
+        pb = self.sender()
+        objname = pb.objectName()
+        n = int(re.findall(r'\d+', objname)[0])
+        motornumber = n-1
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
         self.isscan = True
@@ -387,47 +467,23 @@ class tweakmotors(QMainWindow):
         self.signalmotorunit = self.motorunits[motornumber]
         self.rpos = []
         self.mpos = []
-        
+        pos = self.pts.get_pos(axis)
         self.isfly = False
-        if motornumber ==0:
-            st = float(self.ui.ed_lup_1_L.text())
-            fe = float(self.ui.ed_lup_1_R.text())
-            step = float(self.ui.ed_lup_1_N.text())
-        
-        if motornumber ==1:
-            st = float(self.ui.ed_lup_2_L.text())
-            fe = float(self.ui.ed_lup_2_R.text())
-            step = float(self.ui.ed_lup_2_N.text())
-        
-        if motornumber ==2:
-            st = float(self.ui.ed_lup_3_L.text())
-            fe = float(self.ui.ed_lup_3_R.text())
-            step = float(self.ui.ed_lup_3_N.text())
-        
-        if motornumber ==3:
-            st = float(self.ui.ed_lup_4_L.text())
-            fe = float(self.ui.ed_lup_4_R.text())
-            step = float(self.ui.ed_lup_4_N.text())
-        
-        if motornumber ==4:
-            st = float(self.ui.ed_lup_5_L.text())
-            fe = float(self.ui.ed_lup_5_R.text())
-            step = float(self.ui.ed_lup_5_N.text())
-        
-        if motornumber ==5:
-            st = float(self.ui.ed_lup_6_L.text())
-            fe = float(self.ui.ed_lup_6_R.text())
-            step = float(self.ui.ed_lup_6_N.text())
-        
-        if motornumber ==6:
-            st = float(self.ui.ed_lup_7_L.text())
-            fe = float(self.ui.ed_lup_7_R.text())
-            step = float(self.ui.ed_lup_7_N.text())
+        n = motornumber+1
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        #tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        if st>fe:
+            step = -1*abs(step)
+        if st<fe:
+            step = abs(step)
         if self.ui.cb_reversescandir.isChecked():
-            t = fe
-            fe = st
-            st = t 
-            step = -step
+            if abs(st-pos)>abs(fe-pos):
+                t = fe
+                fe = st
+                st = t 
+                step = -step
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step, step)
         for i, value in enumerate(pos):
@@ -445,16 +501,23 @@ class tweakmotors(QMainWindow):
         self.mpos = []
         
         self.isfly = True
+        n = motornumber+1
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        try:
+            step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        except:
+            step = 0.1
+            self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText("%0.3f"%step)
+        pos = self.pts.get_pos(axis)
         if motornumber ==0:
-            st = float(self.ui.ed_lup_1_L.text())
-            fe = float(self.ui.ed_lup_1_R.text())
-            tm = float(self.ui.ed_lup_1_t.text())
-            step = float(self.ui.ed_lup_1_N.text())
             if self.ui.cb_reversescandir.isChecked():
-                t = fe
-                fe = st
-                st = t 
-                step = -step
+                if abs(st-pos)>abs(fe-pos):
+                    t = fe
+                    fe = st
+                    st = t 
+                    step = -step
 
             self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
             #self.pts, axis, self.pts.hexapod.wave_start)
@@ -473,28 +536,35 @@ class tweakmotors(QMainWindow):
             #     t = time.time()
             #     self.mpos.append(t)
 
-        if motornumber ==6:
-            st = float(self.ui.ed_lup_7_L.text())
-            fe = float(self.ui.ed_lup_7_R.text())
-            tm = float(self.ui.ed_lup_7_t.text())
+        if motornumber >=6:
+            # st = float(self.ui.ed_lup_7_L.text())
+            # fe = float(self.ui.ed_lup_7_R.text())
+            # tm = float(self.ui.ed_lup_7_t.text())
             if self.ui.cb_reversescandir.isChecked():
-                t = fe
-                fe = st
-                st = t 
-            self.pts.phi.vel = 36/2
-            #time.sleep(0.1)
-            self.pts.phi.acc = self.pts.phi.vel*10
-            #time.sleep(0.1)
-            print(f"Speed of phi is set to {self.pts.phi.vel}.")
-            self.pts.mv('phi', st, wait=True)
-            time.sleep(0.5)
-            self.pts.phi.vel = abs(fe-st)/tm
-            #time.sleep(0.1)
-            self.pts.phi.acc = self.pts.phi.vel*10
-            #time.sleep(0.1)
-            print(f"Speed of phi is set to {self.pts.phi.vel}.")
-            self.pts.mv('phi', fe, wait=True)
-            print("Should be in run.")
+                if abs(st-pos)>abs(fe-pos):
+                    t = fe
+                    fe = st
+                    st = t 
+            if motornumber ==6:
+                self._prev_vel, self._prev_acc = self.pts.get_speed(axis)
+                self.pts.set_speed(axis, 36/2, 36/2*10)
+#                print(f"Speed of phi is set to {self.pts.phi.vel}.")
+                self.pts.mv('phi', st, wait=True)
+                time.sleep(0.5)
+                self.pts.set_speed(axis, abs(fe-st)/tm,abs(fe-st)/tm*10)
+#                print(f"Speed of phi is set to {self.pts.phi.vel}.")
+                self.pts.mv('phi', fe, wait=True)
+                print("Should be in run.")
+            else:
+                self.pts.mv(axis, st, wait=True)
+                #ax = self.pts.gonio.channel_names.index(axis)
+                self._prev_vel,self._prev_acc = self.pts.get_speed(axis)
+                print("prev speed was ", self._prev_vel)
+                print("speed should be ", abs(fe-st)/tm)
+                self.pts.set_speed(axis, abs(fe-st)/tm, abs(fe-st)/tm*10)
+                time.sleep(0.5)
+                self.pts.mv(axis, fe, wait=True)
+                print("Should be in run.")
         #self.isscan = False
 
     def save_qds(self):
@@ -559,52 +629,45 @@ class tweakmotors(QMainWindow):
         self.canvas.draw()
 
     def mv(self, motornumber):
+        pb = self.sender()
+        objname = pb.objectName()
+        n = int(re.findall(r'\d+', objname)[0])
+        #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
+        motornumber = n-1
+        #print("motor number is ", motornumber)
         axis = self.motornames[motornumber]
         self.signalmotor = axis
         self.signalmotorunit = self.motorunits[motornumber]
-        if motornumber ==0:
-            val = float(self.ui.ed_1.text())
-        if motornumber ==1:
-            val = float(self.ui.ed_2.text())
-        if motornumber ==2:
-            val = float(self.ui.ed_3.text())
-        if motornumber ==3:
-            val = float(self.ui.ed_4.text())
-        if motornumber ==4:
-            val = float(self.ui.ed_5.text())
-        if motornumber ==5:
-            val = float(self.ui.ed_6.text())
-        if motornumber ==6:
-            val = float(self.ui.ed_7.text())
-        
+        try:
+            val = float(pb.text())
+        except:
+            error_dialog = QErrorMessage()
+            error_dialog.showMessage('Text box is empty.')
+            return
+        #print(f"Move {axis} to {val}")
         w = move(self.pts, axis, val)
         #w.signal.finished.connect(self.scandone)
         self.threadpool.start(w)
-        self.updatepos()
+        self.updatepos(axis)
 
     def mvr(self, motornumber, sign):
+        pb = self.sender()
+        objname = pb.objectName()
+        n = int(re.findall(r'\d+', objname)[0])
+        #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
+        motornumber = n-1
+        #print("motornumber is ", motornumber)
         axis = self.motornames[motornumber]
         self.signalmotor = axis
+        #print("axis is ", axis)
+        #print("sign is ", sign)
         self.signalmotorunit = self.motorunits[motornumber]
-        if motornumber ==0:
-            val = float(self.ui.ed_1_tweak.text())
-        if motornumber ==1:
-            val = float(self.ui.ed_2_tweak.text())
-        if motornumber ==2:
-            val = float(self.ui.ed_3_tweak.text())
-        if motornumber ==3:
-            val = float(self.ui.ed_4_tweak.text())
-        if motornumber ==4:
-            val = float(self.ui.ed_5_tweak.text())
-        if motornumber ==5:
-            val = float(self.ui.ed_6_tweak.text())
-        if motornumber ==6:
-            val = float(self.ui.ed_7_tweak.text())
-        #print(sign*val)
-        #self.pts.mvr(axis, sign*val)
+        val = float(self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).text())
+        #print(f"Move {axis} by {sign*val}")
+
         w = mover(self.pts, axis, sign*val)
         self.threadpool.start(w)
-        self.updatepos()
+        self.updatepos(axis)
     
     def update_qds(self):
         r = self.get_qds_pos()

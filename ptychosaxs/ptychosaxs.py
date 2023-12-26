@@ -1,4 +1,5 @@
 from .motions import Hexapod, Axis, hexapodIP, acsIP, hexapod, phi, acscontroller, acsc, motorSignals
+from .motions import gonio
 from .interferometers import qds
 from .interferometers import plot_position
 import time
@@ -10,6 +11,7 @@ class instruments(object):
         self.hexapod = hexapod
         self.phi = phi
         self.qds = qds
+        self.gonio = gonio
         self.signals = motorSignals()
 
     def mvphi(self, target, relative=False, wait=True):
@@ -38,34 +40,63 @@ class instruments(object):
     def ismoving(self, axis):
         if axis == "phi":
             ismoving = not self.phi.in_position
-        else:
-            ismoving = not self.hexapod.isattarget()
+        if axis in self.hexapod.axes:
+            ismoving = not self.hexapod.isattarget(axis)
+        if axis in self.gonio.channel_names:
+            ch = self.gonio.channel_names.index(axis)
+            ismoving = self.gonio.ismoving(ch)
         return ismoving
-    
+
+    def get_pos(self, axis):
+        #print(axis, " this is the name of axis")
+        if axis == "phi":
+            return float(self.posphi)
+        if axis in self.hexapod.axes:
+            pos = self.hexapod.get_pos()
+            #print(pos)
+            return float(pos[axis])
+        if axis in self.gonio.channel_names:
+            ch = self.gonio.channel_names.index(axis)
+            pos = self.gonio.get_pos(ch)
+            return pos
+        
     def mv(self, axis, target, wait=True):
         self.signals.AxisNameSignal.emit(axis)
+        t0 = time.time()
         if axis == "phi":
             self.mvphi(target)
             if wait:
                 ismoving = True
-                time.sleep(0.1)
+                time.sleep(0.01)
                 while ismoving:
                     self.signals.AxisPosSignal.emit(float(self.posphi))
                     ismoving = self.ismoving(axis)
-                    time.sleep(0.1)
-        if axis in ["X","Y","Z","U","V","W"]:
+                    time.sleep(0.01)
+        if axis in self.hexapod.axes:
             self.hexapod.mv(axis, target)
+            prevpos = target-1
+#            print(wait)
             if wait:
-                time.sleep(0.02)
-                while not self.hexapod.isattarget():
+                time.sleep(0.01)
+#                print("aaa")
+                while True:
                     pos = self.hexapod.get_pos()
-                    self.signals.AxisPosSignal.emit(float(pos[axis]))
-                    time.sleep(0.1)
-        if axis in ["trans1","trans2","tilt1","tilt2"]:
-            self.gonio.mv(axis, target, wait=False)
+                    #print(self.hexapod.isattarget())
+                    pos = float(pos[axis])
+                    self.signals.AxisPosSignal.emit(pos)
+#                    if (abs(pos-target)<0.00001) or (abs(pos-prevpos)<0.00001):
+                    if self.hexapod.isattarget(axis):
+                        break
+                    prevpos = pos
+                    time.sleep(0.01)
+        if axis in self.gonio.channel_names:
+            ch = self.gonio.channel_names.index(axis)
+            self.gonio.mv(ch, target, wait=False)
             if wait:
                 time.sleep(0.02)
-                while not self.gonio.ismoving():
+                while self.gonio.ismoving(ch):
+                    pos = self.gonio.get_pos(ch)
+                    self.signals.AxisPosSignal.emit(pos)
                     time.sleep(0.01)
 
     def mvr(self, axis, target, wait=True):
@@ -80,20 +111,52 @@ class instruments(object):
                     self.signals.AxisPosSignal.emit(self.posphi)
                     ismoving = b['moving']
                     time.sleep(0.02)
-        else:
+        if axis in self.hexapod.axes:
             pos = self.hexapod.get_pos()
-            self.hexapod.mv(axis, pos[axis]+target)
+            prevpos = pos[axis]
+            abstarget = prevpos+target
+            self.hexapod.mv(axis, abstarget)
             if wait:
                 time.sleep(0.02)
-                while not self.hexapod.isattarget():
+                while True:
                     pos = self.hexapod.get_pos()
-                    try:
-                        self.signals.AxisPosSignal.emit(pos[axis])
-                    except:
-                        print(axis)
-                        print(pos)
-                    time.sleep(0.02)
-                    
+                    pos = float(pos[axis])
+                    self.signals.AxisPosSignal.emit(pos)
+                    #if (abs(pos-abstarget)<0.00001) or (abs(pos-prevpos)<0.00001):
+                    if self.hexapod.isattarget(axis):
+                        break
+                    prevpos = pos
+                    time.sleep(0.01)
+        if axis in self.gonio.channel_names:
+            ch = self.gonio.channel_names.index(axis)
+            self.gonio.mvr(ch, target, wait=False)
+            if wait:
+                time.sleep(0.02)
+                while self.gonio.ismoving(ch):
+                    pos = self.gonio.get_pos(ch)
+                    self.signals.AxisPosSignal.emit(pos)
+                    time.sleep(0.01)
+
+    def get_speed(self, axis):
+        if axis == "phi":
+            return self.phi.vel, self.phi.acc
+        if axis in self.hexapod.axes:
+            return self.hexapod.get_speed(), None
+        if axis in self.gonio.channel_names:
+            ch = self.gonio.channel_names.index(axis)
+            vel,acc = self.gonio.get_speed(ch)
+            return vel, acc
+    
+    def set_speed(self, axis, vel=1, acc=1):
+        if axis == "phi":
+            self.phi.vel = vel
+            self.phi.acc = acc
+        if axis in self.hexapod.axes:
+            self.hexapod.set_speed(vel)
+        if axis in self.gonio.channel_names:
+            ch = self.gonio.channel_names.index(axis)
+            self.gonio.set_speed(ch, vel, acc)
+        
     def disconnect(self):
         self.hexapod.disconnect()
         self.phi.controller.disconnect()
@@ -105,6 +168,16 @@ class instruments(object):
         self.qds.connect()
         #self.phi = Axis(acscontroller, 0)
     
+    def isconnected(self, axis = 'X'):
+        if axis in self.gonio.channel_names:
+            ax = self.gonio.channel_names.index(axis)
+            return self.gonio.connected[ax]
+        if axis in self.hexapod.axes:
+            ax = self.hexapod.axes.index(axis)
+            return self.hexapod.connected[ax]
+        if axis == "phi":
+            return self.phi.connected
+
     def disp(self):
         while self.phi.moving:
             print(self.phi.fpos)
@@ -126,14 +199,22 @@ class instruments(object):
                 while ismoving:
                     ismoving = self.ismoving(axis)
                     time.sleep(0.1)
-                r, a = self.qds.get_position()
-            else:
+                    r, a = self.qds.get_position()
+            if axis in self.hexapod.axes:
                 unit = "mm"
                 self.mv(axis, value)
                 time.sleep(0.1)
-                while not self.hexapod.isattarget():
+                while not self.hexapod.isattarget(axis):
                     time.sleep(0.1)
-                r, a = self.qds.get_position()
+                    r, a = self.qds.get_position()
+            if axis in self.gonio.channel_names:
+                ax = self.gonio.channel_names.index(axis)
+                unit = self.gonio.units[ax]
+                self.mv(axis, value)
+                time.sleep(0.1)
+                while self.gonio.ismoving(ax):
+                    time.sleep(0.1)
+                    r, a = self.qds.get_position()
             # read a qds value
             r, a = self.qds.get_position()
             r = r[0]

@@ -100,7 +100,21 @@ def mv(ax, target, wait=True):
 def mvr(ax, target, wait=True):
     #ax = channels[chname]
     move(ax, target=target, absolute=False, wait=wait)
-    
+
+def set_speed(channel, vel=1, acc=10):
+    # input vel and acc should be in mm/s and mm/s^2
+    vel = int(vel*1E9)
+    acc = int(acc*1E9)
+    # velocity 1000000000 equals 1mm/s
+    # acceler  10000000000 equals 10mm/s2.
+    ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_VELOCITY, vel)
+    ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_ACCELERATION, acc)
+
+def get_speed(channel):
+    vel = ctl.GetProperty_i64(smaract, channel, ctl.Property.MOVE_VELOCITY)
+    acc = ctl.GetProperty_i64(smaract, channel, ctl.Property.MOVE_ACCELERATION)
+    return (vel/1E9, acc/1E9)
+
 # MOVE
 # The move command instructs a positioner to perform a movement.
 # The given "move_value" parameter is interpreted according to the previously configured move mode.
@@ -173,18 +187,30 @@ except:
 
 channels = [0, 1, 2, 3]
 base_units = []
+units = []
 for ch in channels:
     ctl.SetProperty_i32(smaract, ch, ctl.Property.MAX_CL_FREQUENCY, 6000)
     ctl.SetProperty_i32(smaract, ch, ctl.Property.HOLD_TIME, 1000)
     base_unit = ctl.GetProperty_i32(smaract, ch, ctl.Property.POS_BASE_UNIT)
     base_units.append(base_unit)
+    if base_unit == ctl.BaseUnit.METER:
+        units.append('mm')
+    else:
+        units.append('deg')
 
     # The move mode states the type of movement performed when sending the "Move" command.
 #move_mode = ctl.MoveMode.CL_ABSOLUTE
 
-def get_connect_status():
+def isconnected(ax=-1):
     # Now we read the state for all available channels.
     # The passed "idx" parameter (the channel index in this case) is zero-based.
+    if ax>-1:
+        state = ctl.GetProperty_i32(smaract, ax, ctl.Property.CHANNEL_STATE)
+        if state & ctl.ChannelState.SENSOR_PRESENT:
+            return True
+        else:
+            return False
+    status = []
     for channel in channels:
         state = ctl.GetProperty_i32(smaract, channel, ctl.Property.CHANNEL_STATE)
         # The returned channel state holds a bit field of several state flags.
@@ -194,9 +220,12 @@ def get_connect_status():
         # Note that in contrast to previous controller systems the controller supports
         # hotplugging of the sensor module and the actuators.
         if state & ctl.ChannelState.SENSOR_PRESENT:
+            status.append(True)
             print("MCS2 channel {} has a sensor.".format(channel))
         else:
+            status.append(False)
             print("MCS2 channel {} has no sensor.".format(channel))
+    return status
 
 # try:
 #     # First we want to know if the configured positioner type is a linear or a rotatory type.
@@ -278,8 +307,8 @@ def get_pos(ax):
         position = ctl.ReadProperty_i64(smaract, r_id1)
 
         # Print the results
-        print("MCS2 current position of channel {}: {}".format(ax, position), end='')
-        print("pm.") if base_units[ax] == ctl.BaseUnit.METER else print("ndeg.")
+        #print("MCS2 current position of channel {}: {}".format(ax, position), end='')
+        #print("pm.") if base_units[ax] == ctl.BaseUnit.METER else print("ndeg.")
         return position/1E9
     except ctl.Error as e:
         # Catching the "ctl.Error" exceptions may be used to handle errors of SmarActCTL function calls.

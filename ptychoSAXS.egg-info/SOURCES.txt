@@ -10,3 +10,4 @@ ptychosaxs/__init__.py
 ptychosaxs/interferometers.py
 ptychosaxs/motions.py
 ptychosaxs/ptychosaxs.py
+ptychosaxs/smaract_gonio.py
