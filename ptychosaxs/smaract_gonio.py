@@ -63,7 +63,12 @@ def calibrate(channel):
     # Note that the function call returns immediately, without waiting for the movement to complete.
     # The "ChannelState.CALIBRATING" flag in the channel state can be monitored to determine
     # the end of the calibration sequence.
-
+    while True:
+        state = ctl.GetProperty_i32(smaract, channel, ctl.Property.CHANNEL_STATE)
+        if state & ctl.ChannelState.CALIBRATING:
+            time.sleep(0.1)
+        else:
+            break
 # FIND REFERENCE
 # Since the position sensors work on an incremental base, the referencing sequence is used to
 # establish an absolute positioner reference for the positioner after system startup.
@@ -88,7 +93,12 @@ def findReference(channel):
     # Note that the function call returns immediately, without waiting for the movement to complete.
     # The "ChannelState.REFERENCING" flag in the channel state can be monitored to determine
     # the end of the referencing sequence.
-
+    while True:
+        state = ctl.GetProperty_i32(smaract, channel, ctl.Property.CHANNEL_STATE)
+        if state & ctl.ChannelState.REFERENCING:
+            time.sleep(0.1)
+        else:
+            break
 def mv(ax, target, wait=True):
     #ax = channels[chname]
     move(ax, target=target, absolute=True, wait=wait)
@@ -97,7 +107,7 @@ def mvr(ax, target, wait=True):
     #ax = channels[chname]
     move(ax, target=target, absolute=False, wait=wait)
 
-def set_speed(channel, vel=1, acc=10):
+def set_speed(channel, vel=5, acc=10):
     # input vel and acc should be in mm/s and mm/s^2
     vel = int(vel*1E9)
     acc = int(acc*1E9)
@@ -181,6 +191,17 @@ try:
 except:
     pass
 
+def _get_unit(channel):
+    base_unit = ctl.GetProperty_i32(smaract, channel, ctl.Property.POS_BASE_UNIT)
+    return base_unit
+
+def get_unit(channel):
+    base_unit = _get_unit(channel)
+    if base_unit == ctl.BaseUnit.METER:
+        return "mm", base_unit
+    else: 
+        return "deg", base_unit
+
 channels = [0, 1, 2, 3]
 base_units = []
 units = []
@@ -188,12 +209,9 @@ for ch in channels:
     ctl.SetProperty_i32(smaract, ch, ctl.Property.MAX_CL_FREQUENCY, 6000)
     ctl.SetProperty_i32(smaract, ch, ctl.Property.HOLD_TIME, 1000)
     set_speed(ch)  # return the speed and acc to defaults (1mm/s, 10mm/s2)
-    base_unit = ctl.GetProperty_i32(smaract, ch, ctl.Property.POS_BASE_UNIT)
+    un, base_unit = get_unit(ch)
     base_units.append(base_unit)
-    if base_unit == ctl.BaseUnit.METER:
-        units.append('mm')
-    else:
-        units.append('deg')
+    units.append(un)
 
     # The move mode states the type of movement performed when sending the "Move" command.
 #move_mode = ctl.MoveMode.CL_ABSOLUTE

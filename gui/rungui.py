@@ -9,10 +9,10 @@ Created on Thu Oct 27 16:42:18 2016
 import sys 
 import os
 
-from PyQt5 import uic, QtCore
+from PyQt5 import uic, QtCore, QtGui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget
 from PyQt5.QtWidgets import QLabel, QLineEdit, QMessageBox, QInputDialog
-from PyQt5.QtCore import QTimer, QObject, pyqtSlot, pyqtSignal, QRunnable, QThreadPool
+from PyQt5.QtCore import QTimer, QObject, pyqtSlot, pyqtSignal, QRunnable, QThreadPool, QSize
 
 import time
 
@@ -136,6 +136,8 @@ def get_pandadata():
     return d
 
 class tweakmotors(QMainWindow):
+    resized = QtCore.pyqtSignal()
+
     def __init__(self):
         super(tweakmotors, self).__init__()
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
@@ -166,7 +168,11 @@ class tweakmotors(QMainWindow):
             self.ui.findChild(QPushButton, "pb_lup_%i"%n).setEnabled(enable)
             self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).setEnabled(enable)
             self.ui.findChild(QLineEdit, "ed_%i"%n).setEnabled(enable)   
-
+            self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setEnabled(enable)  
         # checking only the connected motors.. 
         # if not done, later it will try to update the position of disconnected motors    
         self.motornames = []
@@ -258,6 +264,9 @@ class tweakmotors(QMainWindow):
         self.ui.actionSelect_units.triggered.connect(self.select_qds_units)
         self.ui.actionSelect_QDS_for_X.triggered.connect(self.select_qds_x)
         self.ui.actionSelect_QDS_for_Y.triggered.connect(self.select_qds_y)
+        self.ui.actionCalibrate.triggered.connect(self.smaract_calibrate)
+        self.ui.actionFindReference.triggered.connect(self.smaract_findreference)
+        self.ui.actionSet_gonio_default_vel_acc.triggered.connect(self.smaract_set_defaultspeed)
         self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
         self.pts.signals.AxisNameSignal.connect(self.update_motorname)
 
@@ -290,39 +299,70 @@ class tweakmotors(QMainWindow):
         # a figure instance to plot on
         self.figure = plt.figure()
 
+        #self.ui.
+        self.px = 1/plt.rcParams['figure.dpi']  # pixel in inches
+        print(plt.rcParams['figure.subplot.left'])
+        print(plt.rcParams['figure.subplot.bottom'] )
+        print(plt.rcParams['figure.subplot.right'] )
+        print(plt.rcParams['figure.subplot.top'])
+
         # this is the Canvas Widget that displays the `figure`
         # it takes the `figure` instance as a parameter to __init__
         self.canvas = FigureCanvas(self.figure)
+        self.figure.set_tight_layout(True)
 
         # this is the Navigation widget
         # it takes the Canvas widget and a parent
         self.toolbar = NavigationToolbar(self.canvas, self)
 
-        # Just some button connected to `plot` method
-        #self.button = QPushButton('Plot')
-        #self.button.clicked.connect(self.plot)
-
         # set the layout
         
         self.ui.verticalLayout_2.addWidget(self.toolbar)
         self.ui.verticalLayout_2.addWidget(self.canvas)
-        #self.ui.vlayout_plot.addWidget(self.button)
-        #self.setLayout(layout)
-        # instead of ax.hold(False)
         self.figure.clear()
 
         # create an axis
         self.ax = self.figure.add_subplot(131)
         self.ax2 = self.figure.add_subplot(132)
         self.ax3 = self.figure.add_subplot(133)
+        self.canvas.mpl_connect('button_press_event', self.onclick)
 
         self.updatepos()
 
+        #self.ui.installEventFilter(self)
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_qds)
         self.timer.start(100)        
         self.ui.show()
+        #self.resized.connect(self.resizeFunction)
 
+    def onclick(self, event):
+#        xu = self.ui.width()
+#        yu = self.ui.height()
+        xf = self.ui.frame.width()
+        yf = self.ui.frame.height()
+        xs = xf*self.px
+        ys = (yf-500)*self.px
+        #self.ui.frame.setGeometry(0, 0, xu, yu)
+        #print(f"xsize is {xu}, ysize is {yu}, xf is {xf}, yf is {yf}")
+        self.figure.set_size_inches(xs, ys)
+        self.canvas.draw()
+        # print('%s click: button=%d, x=%d, y=%d, xdata=%f, ydata=%f' %
+        #   ('double' if event.dblclick else 'single', event.button,
+        #    event.x, event.y, event.xdata, event.ydata))
+        
+    def eventFilter(self, myself, event):
+#        print(event.type())
+#        print(self.figure.get_size_inches())
+        if (event.type() == QtCore.QEvent.Resize):
+            xs = self.ui.width()*self.px
+            ys = (self.ui.height()-350)*self.px
+            print(f"xsize is {xs}, ysize is {ys}")
+            self.figure.set_size_inches(xs, ys)
+            self.canvas.draw()
+            #self.resize.emit(1)
+        return True
+    
     def select_qds_units(self):
         text, ok = QInputDialog().getItem(self, "Select QDS units",
                                             "Units:", ('nm', 'um', 'mm'), current=1, editable=False)
@@ -360,6 +400,8 @@ class tweakmotors(QMainWindow):
             return 0
         self.fitdata(filename=filename, datacolumn=self._qds_x_sensor+1, dtype="eccent")
         self.fitdata(filename=filename, datacolumn=self._qds_y_sensor+1, dtype="wob")
+
+        self.canvas.draw()
 
     def fitdata(self, filename="", datacolumn=2, xd = [], yd = [], dtype="wobble"):
         if self._qds_unit == QDS_UNIT_MM:
@@ -415,15 +457,17 @@ class tweakmotors(QMainWindow):
         if ax==1:
             ax = self.ax
         ax.cla()
-        ax.plot(xd, yd, 'b', label='data')
-        ax.plot(xd, curve, 'g--', label=lbl)
+        ax.plot(np.rad2deg(xd), yd, 'b', np.rad2deg(xd), curve, 'g--')
+        ax.set_title(lbl)
+#        ax.plot(xd, yd, 'b', label='data')
+#        ax.plot(xd, curve, 'g--', label=lbl)
         if 'xc=' in lbl:
             ylbl = 'x-x_mean (mm)'
         else:
             ylbl = 'y-y_mean (mm)'
-        ax.set_xlabel('phi (radian)')
+        ax.set_xlabel('phi (deg)')
         ax.set_ylabel(ylbl)
-        ax.legend()
+        #ax.legend()
         self.canvas.draw()
 
     def get_motorpos(self, axis):
@@ -450,6 +494,23 @@ class tweakmotors(QMainWindow):
     def update_motorname(self, axis):
         self.signalmotor = axis
     
+    def smaract_set_defaultspeed(self):
+        for i, connected in enumerate(self.pts.gonio.connected):
+            if connected:
+                self.pts.gonio.set_speed(i)
+
+    def smaract_calibrate(self):
+        for i, connected in enumerate(self.pts.gonio.connected):
+            if connected:
+                self.pts.gonio.calibrate(i)
+        print("MCS2 calibration done..")
+
+    def smaract_findreference(self):
+        for i, connected in enumerate(self.pts.gonio.connected):
+            if connected:
+                self.pts.gonio.findReference(i)
+        print("MCS2 finding references done..")
+                        
     def setphivel_default(self):
 #        print(self.pts.phi.vel, " This was vel value")
         self.pts.phi.vel = 36
@@ -781,6 +842,7 @@ class tweakmotors(QMainWindow):
         ax = self.figure.get_axes()
         for a in ax:
             a.clear()
+        #lt.show()
         self.canvas.draw()
 
     def mv(self, motornumber):
@@ -914,6 +976,7 @@ class tweakmotors(QMainWindow):
         except:
             print("There was error in the plot")
             pass
+        #plt.show()
         self.canvas.draw()
 
 

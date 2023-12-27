@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1074</width>
+    <width>1145</width>
     <height>946</height>
    </rect>
   </property>
@@ -29,6 +29,12 @@
    <layout class="QGridLayout" name="gridLayout">
     <item row="0" column="0">
      <widget class="QFrame" name="frame">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+        <horstretch>2</horstretch>
+        <verstretch>1</verstretch>
+       </sizepolicy>
+      </property>
       <property name="minimumSize">
        <size>
         <width>0</width>
@@ -58,10 +64,13 @@
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_2">
         <property name="sizeConstraint">
-         <enum>QLayout::SetMinAndMaxSize</enum>
+         <enum>QLayout::SetNoConstraint</enum>
         </property>
         <item>
          <layout class="QGridLayout" name="gridLayout_2">
+          <property name="sizeConstraint">
+           <enum>QLayout::SetNoConstraint</enum>
+          </property>
           <item row="8" column="0" colspan="2">
            <widget class="QLabel" name="lb7">
             <property name="text">
@@ -1999,7 +2008,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1074</width>
+     <width>1145</width>
      <height>21</height>
     </rect>
    </property>
@@ -2043,9 +2052,19 @@
     <addaction name="separator"/>
     <addaction name="actionSave_scan"/>
    </widget>
+   <widget class="QMenu" name="menuSmarAct">
+    <property name="title">
+     <string>SmarAct</string>
+    </property>
+    <addaction name="actionCalibrate"/>
+    <addaction name="actionFindReference"/>
+    <addaction name="separator"/>
+    <addaction name="actionSet_gonio_default_vel_acc"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuHexapod"/>
    <addaction name="menuACS"/>
+   <addaction name="menuSmarAct"/>
    <addaction name="menuQDS"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -2137,6 +2156,21 @@
   <action name="actionSelect_QDS_for_Y">
    <property name="text">
     <string>Select QDS for Y</string>
+   </property>
+  </action>
+  <action name="actionCalibrate">
+   <property name="text">
+    <string>Calibrate</string>
+   </property>
+  </action>
+  <action name="actionFindReference">
+   <property name="text">
+    <string>Find reference</string>
+   </property>
+  </action>
+  <action name="actionSet_gonio_default_vel_acc">
+   <property name="text">
+    <string>Set the default vel/acc</string>
    </property>
   </action>
  </widget>
