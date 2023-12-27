@@ -32,3 +32,9 @@ pts.fly_test() # this will save qds data into rpos and tpos variables.
 pts.plot_qds_hex(timeshift= -180, filename="test2") # will plot and save data.
 pts.plot_qds_hex(timeshift= -180) # this will only plot.
 ```
+## GUI
+A gui example is under 'gui' folder. In order to fit QDS data, run rungui.py under the gui folder.
+```dos
+cd gui
+gui> python rungui.py
+```
