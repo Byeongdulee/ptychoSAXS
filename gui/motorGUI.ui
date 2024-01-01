@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1145</width>
-    <height>946</height>
+    <width>1580</width>
+    <height>1143</height>
    </rect>
   </property>
   <property name="maximumSize">
@@ -58,8 +58,8 @@
         <rect>
          <x>0</x>
          <y>10</y>
-         <width>1092</width>
-         <height>871</height>
+         <width>1608</width>
+         <height>900</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -2008,8 +2008,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1145</width>
-     <height>21</height>
+     <width>1580</width>
+     <height>38</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -2061,11 +2061,19 @@
     <addaction name="separator"/>
     <addaction name="actionSet_gonio_default_vel_acc"/>
    </widget>
+   <widget class="QMenu" name="menuScan">
+    <property name="title">
+     <string>Scan</string>
+    </property>
+    <addaction name="action2D_scan"/>
+    <addaction name="action3D_scan"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuHexapod"/>
    <addaction name="menuACS"/>
    <addaction name="menuSmarAct"/>
    <addaction name="menuQDS"/>
+   <addaction name="menuScan"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionSet_default_speed">
@@ -2171,6 +2179,16 @@
   <action name="actionSet_gonio_default_vel_acc">
    <property name="text">
     <string>Set the default vel/acc</string>
+   </property>
+  </action>
+  <action name="action2D_scan">
+   <property name="text">
+    <string>2D XY scan</string>
+   </property>
+  </action>
+  <action name="action3D_scan">
+   <property name="text">
+    <string>3D XYphi scan</string>
    </property>
   </action>
  </widget>
