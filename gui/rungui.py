@@ -8,6 +8,9 @@ Created on Thu Oct 27 16:42:18 2016
 
 import sys 
 import os
+import asyncio
+from asyncqt import QEventLoop
+from server import UDPserver
 
 from PyQt5 import uic, QtCore, QtGui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget
@@ -1114,12 +1117,45 @@ class tweakmotors(QMainWindow):
         #plt.show()
         self.canvas.draw()
 
+    @QtCore.pyqtSlot(str, float, float, float, float)
+    def set_data(self, axis, L, R, step, rt):
+        motornumber = self.motornames.find(axis)
+        n = motornumber+1
+        self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).setText(L)
+        self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setText(R)
+        self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setText(rt)
+        self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText(step)
+
+    @QtCore.pyqtSlot(int)
+    def run_cmd(self, n):
+        if n==2:
+            self.fly2d()
+        if n==3:
+            self.fly3d()
+
+async def create_server(loop):
+    return await loop.create_datagram_endpoint(
+        lambda: UDPserver(), local_addr=("127.0.0.1", 20002)
+    )
+
+
+def main():
+    from PyQt5.QtWidgets import QMainWindow
+    app = QApplication(sys.argv)
+    #sys.exit(app.exec_())
+    #app = QtWidgets.QApplication(sys.argv)
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
+    a = tweakmotors()
+    a.show()
+
+
+    with loop:
+        _, protocol = loop.run_until_complete(create_server(loop))
+        protocol.rangeChanged.connect(a.set_data)
+        protocol.runRequested.connect(a.run_cmd)
+        loop.run_forever()
 
 
 if __name__ == "__main__":
-#    import logging
-#    logging.basicConfig(level=logging.INFO)
-    from PyQt5.QtWidgets import QMainWindow
-    app = QApplication(sys.argv)
-    a = tweakmotors()
-    sys.exit(app.exec_())
+    main()
