@@ -275,7 +275,7 @@ class tweakmotors(QMainWindow):
         self.ui.actionSet_gonio_default_vel_acc.triggered.connect(self.smaract_set_defaultspeed)
  
         self.ui.action2D_scan.triggered.connect(lambda: self.fly2d(xm, ym))
-        self.ui.action3D_scan.triggered.connect(self.fly3d(xm, ym, phim))
+        self.ui.action3D_scan.triggered.connect(lambda: self.fly3d(xm, ym, phim))
         
         self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
         self.pts.signals.AxisNameSignal.connect(self.update_motorname)
