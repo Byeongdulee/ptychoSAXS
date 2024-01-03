@@ -10,7 +10,7 @@ import sys
 import os
 #import asyncio
 #from asyncqt import QEventLoop
-from server import UDPserver
+from server_json import UDPserver
 
 from PyQt5 import uic, QtCore, QtGui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget
@@ -40,6 +40,7 @@ from pandablocks.hdf import write_hdf_files
 import h5py
 import re
 import analysis.planeeqn as eqn
+import json
 
 HEXAPOD_FLYMODE_WAVELET = 0
 HEXAPOD_FLYMODE_STANDARD = 1
@@ -47,6 +48,7 @@ QDS_UNIT_NM = 0
 QDS_UNIT_UM = 1
 QDS_UNIT_MM = 2
 QDS_UNIT_DEFAULT = QDS_UNIT_UM  # default QDS output is um
+DEFAULTS = {'xmotor':0, 'ymotor':1, 'phimotor':6}
 
 def showerror(msg):
     dlg = QMessageBox()
@@ -592,7 +594,7 @@ class tweakmotors(QMainWindow):
     #     thread.finished.connect(thread.deleteLater)
     #     return thread
 
-    def fly2d(self, xmotor=0, ymotor=1):
+    def fly2d(self, xmotor=0, ymotor=1, scanname = ""):
         motor = [xmotor, ymotor]
         for m in motor:
             n = m+1
@@ -605,11 +607,11 @@ class tweakmotors(QMainWindow):
                 return 0
         
         self.isscan = True
-        w = Worker(self.fly2d0, xmotor, ymotor)
+        w = Worker(self.fly2d0, xmotor, ymotor, scanname=scanname)
         w.signal.finished.connect(self.flydone)
         self.threadpool.start(w)
 
-    def fly3d(self, xmotor=0, ymotor=1, phimotor=6):
+    def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname=""):
         motor = [xmotor, ymotor, phimotor]
         for m in motor:
             n = m+1
@@ -622,7 +624,7 @@ class tweakmotors(QMainWindow):
                 return 0
         
         self.isscan = True
-        w = Worker(self.fly3d0, xmotor, ymotor, phimotor)
+        w = Worker(self.fly3d0, xmotor, ymotor, phimotor, scanname=scanname)
         w.signal.finished.connect(self.flydone)
         self.threadpool.start(w)
 
@@ -943,18 +945,18 @@ class tweakmotors(QMainWindow):
     def savescan(self, filename=""):
         self.save_qds(filename=filename)
 
-    def fly_result(self):
-        w = QWidget()
-        w.resize(320, 240)
-        # Set window title
-        w.setWindowTitle("Save QDS Data As")
-        fn = QFileDialog.getSaveFileName(w, 'Save File', '', 'Text (*.txt *.dat)',None, QFileDialog.DontUseNativeDialog)
-        filename = fn[0]
-        if filename == "":
-            return 0
-        if ".txt" not in filename:
-            filename = filename + ".txt"
-
+    def fly_result(self, filename=""):
+        if len(filename)==0:
+            w = QWidget()
+            w.resize(320, 240)
+            # Set window title
+            w.setWindowTitle("Save QDS Data As")
+            fn = QFileDialog.getSaveFileName(w, 'Save File', '', 'Text (*.txt *.dat)',None, QFileDialog.DontUseNativeDialog)
+            filename = fn[0]
+            if filename == "":
+                return 0
+            if ".txt" not in filename:
+                filename = filename + ".txt"
 
         data = self.pts.hexapod.get_records()
         print("Done.. Preparing to plot.")
@@ -1019,7 +1021,7 @@ class tweakmotors(QMainWindow):
         self.threadpool.start(w)
         self.updatepos(axis)
 
-    def mvr(self, motornumber=-1, sign=1):
+    def mvr(self, motornumber=-1, sign=1, val=0):
         if motornumber ==-1:
             pb = self.sender()
             objname = pb.objectName()
@@ -1032,7 +1034,8 @@ class tweakmotors(QMainWindow):
         #print("axis is ", axis)
         #print("sign is ", sign)
         self.signalmotorunit = self.motorunits[motornumber]
-        val = float(self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).text())
+        if val==0:
+            val = float(self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).text())
         #print(f"Move {axis} by {sign*val}")
 
         w = mover(self.pts, axis, sign*val)
@@ -1132,6 +1135,63 @@ class tweakmotors(QMainWindow):
         self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setText(str(R))
         self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setText(str(rt))
         self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText(str(step))
+    
+    @QtCore.pyqtSlot(dict)
+    def run_json(self, json_message):
+        #data = json.loads(json_message)
+        # return_message = None
+        cmd = json_message['command']
+        scanname = ""
+        try:
+            data = json_message['data']
+        except:
+            data = {}
+
+        try:
+            xmotor = int(data['xmotor'])
+        except:
+            xmotor = DEFAULTS['xmotor']
+        try:
+            ymotor = int(data['ymotor'])
+        except:
+            ymotor = DEFAULTS['ymotor']
+        try:
+            phimotor = int(data['phimotor'])
+        except:
+            phimotor = DEFAULTS['phimotor']
+        try:
+            scanname = int(data['scanname'])
+        except:
+            scanname = ""
+        try:
+            folder = int(data['folder'])
+        except:
+            folder = ""
+
+        if cmd == 'setrange':
+            axis = data['axis']
+            Lv = data['L']
+            Rv = data['R']
+            step = data['step']
+            t = data['t']
+            self.set_data(self, axis, float(Lv), float(Rv), float(step), float(t))
+        elif cmd == 'mv':
+            for axis, pos in data.items():
+                #self.set_mv(self, axis, float(pos))
+                motornumber = self.motornames.index(axis)
+                self.mv(motornumber=motornumber, val=float(pos))
+        elif cmd == 'mvr':
+            for axis, pos in data.items():
+                motornumber = self.motornames.index(axis)
+                self.mvr(motornumber=motornumber, val=float(pos))
+        elif cmd == 'run2d':
+            self.fly2d(xmotor=xmotor,ymotor=ymotor,scanname=scanname)
+        elif cmd == 'run3d':
+            self.fly3d(xmotor=xmotor,ymotor=ymotor,phimotor=phimotor,scanname=scanname)
+        elif cmd == 'none':
+            self.runRequested.emit(0)
+        else:
+            print(f"Invalid command {cmd} is recieved.")
 
     @QtCore.pyqtSlot(int)
     def run_cmd(self, n):
@@ -1148,13 +1208,10 @@ class tweakmotors(QMainWindow):
         motornumber = self.motornames.index(axis)
         self.mv(motornumber=motornumber, val=pos)
 
-
-
 async def create_server(loop):
     return await loop.create_datagram_endpoint(
         lambda: UDPserver(), local_addr=("127.0.0.1", 20002)
     )
-
 
 def main():
     from PyQt5.QtWidgets import QMainWindow
@@ -1169,6 +1226,7 @@ def main():
         protocol.rangeChanged.connect(a.set_data)
         protocol.runRequested.connect(a.run_cmd)
         protocol.mvRequested.connect(a.set_mv)
+        protocol.jsonReceived.connect(a.run_json)
         loop.run_forever()
 
 if __name__ == "__main__":

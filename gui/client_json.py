@@ -19,4 +19,4 @@ d['data'] = data
 msg = json.dumps(d)
 print(msg)
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.sendto(msg, (UDP_IP, UDP_PORT))
+sock.sendto(bytes(msg, 'utf-8'), (UDP_IP, UDP_PORT))
