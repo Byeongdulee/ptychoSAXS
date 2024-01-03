@@ -8,7 +8,7 @@ from PyQt5 import QtCore
 class UDPserver(QtCore.QObject):
     rangeChanged = QtCore.pyqtSignal(str, float, float, float, float)
     runRequested = QtCore.pyqtSignal(int)
-
+    mvRequested = QtCore.pyqtSignal(str, float)
     def __init__(self, parent=None):
         super().__init__(parent)
         self._transport = None
@@ -28,14 +28,25 @@ class UDPserver(QtCore.QObject):
         cmd, data = message.split(
             ":"
         )
-
+        print(f"Received: {message}")
         try:
             if cmd == "setrange":
-                axis, L, R, step, rt = data.split("/")
-                self.rangeChanged.emit(axis, float(L), float(R), float(step), float(rt))
+                axis, L, R, step, t = data.split("/")
+                print(f"For axis: {axis}, {L}, {R}, {step}, and {t} are updated.")
+                self.rangeChanged.emit(axis, float(L), float(R), float(step), float(t))
+            if cmd == "mv":
+                dt = data.split(';')
+                print(dt)
+                for data in dt:
+                    if len(data)>0:
+                        axis, pos = data.split("/")
+                        print(axis)
+                        self.mvRequested.emit(axis, float(pos))
             if cmd == "run2d":
                 self.runRequested.emit(2)
             if cmd == "run3d":
-                self.runRequested.emit(3)            
+                self.runRequested.emit(3) 
+            if cmd == "none":
+                self.runRequested.emit(0)           
         except ValueError as e:
             print(e)

@@ -8,8 +8,8 @@ Created on Thu Oct 27 16:42:18 2016
 
 import sys 
 import os
-import asyncio
-from asyncqt import QEventLoop
+#import asyncio
+#from asyncqt import QEventLoop
 from server import UDPserver
 
 from PyQt5 import uic, QtCore, QtGui
@@ -139,7 +139,7 @@ def get_pandadata():
     return d
 
 class tweakmotors(QMainWindow):
-    resized = QtCore.pyqtSignal()
+#    resized = QtCore.pyqtSignal()
 
     def __init__(self):
         super(tweakmotors, self).__init__()
@@ -192,11 +192,11 @@ class tweakmotors(QMainWindow):
         for i, name in enumerate(self.motornames):
             n = i+1
             self.ui.findChild(QLabel, "lb%i"%n).setText(name)
-            self.ui.findChild(QPushButton, "pb_tweak%iL"%n).clicked.connect(lambda: self.mvr(None, -1))
-            self.ui.findChild(QPushButton, "pb_tweak%iR"%n).clicked.connect(lambda: self.mvr(None, 1))
-            self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stepscan(None))
-            self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).clicked.connect(lambda: self.fly(None))
-            self.ui.findChild(QLineEdit, "ed_%i"%n).returnPressed.connect(lambda: self.mv(None))
+            self.ui.findChild(QPushButton, "pb_tweak%iL"%n).clicked.connect(lambda: self.mvr(-1, -1))
+            self.ui.findChild(QPushButton, "pb_tweak%iR"%n).clicked.connect(lambda: self.mvr(-1, 1))
+            self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stepscan(-1))
+            self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).clicked.connect(lambda: self.fly(-1))
+            self.ui.findChild(QLineEdit, "ed_%i"%n).returnPressed.connect(lambda: self.mv(-1, None))
             if self.pts.isconnected(name):
                 enable = True
             else:
@@ -273,7 +273,8 @@ class tweakmotors(QMainWindow):
         self.ui.actionCalibrate.triggered.connect(self.smaract_calibrate)
         self.ui.actionFindReference.triggered.connect(self.smaract_findreference)
         self.ui.actionSet_gonio_default_vel_acc.triggered.connect(self.smaract_set_defaultspeed)
- 
+        self.ui.actionScanStop.triggered.connect(self.stopscan)
+        self.isStopScanIssued = False
         self.ui.action2D_scan.triggered.connect(lambda: self.fly2d(xm, ym))
         self.ui.action3D_scan.triggered.connect(lambda: self.fly3d(xm, ym, phim))
         
@@ -311,10 +312,10 @@ class tweakmotors(QMainWindow):
 
         #self.ui.
         self.px = 1/plt.rcParams['figure.dpi']  # pixel in inches
-        print(plt.rcParams['figure.subplot.left'])
-        print(plt.rcParams['figure.subplot.bottom'] )
-        print(plt.rcParams['figure.subplot.right'] )
-        print(plt.rcParams['figure.subplot.top'])
+        # print(plt.rcParams['figure.subplot.left'])
+        # print(plt.rcParams['figure.subplot.bottom'] )
+        # print(plt.rcParams['figure.subplot.right'] )
+        # print(plt.rcParams['figure.subplot.top'])
 
         # this is the Canvas Widget that displays the `figure`
         # it takes the `figure` instance as a parameter to __init__
@@ -336,6 +337,7 @@ class tweakmotors(QMainWindow):
         self.ax2 = self.figure.add_subplot(132)
         self.ax3 = self.figure.add_subplot(133)
         self.canvas.mpl_connect('button_press_event', self.onclick)
+        self.canvas.draw()
 
         self.updatepos()
 
@@ -345,6 +347,9 @@ class tweakmotors(QMainWindow):
         self.timer.start(100)        
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
+
+    def stopscan(self):
+        self.isStopScanIssued = True
 
     def onclick(self, event):
 #        xu = self.ui.width()
@@ -651,7 +656,7 @@ class tweakmotors(QMainWindow):
             motornumber = n-1
         else:
             n = motornumber + 1
-
+        
         try:
             st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
             fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
@@ -735,6 +740,8 @@ class tweakmotors(QMainWindow):
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step, step)
         for i, value in enumerate(pos):
+            if self.isStopScanIssued:
+                return
             self.pts.mv(axis, value)
             r = self.get_qds_pos()
             self.rpos.append([r[0], r[1], r[2]])
@@ -773,8 +780,11 @@ class tweakmotors(QMainWindow):
         if len(scanname):
             scanname=axis
         else:
-            scanname="%s_%s"%(scanname, axis)        
+#            print(scanname, axis)
+            scanname=f"{scanname}{axis}"        
         for i, value in enumerate(pos):
+            if self.isStopScanIssued:
+                return
             self.pts.mv(axis, value)
             # fly here
             scan="%s%0.3d"%(scanname, i)
@@ -814,8 +824,10 @@ class tweakmotors(QMainWindow):
         if len(scanname):
             scanname=axis
         else:
-            scanname="%s_%s"%scanname
+            scanname=f"{scanname}{axis}"
         for i, value in enumerate(pos):
+            if self.isStopScanIssued:
+                return
             self.pts.mv(axis, value)
             # fly here
             self.fly0(xmotor)
@@ -857,22 +869,22 @@ class tweakmotors(QMainWindow):
                     step = -step
 #            print(self.hexapod_flymode, "fly mode")
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
-                print("Run the fly scan with controller")
+#                print("Running the fly scan with controller")
                 self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
                 self.pts.hexapod.run_traj()
                 while self.pts.ismoving(axis):
                     time.sleep(0.01)
 
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD) or (axis != "X"):
-                print("Run the fly scan without controller")
+                print(" Running the fly scan without controller")
                 self.pts.mv(axis, st, wait=True)
                 self._prev_vel,self._prev_acc = self.pts.get_speed(axis)
-                print("prev speed was ", self._prev_vel)
-                print("speed should be ", abs(fe-st)/tm)
+                print("     prev speed was ", self._prev_vel)
+                print("     speed should be ", abs(fe-st)/tm)
                 self.pts.set_speed(axis, abs(fe-st)/tm, None)
                 time.sleep(0.02)
                 self.pts.mv(axis, fe, wait=True)
-                print("Should be in run.")
+                #print("Should be in run.")
 
         if motornumber >=6:
             # st = float(self.ui.ed_lup_7_L.text())
@@ -976,40 +988,44 @@ class tweakmotors(QMainWindow):
                     print(qds_data.shape, " qds data")
 
     def clearplot(self):
-        self.isscan = False
+        #self.isscan = False
         ax = self.figure.get_axes()
         for a in ax:
             a.clear()
         #lt.show()
         self.canvas.draw()
 
-    def mv(self, motornumber):
-        pb = self.sender()
-        objname = pb.objectName()
-        n = int(re.findall(r'\d+', objname)[0])
-        #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
-        motornumber = n-1
+    def mv(self, motornumber=-1, val=None):
+        if motornumber<-1:
+            pb = self.sender()
+            objname = pb.objectName()
+            n = int(re.findall(r'\d+', objname)[0])
+            #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
+            motornumber = n-1
+
         #print("motor number is ", motornumber)
         axis = self.motornames[motornumber]
         self.signalmotor = axis
         self.signalmotorunit = self.motorunits[motornumber]
-        try:
-            val = float(pb.text())
-        except:
-            showerror('Text box is empty.')
-            return
+        if type(val)==type(None):
+            try:
+                val = float(pb.text())
+            except:
+                showerror('Text box is empty.')
+                return
         #print(f"Move {axis} to {val}")
         w = move(self.pts, axis, val)
         #w.signal.finished.connect(self.scandone)
         self.threadpool.start(w)
         self.updatepos(axis)
 
-    def mvr(self, motornumber, sign):
-        pb = self.sender()
-        objname = pb.objectName()
-        n = int(re.findall(r'\d+', objname)[0])
-        #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
-        motornumber = n-1
+    def mvr(self, motornumber=-1, sign=1):
+        if motornumber ==-1:
+            pb = self.sender()
+            objname = pb.objectName()
+            n = int(re.findall(r'\d+', objname)[0])
+            #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
+            motornumber = n-1
         #print("motornumber is ", motornumber)
         axis = self.motornames[motornumber]
         self.signalmotor = axis
@@ -1031,13 +1047,14 @@ class tweakmotors(QMainWindow):
         self.ui.lcd_Z_2.display("%0.3f" % (r[2]))
         #self.rpos = []
         #self.mpos = []
-#        print(self.isscan, " isscan...")
         if self.isscan:
             if self.isfly:
                 self.rpos.append([r[0], r[1], r[2]])
                 self.mpos.append(self.get_motorpos(self.signalmotor))
             self.updatepos()
             self.plot()
+        else:
+            self.updatepos()
 
     def reset_qdsX(self):
         r = self.get_qds_pos(False)
@@ -1082,23 +1099,13 @@ class tweakmotors(QMainWindow):
 
     def plot(self):
         
-        #import random
-        ''' plot some random stuff '''
-        # random data
-        #data = [random.random() for i in range(10)]
-
-        # discards the old graph
-        # ax.hold(False) # deprecated, see above
-
-
         r = np.asarray(self.rpos)
         pos = np.asarray(self.mpos)
-        xl = f"{self.signalmotor} ({self.signalmotorunit})"
+        try:
+            xl = f"{self.signalmotor} ({self.signalmotorunit})"
+        except:
+            xl = ""
 
-        if not self.ui.cb_keepprevscan.isChecked():
-            self.ax.cla()
-            self.ax2.cla()
-            self.ax3.cla()
         try:
             self.ax.plot(pos, r[:,0], 'r')
             self.ax.set_xlabel(xl)
@@ -1114,24 +1121,34 @@ class tweakmotors(QMainWindow):
         except:
             print("There was error in the plot")
             pass
-        #plt.show()
         self.canvas.draw()
 
     @QtCore.pyqtSlot(str, float, float, float, float)
     def set_data(self, axis, L, R, step, rt):
-        motornumber = self.motornames.find(axis)
+#        print(axis, L, R, rt, step)
+        motornumber = self.motornames.index(axis)
         n = motornumber+1
-        self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).setText(L)
-        self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setText(R)
-        self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setText(rt)
-        self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText(step)
+        self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).setText(str(L))
+        self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setText(str(R))
+        self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setText(str(rt))
+        self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText(str(step))
 
     @QtCore.pyqtSlot(int)
     def run_cmd(self, n):
+#        print("run_cmd is called")
+        if n==0:
+            print("None is sent from the client.")
         if n==2:
             self.fly2d()
         if n==3:
             self.fly3d()
+
+    @QtCore.pyqtSlot(str, float)
+    def set_mv(self, axis, pos):
+        motornumber = self.motornames.index(axis)
+        self.mv(motornumber=motornumber, val=pos)
+
+
 
 async def create_server(loop):
     return await loop.create_datagram_endpoint(
@@ -1141,21 +1158,24 @@ async def create_server(loop):
 
 def main():
     from PyQt5.QtWidgets import QMainWindow
+    from asyncqt import QEventLoop
     app = QApplication(sys.argv)
-    #sys.exit(app.exec_())
-    #app = QtWidgets.QApplication(sys.argv)
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
     a = tweakmotors()
-    a.show()
-
 
     with loop:
         _, protocol = loop.run_until_complete(create_server(loop))
         protocol.rangeChanged.connect(a.set_data)
         protocol.runRequested.connect(a.run_cmd)
+        protocol.mvRequested.connect(a.set_mv)
         loop.run_forever()
 
-
 if __name__ == "__main__":
+    # server option included..
     main()
+    # non-server option
+    # from PyQt5.QtWidgets import QMainWindow
+    # app = QApplication(sys.argv)
+    # a = tweakmotors()
+    # sys.exit(app.exec_())

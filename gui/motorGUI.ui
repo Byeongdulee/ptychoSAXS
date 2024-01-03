@@ -602,7 +602,7 @@
              </size>
             </property>
             <property name="text">
-             <string>1</string>
+             <string>0.1</string>
             </property>
            </widget>
           </item>
@@ -628,7 +628,7 @@
              </size>
             </property>
             <property name="text">
-             <string>1</string>
+             <string>0.1</string>
             </property>
            </widget>
           </item>
@@ -773,7 +773,7 @@
              </size>
             </property>
             <property name="text">
-             <string>1</string>
+             <string>0.1</string>
             </property>
            </widget>
           </item>
@@ -2009,7 +2009,7 @@
      <x>0</x>
      <y>0</y>
      <width>1580</width>
-     <height>38</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -2067,6 +2067,8 @@
     </property>
     <addaction name="action2D_scan"/>
     <addaction name="action3D_scan"/>
+    <addaction name="separator"/>
+    <addaction name="actionScanStop"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuHexapod"/>
@@ -2189,6 +2191,11 @@
   <action name="action3D_scan">
    <property name="text">
     <string>3D XYphi scan</string>
+   </property>
+  </action>
+  <action name="actionScanStop">
+   <property name="text">
+    <string>Stop</string>
    </property>
   </action>
  </widget>
