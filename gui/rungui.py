@@ -286,6 +286,7 @@ class tweakmotors(QMainWindow):
         self.rpos = []
         self.mpos = []
         self.threadpool = QThreadPool.globalInstance()
+        self.datapath = ""
         # qds
         self.ref_X = 0
         self.ref_Z = 0
@@ -833,7 +834,8 @@ class tweakmotors(QMainWindow):
             self.pts.mv(axis, value)
             # fly here
             self.fly0(xmotor)
-            self.save_qds(filename="%s%0.3d"%(scanname, i))
+            filename = "%s%0.3d"%(scanname, i)
+            self.save_qds(filename=filename)
 #            r = self.get_qds_pos()
 #            self.rpos2.append([r[0], r[1], r[2]])
 #            self.mpos2.append(value)
@@ -932,8 +934,15 @@ class tweakmotors(QMainWindow):
             filename = fn[0]
             if filename == "":
                 return 0
+        # filename handling
         if ".txt" not in filename:
             filename = filename + ".txt"
+        d = os.path.dirname(filename)
+        if len(d) == 0:
+            filename = os.path.join(self.datapath, filename)
+        else:
+            self.datapath = d
+        # data unit and data
         if self._qds_unit == QDS_UNIT_MM:
             self.rpos = self.rpos/1E3
         if self._qds_unit == QDS_UNIT_UM:
@@ -955,9 +964,15 @@ class tweakmotors(QMainWindow):
             filename = fn[0]
             if filename == "":
                 return 0
-            if ".txt" not in filename:
-                filename = filename + ".txt"
-
+        # filename handling
+        if ".txt" not in filename:
+            filename = filename + ".txt"
+        d = os.path.dirname(filename)
+        if len(d) == 0:
+            filename = os.path.join(self.datapath, filename)
+        else:
+            self.datapath = d
+        # rea
         data = self.pts.hexapod.get_records()
         print("Done.. Preparing to plot.")
         if isinstance(data, type({})):
@@ -1169,12 +1184,13 @@ class tweakmotors(QMainWindow):
             folder = ""
 
         if cmd == 'setrange':
-            axis = data['axis']
-            Lv = data['L']
-            Rv = data['R']
-            step = data['step']
-            t = data['t']
-            self.set_data(self, axis, float(Lv), float(Rv), float(step), float(t))
+            motornumber = self.motornames.index(data['axis'])
+            n = motornumber+1
+            for key, val in data.items():
+                if key=='axis':
+                    pass
+                else:
+                    self.ui.findChild(QLineEdit, "ed_lup_%i_%s"%(n, key)).setText(val)
         elif cmd == 'mv':
             for axis, pos in data.items():
                 #self.set_mv(self, axis, float(pos))
@@ -1190,6 +1206,33 @@ class tweakmotors(QMainWindow):
             self.fly3d(xmotor=xmotor,ymotor=ymotor,phimotor=phimotor,scanname=scanname)
         elif cmd == 'none':
             self.runRequested.emit(0)
+        elif cmd == "toggle":
+            try:
+                val = data['controllerfly']
+                if val == "on":
+                    self.ui.actionEnable_fly_with_controller.setChecked(True)
+                if val == "off":
+                    self.ui.actionEnable_fly_with_controller.setChecked(False)
+            except:
+                pass
+            try:
+                val = data['keepprevscan']
+                if val == "on":
+                    self.ui.cb_keepprevscan.setChecked(True)
+                if val == "off":
+                    self.ui.cb_keepprevscan.setChecked(False)
+            except:
+                pass
+            try:
+                val = data['reversescan']
+                if val == "on":
+                    self.ui.cb_reversescandir.setChecked(True)
+                if val == 'off':
+                    self.ui.cb_reversescandir.setChecked(False)
+            except:
+                pass
+        elif cmd == "setfolder":
+            self.datapath = folder
         else:
             print(f"Invalid command {cmd} is recieved.")
 
