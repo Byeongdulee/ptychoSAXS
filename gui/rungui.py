@@ -8,9 +8,10 @@ Created on Thu Oct 27 16:42:18 2016
 
 import sys 
 import os
-#import asyncio
-#from asyncqt import QEventLoop
-from server_json import UDPserver
+import asyncio
+from asyncqt import QEventLoop
+from server_json import UDPserver, create_server
+import json
 
 from PyQt5 import uic, QtCore, QtGui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget
@@ -28,19 +29,9 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import matplotlib.pyplot as plt
 import numpy as np
 
-# panda box...
-import asyncio
-#import sys
-from pandablocks.blocking import BlockingClient
-from pandablocks.commands import Put
-pandaip = "164.54.122.90"
-from pandablocks.asyncio import AsyncioClient
-from pandablocks.commands import Put
-from pandablocks.hdf import write_hdf_files
-import h5py
+from tools.panda import get_pandadata
 import re
 import analysis.planeeqn as eqn
-import json
 
 HEXAPOD_FLYMODE_WAVELET = 0
 HEXAPOD_FLYMODE_STANDARD = 1
@@ -112,33 +103,6 @@ class mover(QRunnable):
         """Long-running task."""
         self.pts.mvr(self.axis, self.pos)
         self.signal.finished.emit(True)
-
-def disarm_panda():
-
-    with BlockingClient(pandaip) as client:
-        client.send(Put("BITS.A", 0))
-
-
-pandafn = "C:/Users/s12idc/Documents/GitHub/panda-capture.h5"
-
-async def arm_and_hdf():
-    # Create a client and connect the control and data ports
-    async with AsyncioClient(pandaip) as client:
-        try:
-            # Put to 2 fields simultaneously
-            await asyncio.gather(
-                client.send(Put("BITS.A", 1)),
-            )
-            # Listen for data, arming the PandA at the beginning
-            
-            await write_hdf_files(client, file_names=iter((pandafn,)), arm=True)
-        except:
-            pass
-
-def get_pandadata():
-    h = h5py.File(pandafn, "r")
-    d = h["INENC2.VAL.Value"][()]
-    return d
 
 class tweakmotors(QMainWindow):
 #    resized = QtCore.pyqtSignal()
@@ -1251,14 +1215,9 @@ class tweakmotors(QMainWindow):
         motornumber = self.motornames.index(axis)
         self.mv(motornumber=motornumber, val=pos)
 
-async def create_server(loop):
-    return await loop.create_datagram_endpoint(
-        lambda: UDPserver(), local_addr=("127.0.0.1", 20002)
-    )
 
 def main():
-    from PyQt5.QtWidgets import QMainWindow
-    from asyncqt import QEventLoop
+#    run gui with server option
     app = QApplication(sys.argv)
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
@@ -1272,11 +1231,12 @@ def main():
         protocol.jsonReceived.connect(a.run_json)
         loop.run_forever()
 
+def main_no_server():
+    # non-server option
+    app = QApplication(sys.argv)
+    a = tweakmotors()
+    sys.exit(app.exec_())
+
 if __name__ == "__main__":
     # server option included..
     main()
-    # non-server option
-    # from PyQt5.QtWidgets import QMainWindow
-    # app = QApplication(sys.argv)
-    # a = tweakmotors()
-    # sys.exit(app.exec_())
