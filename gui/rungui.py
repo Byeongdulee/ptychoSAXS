@@ -977,9 +977,10 @@ class tweakmotors(QMainWindow):
         self.canvas.draw()
 
     def mv(self, motornumber=-1, val=None):
-        if motornumber<-1:
+        if motornumber<0:
             pb = self.sender()
             objname = pb.objectName()
+            val_text = pb.text()
             n = int(re.findall(r'\d+', objname)[0])
             #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
             motornumber = n-1
@@ -990,7 +991,7 @@ class tweakmotors(QMainWindow):
         self.signalmotorunit = self.motorunits[motornumber]
         if type(val)==type(None):
             try:
-                val = float(pb.text())
+                val = float(val_text)
             except:
                 showerror('Text box is empty.')
                 return
