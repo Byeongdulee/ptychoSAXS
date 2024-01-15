@@ -2,6 +2,7 @@ from instruments.srs import SRSDG645
 import quantities as pq
 from enum import IntEnum
 from instruments.util_fns import ProxyList
+import time
 addressB = "tcpip://164.54.122.66:5025" # 12idb
 addressC = "tcpip://164.54.122.33:5025" # 12idc 
 #DG = ik.srs.SRSDG645.open_from_uri(address)
@@ -48,25 +49,27 @@ class _dg645Instrument(object):
 
     @property
     def initime(self):
-        endtime = self._ddg.channel[2*(self.idx+1)].delay
-        if not (endtime[0] == self._ddg.Channels.T0):
-            self._ddg.channel[2*(self.idx+1)].delay = (self._ddg.channel[0], endtime[1])
+        endtime = self._ddg.channel[2*self.idx].delay
+#        if not (endtime[0] == self._ddg.Channels.T0):
+#            self._ddg.channel[2*self.idx+1].delay = (self._ddg.channel[0], endtime[1])
         return endtime[1]
 
     @initime.setter
     def initime(self, newval):
-        self._ddg.channel[2*(self.idx+1)].delay = (self._ddg.channel[0], pq.Quantity(newval, "s"))
+        #self._ddg.channel[2*self.idx+1].delay = (self._ddg.channel[0], pq.Quantity(newval, "s"))
+        self._ddg.channel[2*self.idx].delay = (self._ddg.channel[0], newval)
 
     @property
     def duration(self):
-        endtime = self._ddg.channel[2*(self.idx+1)+1].delay
-        if not (endtime[0] == self._ddg.Channels(2*(self.idx+1))):
-            self._ddg.channel[2*(self.idx+1)+1].delay = (self._ddg.channel[2*(self.idx+1)], endtime[1])
+        endtime = self._ddg.channel[2*self.idx+1].delay
+#        if not (endtime[0] == self._ddg.Channels((2*self.idx+1))):
+#            self._ddg.channel[2*self.idx+1].delay = (self._ddg.channel[2*self.idx], endtime[1])
         return endtime[1]
         
     @duration.setter
     def duration(self, newval):
-        self._ddg.channel[2*(self.idx+1)+1].delay = (self._ddg.channel[2*(self.idx+1)], pq.Quantity(newval, "s"))
+#        self._ddg.channel[2*self.idx+1].delay = (self._ddg.channel[2*self.idx], pq.Quantity(newval, "s"))
+        self._ddg.channel[2*self.idx+1].delay = (self._ddg.channel[2*self.idx], newval)
 
     @property
     def polarity(self):
@@ -251,24 +254,35 @@ class dg645_12ID(SRSDG645):
         Cycdelay = SOFTWARE_INIT_DEADTIME
 
         self.burst_init()
+        time.sleep(0.01)
         if (DGNimage > 1):
             if (DGexpt >= Cycperiod):
                 raise TimeoutError("Cycperiod should be longer than a single pulse")
-
+#        print(dA, lAB, dC, lCD, dE, lEF, dG, lGH)
         self.instrument["shutter"].initime = dA
+        time.sleep(0.1)
+#        self.check_error()
         self.instrument["shutter"].duration = lAB
+#        self.check_error()
         self.instrument["detector"].initime = dC
+#        self.check_error()
         self.instrument["detector"].duration = lCD
+#        self.check_error()
         self.instrument["struck"].initime = dE
+#        self.check_error()
         self.instrument["struck"].duration = lEF
+#        self.check_error()
         self.instrument["inhibitor"].initime = dG
+#        self.check_error()
         self.instrument["inhibitor"].duration = lGH
+#        self.check_error()
 
         if ((Cycperiod < DG645_BURST_MAX_TIME) and (DGNimage > 1)):
             self.burst_set(DGNimage, Cycperiod, Cycdelay)
-            self.check_error()
+#            self.check_error()
         else:
             self.burst_enable = 0
+        self.check_error()
 
     def PE(self, DGexpt, *kwd):
         self.set_PE(DGexpt, *kwd)
@@ -310,8 +324,11 @@ class dg645_12ID(SRSDG645):
     def check_error(self):
         rtn = int(self.query("LERR?"))
         if rtn>0:
-            raise IOError("Error in setting DG645")
-        
+            raise IOError(f"Error code: {rtn} in setting DG645")
+    
+    def clear(self):
+        self.sendcmd('*CLS')
+
     def burst_init(self):
         self.enable_burst_mode = 1
         self.burst_delay = 0
@@ -319,9 +336,13 @@ class dg645_12ID(SRSDG645):
     
     def burst_set(self, Ncycle, Period, delay):
         self.burst_cycle = Ncycle
+#        self.check_error()
         self.burst_period = Period
+#        self.check_error()
         self.burst_delay = delay
+#        self.check_error()
         self.burst_enable = 1
+#        self.check_error()
             
     @property
     def burst_cycle(self):
@@ -347,7 +368,7 @@ class dg645_12ID(SRSDG645):
 
     @burst_period.setter
     def burst_period(self, newval):
-        self.sendcmd("BURP {}".format(int(newval)))
+        self.sendcmd("BURP {}".format(float(newval)))
         
     @property
     def burst_delay(self):
@@ -360,7 +381,7 @@ class dg645_12ID(SRSDG645):
 
     @burst_delay.setter
     def burst_delay(self, newval):
-        self.sendcmd("BURD {}".format(int(newval)))
+        self.sendcmd("BURD {}".format(float(newval)))
 
     @property
     def burst_enable(self):
