@@ -44,6 +44,61 @@ PRESCALE_OUTPUT_CD = 2
 PRESCALE_OUTPUT_EF = 3
 PRESCALE_OUTPUT_GH = 4
 
+INSTRUMENT_STATUS = {0: 'A trigger has been detected', 
+                    1: 'A trigger was detected while a delay or burst cycle was in progress.', 
+                    2: 'A delay cycle has completed.', 
+                    3: 'A burst of delay cycles has completed.',
+                    4: 'A delay cycle was inhibited.', 
+                    5: 'A delay cycle was aborted prematurely in order to change instrument delay settings.', 
+                    6: 'The 100 MHz PLL came unlocked.', 
+                    7: 'The Rb timebase came unlocked. '}
+STANDARD_EVENT_STATUS = {0: 'Operation complete. All previous commands have completed.', 
+                    1: 'Reserved', 
+                    2: 'Query error occurred.', 
+                    3: 'Device dependent error.',
+                    4: 'Execution error. A command failed to execute correctly because a parameter was out of range. ', 
+                    5: 'Command error. The parser detected a syntax error ', 
+                    6: 'Reserved', 
+                    7: 'Power on. The CG635 has been power cycled. '}
+SERIAL_POLL_STATUS = {0: 'An unmasked bit in the instrument status register (INSR) has been set. ', 
+                    1: 'Set if a delay cycle is in progress. Otherwise cleared.', 
+                    2: 'Set if a burst cycle is in progress. Otherwise cleared.', 
+                    3: '',
+                    4: 'The interface output buffer is non-empty.', 
+                    5: 'An unmasked bit in the standard event status register (*ESR) has been set.', 
+                    6: 'Master summary bit. Indicates that the CG635 is requesting service because an unmasked bit in this register has been set. ', 
+                    7: ''}
+ERRORS = {0: 'No Error',
+          10: 'Illigal Value',
+          11: 'Illigal Mode',
+          12: 'Illigal Delay',
+          13: 'Illigal Link',
+          14: 'Recall Failed',
+          15: 'Not Allowed',
+          16: 'Failed Self Test',
+          17: 'Failed Auto Calibration',
+          30: 'Lost Data',
+          32: 'No Listener',
+          110: 'Illegal Command',
+          111: 'Undefined Command',
+          112: 'Illegal Query',
+          113: 'Illegal Set',
+          114: 'Null Parameter',
+          115: 'Extra Parameters',
+          116: 'Missing Parameters',
+          117: 'Parameter Overflow',
+          118: 'Invalid Floating Point Number',
+          120: 'Invalid Integer',
+          121: 'Integer Overflow',
+          122: 'Invalid Hexadecimal',
+          126: 'Syntax Error',
+          170: 'Communication Error',
+          171: 'Over run',
+          254: 'Too Many Errors'}
+
+class DG645_Error(Exception):
+    pass
+
 '''
 Trigger holdoff : 
 Trigger holdoff sets the minimum allowed time between successive triggers.
@@ -68,7 +123,7 @@ Once displayed, the user can modify the trigger holdoff using any of the methods
 discussed in the section Front-Panel Interface earlier in this chapter. 
 
 
-Trigger Prescaling:
+Trigger Prescaling: (Not available)
 The DG645 supports a number of complex triggering requirements through a set of 
 prescaling registers. Trigger prescaling enables the DG645 to be triggered synchronously 
 with a much faster source, but at a sub-multiple of the original trigger frequency. 
@@ -111,6 +166,16 @@ class _dg645Instrument(object):
         :rtype: `int`
         """
         return self._chan
+        
+    @property
+    def name(self):
+        """
+        Gets the channel identifier number as used for communication
+        :return: The communication identification number for the specified
+            channel
+        :rtype: `int`
+        """
+        return self._ddg.instrument._valid_set(self.idx).__dict__['_name_']
 
     @property
     def delay(self):
@@ -170,7 +235,7 @@ class dg645_12ID(SRSDG645):
         For DG645 at 12ID-B
         Front 2 BNCs will be used: 
             AB for shutter
-            CD for Detector 
+            CD for detectors 
             EF for struck
             GH for inhibitor
             
@@ -390,7 +455,14 @@ class dg645_12ID(SRSDG645):
     def check_error(self):
         rtn = int(self.query("LERR?"))
         if rtn>0:
-            raise IOError(f"Error code: {rtn} in setting DG645")
+            try:
+                errorstr = ERRORS[rtn]
+            except:
+                if (rtn>=40) and (rtn<100):
+                    errorstr = "Device Dependent Error Code %i"%rtn
+                else:
+                    errorstr = "Unknown Code"
+            raise DG645_Error(errorstr)
     
     def clear(self):
         self.sendcmd('*CLS')
@@ -409,7 +481,49 @@ class dg645_12ID(SRSDG645):
 #        self.check_error()
         self.burst_enable = 1
 #        self.check_error()
-            
+    
+    def disp(self):
+        print('')
+        print('Delays:')
+        for each in range(self.instrument.__len__()):
+            resp = self.instrument[each].delay
+            print("\t%i:  %s\t: %s" % (each, self.instrument[each].name, resp))
+        print('')
+        print('Amplitudes:')
+        for each in range(self.instrument.__len__()):
+            amp = self.instrument[each].level_amplitude
+            print("\t%i:  %s\t: %s" % (each, self.instrument[each].name, amp))
+        print('')
+        print('Polarities:')
+        for each in range(self.instrument.__len__()):
+            pol = self.instrument[each].polarity
+            print("\t%i:  %s\t: %s" % (each, self.instrument[each].name, pol))
+
+    def get_status(self):
+        resp = self.query("*STB?\n")
+        code = bin(int(resp))
+        code = code[2:]
+        print("Serial Poll STATUS: %s"%code)
+        for idx in range(len(code)):
+            if code[-idx-1] == '1':
+                print("\t%s"%SERIAL_POLL_STATUS[idx])
+
+        resp = self.query("*ESR?\n")
+        code = bin(int(resp))
+        code = code[2:]
+        print("Standard Event STATUS: %s"%code)
+        for idx in range(len(code)):
+            if code[-idx-1] == '1':
+                print("\t%s"%STANDARD_EVENT_STATUS[idx])
+
+        resp = self.query("INSR?\n")
+        code = bin(int(resp))
+        code = code[2:]
+        print("Instrument STATUS CODE: %s"%code)
+        for idx in range(len(code)):
+            if code[-idx-1] == '1':
+                print("\t%s"%INSTRUMENT_STATUS[idx])
+
     @property
     def burst_cycle(self):
         """
