@@ -178,45 +178,7 @@ class tweakmotors(QMainWindow):
             self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setEnabled(enable)               
             self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setEnabled(enable)               
             self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setEnabled(enable)               
-        # self.ui.pb_tweak1L.clicked.connect(lambda: self.mvr(0, -1))
-        # self.ui.pb_tweak1R.clicked.connect(lambda: self.mvr(0, 1))
-        # self.ui.pb_tweak2L.clicked.connect(lambda: self.mvr(1, -1))
-        # self.ui.pb_tweak2R.clicked.connect(lambda: self.mvr(1, 1))
-        # self.ui.pb_tweak3L.clicked.connect(lambda: self.mvr(2, -1))
-        # self.ui.pb_tweak3R.clicked.connect(lambda: self.mvr(2, 1))
-        # self.ui.pb_tweak4L.clicked.connect(lambda: self.mvr(3, -1))
-        # self.ui.pb_tweak4R.clicked.connect(lambda: self.mvr(3, 1))
-        # self.ui.pb_tweak5L.clicked.connect(lambda: self.mvr(4, -1))
-        # self.ui.pb_tweak5R.clicked.connect(lambda: self.mvr(4, 1))
-        # self.ui.pb_tweak6L.clicked.connect(lambda: self.mvr(5, -1))
-        # self.ui.pb_tweak6R.clicked.connect(lambda: self.mvr(5, 1))
-        # self.ui.pb_tweak7L.clicked.connect(lambda: self.mvr(6, -1))
-        # self.ui.pb_tweak7R.clicked.connect(lambda: self.mvr(6, 1))
-        # self.ui.ed_1.returnPressed.connect(lambda: self.mv(0))
-        # self.ui.ed_2.returnPressed.connect(lambda: self.mv(1))
-        # self.ui.ed_3.returnPressed.connect(lambda: self.mv(2))
-        # self.ui.ed_4.returnPressed.connect(lambda: self.mv(3))
-        # self.ui.ed_5.returnPressed.connect(lambda: self.mv(4))
-        # self.ui.ed_6.returnPressed.connect(lambda: self.mv(5))
-        # self.ui.ed_7.returnPressed.connect(lambda: self.mv(6))
-
-        # self.ui.pb_SAXSscan_1.setEnabled(True)
-        # self.ui.pb_SAXSscan_2.setEnabled(False)
-        # self.ui.pb_SAXSscan_3.setEnabled(False)
-        # self.ui.pb_SAXSscan_4.setEnabled(False)
-        # self.ui.pb_SAXSscan_5.setEnabled(False)
-        # self.ui.pb_SAXSscan_6.setEnabled(False)
-        # self.ui.pb_SAXSscan_7.setEnabled(True)
-
-        # self.ui.pb_lup_1.clicked.connect(lambda: self.stepscan(0))
-        # self.ui.pb_lup_2.clicked.connect(lambda: self.stepscan(1))
-        # self.ui.pb_lup_3.clicked.connect(lambda: self.stepscan(2))
-        # self.ui.pb_lup_4.clicked.connect(lambda: self.stepscan(3))
-        # self.ui.pb_lup_5.clicked.connect(lambda: self.stepscan(4))
-        # self.ui.pb_lup_6.clicked.connect(lambda: self.stepscan(5))
-        # self.ui.pb_lup_7.clicked.connect(lambda: self.stepscan(6))
-        # self.ui.pb_SAXSscan_1.clicked.connect(lambda: self.fly(0))
-        # self.ui.pb_SAXSscan_7.clicked.connect(lambda: self.fly(6))
+        
         self.ui.actionRun.triggered.connect(self.timescan)
         self.ui.actionStop.triggered.connect(self.timescanstop)
         self.ui.actionClear.triggered.connect(self.clearplot)
@@ -225,7 +187,7 @@ class tweakmotors(QMainWindow):
         self.ui.actionEnable_fly_with_controller.triggered.connect(self.select_flymode) # hexapod flyscan type.
         self.ui.actionSet_the_default_vel_acc.triggered.connect(self.sethexapodvel_default)  # hexapod set vel acc into default
         self.ui.actionSet_default_speed.triggered.connect(self.setphivel_default)
-        self.ui.actionSave.triggered.connect(self.save_qds)
+        self.ui.actionSave.triggered.connect(self.savescan)
         self.ui.actionSave_flyscan_result.triggered.connect(self.fly_result)
         self.ui.actionFit_QDS_phi.setEnabled(False)
         self.ui.actionFit_QDS_phi.triggered.connect(self.fit_wobble_eccentricity)
@@ -243,6 +205,7 @@ class tweakmotors(QMainWindow):
         self.isStopScanIssued = False
         self.ui.action2D_scan.triggered.connect(lambda: self.fly2d(xm, ym))
         self.ui.action3D_scan.triggered.connect(lambda: self.fly3d(xm, ym, phim))
+        self.ui.actionSelect_time_intervals.triggered.connect(self.select_timeintervals)
         
         self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
         self.pts.signals.AxisNameSignal.connect(self.update_motorname)
@@ -273,6 +236,8 @@ class tweakmotors(QMainWindow):
         self.ui.pb_recordz2_2.clicked.connect(lambda: self.record_qdsZ(5))
         self.ui.pb_recordz3_2.clicked.connect(lambda: self.record_qdsZ(6))
         
+        self._qds_time_interval = 0.1
+
         # figure to plot
         # a figure instance to plot on
         self.figure = plt.figure()
@@ -355,6 +320,10 @@ class tweakmotors(QMainWindow):
         if text =="mm":
             self._qds_unit = QDS_UNIT_MM
     
+    def select_timeintervals(self):
+        val, ok = QInputDialog().getDouble(self, "QDS acqusition time intervals", "time intervals(s)", self._qds_time_interval)
+        self._qds_time_interval = val
+
     def select_qds_x(self):
         text, ok = QInputDialog().getItem(self, "Select QDS units",
                                             "Units:", ('0', '1', '2'), current=1, editable=False)
@@ -543,22 +512,11 @@ class tweakmotors(QMainWindow):
         self.isscan = True
         # self.thread = self.createtimescanthread()
         # self.thread.start()
+        self.is_selfsaved = False
         w = Worker(self.timescan0)
         w.signal.finished.connect(self.scandone)
         self.threadpool.start(w)
         
-
-    # def createtimescanthread(self):
-    #     thread = QThread()
-    #     w = Worker()
-    #     w.moveToThread(thread)
-    #     thread.started.connect(self.timescan0)
-    #     w.progress.connect(self.update_graph)
-    #     w.finished.connect(thread.quit)
-    #     w.finished.connect(w.deleteLater)
-    #     thread.finished.connect(thread.deleteLater)
-    #     return thread
-
     def fly2d(self, xmotor=0, ymotor=1, scanname = ""):
         motor = [xmotor, ymotor]
         for m in motor:
@@ -655,12 +613,22 @@ class tweakmotors(QMainWindow):
         pass
 
     def timescan0(self):
+        self.tempfilename = "_qds_temporary.txt"
+        N_selfsave_points = 1024
+        k = 0
         while self.isscan:
             r = self.get_qds_pos()
             self.rpos.append([r[0], r[1], r[2]])
             t = time.time()-self.t0
             self.mpos.append(t)
-            time.sleep(0.1)
+            time.sleep(self._qds_time_interval)
+            if len(self.mpos)>N_selfsave_points:
+                self.save_qds(self.tempfilename, "a")
+                k = k + 1
+                self.mpos = []
+                self.rpos = []
+                print(f"Previous {N_selfsave_points} data points are saved in {self.tempfilename}")
+                self.is_selfsaved = True
 
     def get_qds_pos(self, isrefavailable = True):
         r, a = self.pts.qds.get_position()
@@ -888,8 +856,15 @@ class tweakmotors(QMainWindow):
                 print("Should be in run.")
         #self.isscan = False
 
-    def save_qds(self, filename = ''):
-        if len(filename) == 0:
+    def save_qds(self, filename = '', saveoption = "w"):
+        if type(filename)==bool:
+            fn = ""
+        if type(filename)==str:
+            if len(filename) == 0:
+                fn = ""
+            else:
+                fn = filename
+        if len(fn) == 0:
             w = QWidget()
             w.resize(320, 240)
             # Set window title
@@ -913,10 +888,26 @@ class tweakmotors(QMainWindow):
             pass
         if self._qds_unit == QDS_UNIT_NM:
             self.rpos = self.rpos*1E3
-        self.pts.savedata(filename, self.mpos, self.rpos, col=[0,1,2])
+        self.save_list(filename, self.mpos, self.rpos, col=[0,1,2], option=saveoption)
+        #self.pts.savedata(filename, self.mpos, self.rpos, col=[0,1,2])
+
+    def save_list(self, filename, mpos, rpos, col, option="w"):
+        with open(filename, option) as f:
+            for i, m in enumerate(mpos):
+                strv = ""
+                for cind in col:
+                    strv = "%s    %0.5e"%(strv, rpos[i][cind])
+                f.write("%0.5e%s\n"%(m, strv))
 
     def savescan(self, filename=""):
+        if self.is_selfsaved:
+            self.save_qds(self.tempfilename, "a")
+            data = np.loadtxt(self.tempfilename)
+            self.mpos = data[:, 0]
+            self.rpos = data[:, 1:4]
         self.save_qds(filename=filename)
+        os.remove(self.tempfilename)
+        self.is_selfsaved = False
 
     def fly_result(self, filename=""):
         if len(filename)==0:
@@ -1090,12 +1081,15 @@ class tweakmotors(QMainWindow):
             xl = ""
 
         try:
+            self.ax.clear()
             self.ax.plot(pos, r[:,0], 'r')
             self.ax.set_xlabel(xl)
             yl = 'X position (um)'
             self.ax.set_ylabel(yl)
+            self.ax2.clear()
             self.ax2.plot(pos, r[:,1], 'b')
             self.ax2.set_xlabel(xl)
+            self.ax3.clear()
             self.ax3.plot(pos, r[:,2], 'k')
             self.ax3.set_xlabel(xl)
             yl = 'Z position (um)'

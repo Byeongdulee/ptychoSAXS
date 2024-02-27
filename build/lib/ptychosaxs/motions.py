@@ -26,29 +26,17 @@ except:
     phi.connected = False
 
 try:
+    from ptychosaxs.smaract_gonio import ctl
     import ptychosaxs.smaract_gonio as gonio
-    # Read the version of the library
-    gonio.channel_names = []
-    gonio.connected = gonio.isconnected()
-    trnum=0
-    tinum=0
-    k = 0
-    for unit in gonio.units:
-        if unit == 'mm':
-            name0 = 'trans'
-            trnum += 1
-            n = trnum
-        elif unit == "deg":
-            name0 = 'tilt'
-            tinum += 1
-            n = tinum
-        else:
-            name0 = 'None'
-            k = k+1
-            n = k
-        gonio.channel_names.append("%s%i"%(name0, n))
-        
+    buffer = ctl.FindDevices()
+    if buffer == '':
+        gonio.connected = [False,False,False,False]
+    else:
+        # Read the version of the library
+        gonio.connected = gonio.isconnected()
 except:
+    class gonio:
+        pass
     gonio.connected = [False,False,False,False]
 
 from PyQt5.QtCore import QObject, pyqtSignal

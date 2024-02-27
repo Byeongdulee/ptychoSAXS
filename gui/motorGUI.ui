@@ -2035,6 +2035,7 @@
     <addaction name="actionSelect_QDS_for_X"/>
     <addaction name="actionSelect_QDS_for_Y"/>
     <addaction name="separator"/>
+    <addaction name="actionSelect_time_intervals"/>
     <addaction name="actionRun"/>
     <addaction name="actionStop"/>
     <addaction name="actionClear"/>
@@ -2196,6 +2197,11 @@
   <action name="actionScanStop">
    <property name="text">
     <string>Stop</string>
+   </property>
+  </action>
+  <action name="actionSelect_time_intervals">
+   <property name="text">
+    <string>Select time intervals</string>
    </property>
   </action>
  </widget>

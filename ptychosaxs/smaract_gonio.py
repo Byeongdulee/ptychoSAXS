@@ -183,13 +183,9 @@ try:
 except:
     pass
 
-
-try:
-    # Open the first MCS2 device from the list
-    smaract = ctl.Open(smaractstage)
-    print("MCS2 opened {}.".format(smaractstage))
-except:
-    pass
+channels = [0, 1, 2, 3]
+base_units = []
+units = []
 
 def _get_unit(channel):
     base_unit = ctl.GetProperty_i32(smaract, channel, ctl.Property.POS_BASE_UNIT)
@@ -202,16 +198,6 @@ def get_unit(channel):
     else: 
         return "deg", base_unit
 
-channels = [0, 1, 2, 3]
-base_units = []
-units = []
-for ch in channels:
-    ctl.SetProperty_i32(smaract, ch, ctl.Property.MAX_CL_FREQUENCY, 6000)
-    ctl.SetProperty_i32(smaract, ch, ctl.Property.HOLD_TIME, 1000)
-    set_speed(ch)  # return the speed and acc to defaults (1mm/s, 10mm/s2)
-    un, base_unit = get_unit(ch)
-    base_units.append(base_unit)
-    units.append(un)
 
     # The move mode states the type of movement performed when sending the "Move" command.
 #move_mode = ctl.MoveMode.CL_ABSOLUTE
@@ -372,3 +358,37 @@ def ismoving(ax):
 #        print("MCS2 channel {} is stopped.".format(ax))
     else:
         return True
+    
+
+channel_names = []
+try:
+    # Open the first MCS2 device from the list
+    smaract = ctl.Open(smaractstage)
+    print("MCS2 opened {}.".format(smaractstage))
+    trnum=0
+    tinum=0
+    for ch in channels:
+        ctl.SetProperty_i32(smaract, ch, ctl.Property.MAX_CL_FREQUENCY, 6000)
+        ctl.SetProperty_i32(smaract, ch, ctl.Property.HOLD_TIME, 1000)
+        set_speed(ch)  # return the speed and acc to defaults (1mm/s, 10mm/s2)
+        un, base_unit = get_unit(ch)
+        base_units.append(base_unit)
+        units.append(un)
+        if un == 'mm':
+            name0 = 'trans'
+            trnum += 1
+            n = trnum
+        elif un == "deg":
+            name0 = 'tilt'
+            tinum += 1
+            n = tinum
+        else:
+            name0 = 'None'
+            k = k+1
+            n = k
+        channel_names.append("%s%i"%(name0, n))
+except:
+    channel_names = []
+    units = []
+    pass
+
