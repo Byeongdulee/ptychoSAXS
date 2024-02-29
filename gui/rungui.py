@@ -122,6 +122,7 @@ class tweakmotors(QMainWindow):
         self._qds_unit = QDS_UNIT_DEFAULT
         self._qds_x_sensor = 0
         self._qds_y_sensor = 1
+        self.is_selfsaved = False
         for i, name in enumerate(self.pts.gonio.channel_names):
             #if self.pts.gonio.connected[i]:
             motornames.append(name)
@@ -902,12 +903,14 @@ class tweakmotors(QMainWindow):
     def savescan(self, filename=""):
         if self.is_selfsaved:
             self.save_qds(self.tempfilename, "a")
-            data = np.loadtxt(self.tempfilename)
-            self.mpos = data[:, 0]
-            self.rpos = data[:, 1:4]
-        self.save_qds(filename=filename)
-        os.remove(self.tempfilename)
-        self.is_selfsaved = False
+            os.rename(self.tempfilename, filename)
+            #data = np.loadtxt(self.tempfilename)
+            #self.mpos = data[:, 0]
+            #self.rpos = data[:, 1:4]
+        else:
+            self.save_qds(filename=filename)
+        if self.is_selfsaved:
+            self.is_selfsaved = False
 
     def fly_result(self, filename=""):
         if len(filename)==0:

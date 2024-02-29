@@ -14,16 +14,26 @@ class instruments(object):
         self.gonio = gonio
         self.signals = motorSignals()
 
+    def commutate_phi(self):
+        acsc.commutate(acscontroller.hc, self.phi.axisno, wait=acsc.SYNCHRONOUS)
+
     def mvphi(self, target, relative=False, wait=True):
-        if relative:
-            c = "relative"
-        else:
-            c = "absolute"        
-        if wait:
-            wait = acsc.SYNCHRONOUS
-        else:
-            wait = acsc.ASYNCHRONOUS
-        self.phi.ptp(target=target, coordinates=c, wait=wait)
+        try:
+            if self.phi.enabled == False:
+                self.phi.enable()
+            if relative:
+                c = "relative"
+            else:
+                c = "absolute"        
+            if wait:
+                wait = acsc.SYNCHRONOUS
+            else:
+                wait = acsc.ASYNCHRONOUS
+            self.phi.ptp(target=target, coordinates=c, wait=wait)
+        except acsc.AcscError as Err:
+            if '3261:' in Err:
+                print("phi was not commutated, and is being commutated. Please wait.")
+                self.commutate_phi()
 
     def mvrphi(self, val, wait=True):
         self.mvphi(val, relative=True, wait=wait)
