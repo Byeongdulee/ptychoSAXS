@@ -614,7 +614,7 @@ class tweakmotors(QMainWindow):
         pass
 
     def timescan0(self):
-        self.tempfilename = "_qds_temporary.txt"
+        self.tempfilename = "C:\TEMP\_qds_temporary.txt"
         N_selfsave_points = 1024
         k = 0
         while self.isscan:
@@ -857,6 +857,24 @@ class tweakmotors(QMainWindow):
                 print("Should be in run.")
         #self.isscan = False
 
+    def getfilename(self):
+        w = QWidget()
+        w.resize(320, 240)
+        # Set window title
+        w.setWindowTitle("Save QDS Data As")
+        fn = QFileDialog.getSaveFileName(w, 'Save File', '', 'Text (*.txt *.dat)',None, QFileDialog.DontUseNativeDialog)
+        filename = fn[0]
+        if filename == "":
+            return 0
+        if ".txt" not in filename:
+            filename = filename + ".txt"
+        d = os.path.dirname(filename)
+        if len(d) == 0:
+            filename = os.path.join(self.datapath, filename)
+        else:
+            self.datapath = d
+        return filename
+    
     def save_qds(self, filename = '', saveoption = "w"):
         if type(filename)==bool:
             fn = ""
@@ -866,22 +884,7 @@ class tweakmotors(QMainWindow):
             else:
                 fn = filename
         if len(fn) == 0:
-            w = QWidget()
-            w.resize(320, 240)
-            # Set window title
-            w.setWindowTitle("Save QDS Data As")
-            fn = QFileDialog.getSaveFileName(w, 'Save File', '', 'Text (*.txt *.dat)',None, QFileDialog.DontUseNativeDialog)
-            filename = fn[0]
-            if filename == "":
-                return 0
-        # filename handling
-        if ".txt" not in filename:
-            filename = filename + ".txt"
-        d = os.path.dirname(filename)
-        if len(d) == 0:
-            filename = os.path.join(self.datapath, filename)
-        else:
-            self.datapath = d
+            filename = self.getfilename()
         # data unit and data
         if self._qds_unit == QDS_UNIT_MM:
             self.rpos = self.rpos/1E3
@@ -903,10 +906,8 @@ class tweakmotors(QMainWindow):
     def savescan(self, filename=""):
         if self.is_selfsaved:
             self.save_qds(self.tempfilename, "a")
+            filename = self.getfilename()
             os.rename(self.tempfilename, filename)
-            #data = np.loadtxt(self.tempfilename)
-            #self.mpos = data[:, 0]
-            #self.rpos = data[:, 1:4]
         else:
             self.save_qds(filename=filename)
         if self.is_selfsaved:
