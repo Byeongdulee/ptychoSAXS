@@ -808,7 +808,11 @@ class tweakmotors(QMainWindow):
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
 #                print("Running the fly scan with controller")
                 self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
-                self.pts.hexapod.run_traj()
+                time.sleep(0.1)
+                try:
+                    self.pts.hexapod.run_traj()
+                except:
+                    print("Error from the controller (runguy.py line 815). Try again.")
                 while self.pts.ismoving(axis):
                     time.sleep(0.01)
 
