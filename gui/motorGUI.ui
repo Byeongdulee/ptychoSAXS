@@ -2009,7 +2009,7 @@
      <x>0</x>
      <y>0</y>
      <width>1580</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -2071,11 +2071,20 @@
     <addaction name="separator"/>
     <addaction name="actionScanStop"/>
    </widget>
+   <widget class="QMenu" name="menuSoftglue">
+    <property name="title">
+     <string>Softglue</string>
+    </property>
+    <addaction name="actionMemory_clear_before_scan"/>
+    <addaction name="actionckTime_reset_before_scan"/>
+    <addaction name="actionReset"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuHexapod"/>
    <addaction name="menuACS"/>
    <addaction name="menuSmarAct"/>
    <addaction name="menuQDS"/>
+   <addaction name="menuSoftglue"/>
    <addaction name="menuScan"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -2202,6 +2211,33 @@
   <action name="actionSelect_time_intervals">
    <property name="text">
     <string>Select time intervals</string>
+   </property>
+  </action>
+  <action name="actionMemory_clear_before_scan">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Memory clear before scan</string>
+   </property>
+  </action>
+  <action name="actionckTime_reset_before_scan">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>ckTime reset before scan</string>
+   </property>
+  </action>
+  <action name="actionReset">
+   <property name="text">
+    <string>Reset</string>
    </property>
   </action>
  </widget>

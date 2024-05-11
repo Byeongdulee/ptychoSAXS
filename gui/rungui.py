@@ -29,7 +29,9 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import matplotlib.pyplot as plt
 import numpy as np
 
-from tools.panda import get_pandadata
+#from tools.panda import get_pandadata
+from tools.softglue import sgz_pty
+s12softglue = sgz_pty()
 import re
 import analysis.planeeqn as eqn
 
@@ -498,6 +500,8 @@ class tweakmotors(QMainWindow):
         self.isscan = False
 
     def timescan(self):
+        if self.ui.actionckTime_reset_before_scan.isChecked():
+            s12softglue.ckTime_reset()
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
         #if self.isscan:
@@ -519,6 +523,8 @@ class tweakmotors(QMainWindow):
         self.threadpool.start(w)
         
     def fly2d(self, xmotor=0, ymotor=1, scanname = ""):
+        if self.ui.actionckTime_reset_before_scan.isChecked():
+            s12softglue.ckTime_reset()
         motor = [xmotor, ymotor]
         for m in motor:
             n = m+1
@@ -536,6 +542,8 @@ class tweakmotors(QMainWindow):
         self.threadpool.start(w)
 
     def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname=""):
+        if self.ui.actionckTime_reset_before_scan.isChecked():
+            s12softglue.ckTime_reset()
         motor = [xmotor, ymotor, phimotor]
         for m in motor:
             n = m+1
@@ -553,6 +561,9 @@ class tweakmotors(QMainWindow):
         self.threadpool.start(w)
 
     def fly(self, motornumber=-1):
+        if self.ui.actionckTime_reset_before_scan.isChecked():
+            s12softglue.ckTime_reset()
+
         if motornumber<0:
             pb = self.sender()
             objname = pb.objectName()
@@ -781,6 +792,8 @@ class tweakmotors(QMainWindow):
         self.mpos = []
         
         self.isfly = True
+        if self.ui.actionMemory_clear_before_scan.isChecked():
+            s12softglue.memory_clear()
         # disable fit menu
         self.ui.actionFit_QDS_phi.setEnabled(False)
 
@@ -943,7 +956,7 @@ class tweakmotors(QMainWindow):
         else:
             l_data = data
         try:
-            qds_data = get_pandadata()
+            qds_data = s12softglue.get_position()
         except:
             showerror("PanDA is needed.")
             return

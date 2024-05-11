@@ -10,7 +10,7 @@ class sgz_pty(Device):
     sg10.put("ck10")
     sg20 = PV('%s20MHZ_CLOCK_Signal'%SGpv)
     sg20.put("ck20")
-    attrs = ('VALA', 'VALI', 'VALJ', 'PROC', 'D', 'F')
+    attrs = ('VALA', 'VALB', 'VALC', 'VALD', 'VALE', 'VALF', 'VALI', 'VALJ', 'PROC', 'D', 'F')
 
     def __init__(self, prefix = dmaPV):
         myattrs =list(self.attrs)
@@ -81,5 +81,11 @@ class sgz_pty(Device):
     def get_buffN(self):
         return self.VALJ
         
-    def get_counts(self):
+    def get_time(self):
         return self.VALA
+
+    def get_data(self):
+        return [self.VALA, self.VALB, self.VALC, self.VALD]
+    
+    def get_position(self):
+        return [self.VALB, self.VALC, self.VALD]
