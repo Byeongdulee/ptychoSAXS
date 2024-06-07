@@ -31,7 +31,7 @@ async def arm_and_hdf():
         except:
             pass
 
-def get_position():
+def get_pos_array():
     h = h5py.File(pandafn, "r")
     d = h["INENC2.VAL.Value"][()]
     return d

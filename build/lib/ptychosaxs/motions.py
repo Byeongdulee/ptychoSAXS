@@ -21,19 +21,15 @@ try:
 
     phi = Axis(acscontroller, 0)
     phi.connected = True
+    acsc.commutate(phi.controller.hc, phi.axisno)
 except:
     phi = Axis
     phi.connected = False
 
 try:
-    from ptychosaxs.smaract_gonio import ctl
+    #from ptychosaxs.smaract_gonio import ctl
     import ptychosaxs.smaract_gonio as gonio
-    buffer = ctl.FindDevices()
-    if buffer == '':
-        gonio.connected = [False,False,False,False]
-    else:
-        # Read the version of the library
-        gonio.connected = gonio.isconnected()
+    gonio.connected = gonio.isconnected()
 except:
     class gonio:
         pass

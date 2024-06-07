@@ -32,6 +32,9 @@ import numpy as np
 #from tools.panda import get_pandadata
 from tools.softglue import sgz_pty
 s12softglue = sgz_pty()
+
+# detectors
+from tools.detectors import pilatus
 import re
 import analysis.planeeqn as eqn
 
@@ -209,7 +212,11 @@ class tweakmotors(QMainWindow):
         self.ui.action2D_scan.triggered.connect(lambda: self.fly2d(xm, ym))
         self.ui.action3D_scan.triggered.connect(lambda: self.fly3d(xm, ym, phim))
         self.ui.actionSelect_time_intervals.triggered.connect(self.select_timeintervals)
-        
+        self.ui.actionTrigout.triggered.connect(lambda: self.set_softglue_in(1))
+        self.ui.actionDetout.triggered.connect(lambda: self.set_softglue_in(2))
+        self.ui.actionPrint_flyscan_settings.triggered.connect(lambda: self.print_fly_settings(0))
+        self.ui.actionSAXS.triggered.connect(lambda: self.select_detectors(1))
+        self.ui.actionWAXS.triggered.connect(lambda: self.select_detectors(2))
         self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
         self.pts.signals.AxisNameSignal.connect(self.update_motorname)
 
@@ -276,6 +283,9 @@ class tweakmotors(QMainWindow):
 
         self.updatepos()
 
+        # detectors
+        self.detector = [None]*2
+
         #self.ui.installEventFilter(self)
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_qds)
@@ -283,6 +293,16 @@ class tweakmotors(QMainWindow):
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
 
+    def set_softglue_in(self, val):
+        if val==1:
+            self.ui.actionDetout.setChecked(False)
+            self.ui.actionTrigout.setChecked(True)
+            s12softglue.set_trigout_in()
+        if val==2:
+            self.ui.actionDetout.setChecked(True)
+            self.ui.actionTrigout.setChecked(False)
+            s12softglue.set_detout_in()
+            
     def stopscan(self):
         self.isStopScanIssued = True
 
@@ -481,6 +501,20 @@ class tweakmotors(QMainWindow):
         self.updatepos()
         print("scan done.......")
     
+    def select_detectors(self, N):
+        if N==1:
+            if self.ui.actionSAXS.isChecked():
+                self.ui.actionSAXS.setChecked(True)
+                self.detector[0] = pilatus('S12-PILATUS1:')
+            else:
+                self.ui.actionSAXS.setChecked(False)
+        if N==2:
+            if self.ui.actionWAXS.isChecked():
+                self.ui.actionWAXS.setChecked(True)
+                self.detector[1] = pilatus('12idcPIL:')
+            else:
+                self.ui.actionWAXS.setChecked(False)
+        
     def select_flymode(self):
         if self.ui.actionEnable_fly_with_controller.isChecked():  # when checked, this value is False
             self.ui.actionEnable_fly_with_controller.setChecked(True)
@@ -821,11 +855,13 @@ class tweakmotors(QMainWindow):
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
 #                print("Running the fly scan with controller")
                 self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
-                time.sleep(0.1)
-                try:
-                    self.pts.hexapod.run_traj()
-                except:
-                    print("Error from the controller (runguy.py line 815). Try again.")
+                expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
+                for det in self.detector:
+                    print(type(det))
+                    if det is not None:
+                        print(f"exposure time is set to {expt} seconds.")
+                        det.fly_ready(expt, self.pts.hexapod.pulse_number)
+                self.pts.hexapod.run_traj(axis)
                 while self.pts.ismoving(axis):
                     time.sleep(0.01)
 
@@ -873,6 +909,43 @@ class tweakmotors(QMainWindow):
                 self.pts.mv(axis, fe, wait=True)
                 print("Should be in run.")
         #self.isscan = False
+
+    def print_fly_settings(self, motornumber):
+        print('')
+        print("Currently, the flyscan only works for X axis of the hexapod.")
+        print('==========================================================')
+        print('')
+        axis = self.motornames[motornumber]
+        self.signalmotor = axis
+        self.signalmotorunit = self.motorunits[motornumber]
+        
+        self.isfly = True
+        n = motornumber+1
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        try:
+            step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        except:
+            step = 0.1
+            self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText("%0.3f"%step)
+        pos = self.pts.get_pos(axis)
+        if axis in self.pts.hexapod.axes:
+            if self.ui.cb_reversescandir.isChecked():
+                if abs(st-pos)>abs(fe-pos):
+                    t = fe
+                    fe = st
+                    st = t 
+                    step = -step
+            if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
+                self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
+            else:
+                print("Currently, the flyscan only works for X axis.")
+        else:
+            print("Currently, the flyscan only works for X axis of the hexapod.")
+        print('==========================================================')
+        print('')
+        print('')
 
     def getfilename(self):
         w = QWidget()
@@ -956,7 +1029,7 @@ class tweakmotors(QMainWindow):
         else:
             l_data = data
         try:
-            qds_data = s12softglue.get_position()
+            qds_data = s12softglue.get_pos_array()
         except:
             showerror("PanDA is needed.")
             return

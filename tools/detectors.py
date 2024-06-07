@@ -2,54 +2,49 @@ from epics import caget, caput, PV
 
 beamlinePV = '12idc:'
 
-# detPV = ['S12-PILATUS1:cam1',]
-# hdfPV = ['S12-PILATUS1:HDF1',]
+try:
+	from .ad_pilatus import AD_Pilatus, EIGERMODE, PILATUSMODE
+except:
+	from ad_pilatus import AD_Pilatus, EIGERMODE, PILATUSMODE
+#pil = AD_Pilatus('12idcPIL:')
 
-# def det_ready():
-#     for det in detPV:
-#         caput(f'{det}:Acquire', 0)
-#         caput(f'{det}:TriggerMode',3) #Trigger mode
-#         caput(f'{det}:NumImages',1)
-#     for det in hdfPV:
-#         caput(f'{det}:EnableCallbacks',1)
-#         caput(f'{det}:FileWriteMode',2)
-#         caput(f'{det}:FileTemplate', '%s%s_data_%5.5d.h5')
-#         caput(f'{det}:NDArrayPort', 'PIL')
+class pilatus(AD_Pilatus):
+	def __init__(self, basename="S12-PILATUS1:"):
+		super().__init__(basename)
+		self.setNDArrayPort()
+#		self.detmode = PILATUSMODE
+#		self.dettype = "pilatus"
 
-# def scan_ready(expt, x_points, y_points):
-#     Npoints = x_points*y_points
-#     fw_dir = caget(f"{beamlinePV}data:userDir")
-#     for det in detPV:
-#         caput(f'{det}:AcquirePeriod', expt+0.005)
-#         caput(f'{det}:NumImages',Npoints)  # number of data to collect
-#     for det in hdfPV:
-#         caput(f'{det}:FilePath',fw_dir) #changle fw path
-#         caput(f'{det}:FileName','scan{:03d}'.format(caget(f'{beamlinePV}saveData_scanNumber')))
-#         caput(f'{det}:FileNumber',1)
-#         caput(f'{det}:NumCapture',x_points)
+	def SetNumImages(self, n):
+		self.NumImages = n
+            #self.NumTriggers = 1
+        # if self.detmode == EIGERMODE:
+        #     self.NumImages = 1
+        #     self.NumTriggers = n
 
-# def arm_detectors():
-# 	for det in detPV:
-# 	    caput(f'{det}:Acquire', 1)  # arming the detector.
+	def wait_trigDone(self):
+		while self.Acquire_RBV:
+			if self.getCapture()==0:
+				if (self.fileGet("AutoSave")==0):
+					self.FileWrite()
 
-from ad_pilatus import AD_Pilatus
-pil = AD_Pilatus('S12-PILATUS1:')
-pil.setNDArrayPort()
-def fly_ready(expt, x_points, y_points):
-	Npoints = x_points*y_points
-	pil.SetExposureTime(expt)
-	pil.setFileTemplate('%s%s_data_%5.5d.h5')
-	pil.SetMultiFrames(Npoints, x_points)
-	pil.StartCapture()
+	def wait_capturedone(self):
+		self.CCD_waitCaptureDone()
+		if (self.fileGet("AutoSave")==0):
+			self.FileWrite()
+		self.CCD_waitFileWriting()
 
-def set_scanNumberAsfilename():
-	fw_dir = caget(f"{beamlinePV}data:userDir")
-	pil.setFilePath(fw_dir)
-	pil.setFileName('scan{:03d}'.format(caget(f'{beamlinePV}saveData_scanNumber')))
+	def fly_ready(self, expt, x_points, y_points=1, wait=False):
+		Npoints = x_points*y_points
+		self.SetExposureTime(expt)
+		self.setArrayCounter(0)
+		self.setFileTemplate('%s%s_data_%5.5d.h5')
+		self.SetMultiFrames(Npoints, x_points)
+		self.StartCapture()
+		if wait:
+			self.wait_capturedone()
 
-def wait_capturedone():
-    pil.CCD_waitCaptureDone()
-    pil.FileWrite(); 
-    pil.CCD_waitFileWriting()
-# when x_scan is done..
-# run pil.CCD_waitCaptureDone()pil.FileWrite(); pil.CCD_waitFileWriting()
+	def set_scanNumberAsfilename(self):
+		fw_dir = caget(f"{beamlinePV}data:userDir")
+		self.setFilePath(fw_dir)
+		self.setFileName('scan{:03d}'.format(caget(f'{beamlinePV}saveData_scanNumber')))

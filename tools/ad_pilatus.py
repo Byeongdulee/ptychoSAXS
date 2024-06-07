@@ -37,7 +37,7 @@ class AD_Pilatus(Device):
     def Arm(self, nimg = 1):
         self.ImageMode = 1
         self.Acquire = 0 # stop acquire
-        self.SetNumImages(nimg)
+        self.NumImages = nimg
         self.Acquire = 1
         self.CCD_waitstarted()
 
@@ -50,14 +50,6 @@ class AD_Pilatus(Device):
             if abs(time.time()-t)>TIMEOUT:
                 raise TimeoutError
             
-    def SetNumImages(self, n, detmode = PILATUSMODE):
-        if detmode == PILATUSMODE:
-            self.NumImages = n
-            self.NumTriggers = 1
-        if detmode == EIGERMODE:
-            self.NumImages = 1
-            self.NumTriggers = n
-
     def CCD_waitFileWriting(self):
         while not self.FileWriteComplete():
             time.sleep(0.1)
@@ -77,7 +69,7 @@ class AD_Pilatus(Device):
         self.TriggerMode = 3
 
         # number of images for collection and capture
-        self.SetNumImages(n_trig)
+        self.NumImages = n_trig
 
         # set filesaver
         self.filePut('NumCapture',    n_cap)
@@ -88,8 +80,8 @@ class AD_Pilatus(Device):
 
     def StartCapture(self):
         self.ShutterMode = 0
-        self.filePut('AutoSave', 0)
-        self.filePut('FileWriteMode', 2)  # capture
+        self.filePut('AutoSave', 1)
+        self.filePut('FileWriteMode', 1)  # capture
         time.sleep(0.05)
         self.filePut('Capture', 1)  # start capture
         self.Acquire = 1
@@ -157,6 +149,9 @@ class AD_Pilatus(Device):
 
     def setFileName(self, fname):
         return self.filePut('FileName', fname)
+    
+    def setArrayCounter(self, N=0):
+        self.ArrayCounter = N
 
     def nextFileNumber(self):
         self.setFileNumber(1+self.fileGet('FileNumber'))
@@ -195,8 +190,11 @@ class AD_Pilatus(Device):
     def getFileNumber(self):
         return self.fileGet('FileNumber_RBV')
 
+    def getCapture(self):
+        return self.fileGet('Capture_RBV')
+
     def getFilePath(self):
-        return self.fileGet('FilePath_RBV',as_string=True)
+        return self.fileGet('FilePath',as_string=True)
 
     def getFileNameByIndex(self,index):
         return self.getFileTemplate() % (self.getFilePath(), self.getFileName(), index)
@@ -205,7 +203,7 @@ class AD_Pilatus(Device):
         return self.fileGet('NumCaptured_RBV')
     
     def getArrayCounter(self):
-        return self.ArrayCounter_RBV.get()
+        return self.ArrayCounter_RBV
     
     def setNDArrayPort(self, port='PIL'):
         self.filePut('NDArrayPort', port)

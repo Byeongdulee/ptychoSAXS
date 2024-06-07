@@ -1,7 +1,6 @@
 import time
 from epics import Device, PV
 
-
 class sgz_pty(Device):
     basePV = "12IFMZ:"
     dmaPV = '%s1acquireDma'%basePV
@@ -19,6 +18,9 @@ class sgz_pty(Device):
         self.add_pv('%sBUFFER-1_IN_Signal'%self.SGpv, attr="buf_in1")
         self.add_pv('%sBUFFER-2_IN_Signal'%self.SGpv, attr="buf_in2")
         self.add_pv('%sBUFFER-4_IN_Signal'%self.SGpv, attr="buf_in4")
+        self.add_pv('%sAND-3_IN1_Signal'%self.SGpv, attr="in1")
+        self.add_pv('%sAND-4_IN1_Signal'%self.SGpv, attr="in2")
+        self.add_pv('%sDivByN-2_N'%self.SGpv, attr="div2")
         self.add_pv('%sDivByN-1_N'%self.SGpv, attr="div1")
         self.add_pv('%sDivByN-2_N'%self.SGpv, attr="div2")
         self.add_pv('%sDivByN-3_N'%self.SGpv, attr="div3")
@@ -27,8 +29,12 @@ class sgz_pty(Device):
         self.add_pv('%sDivByN-3_CLOCK_Signal'%self.SGpv, attr="div3clock")
         self.add_pv('%sUpDnCntr-1_CLEAR_Signal'%self.SGpv, attr="_clockreset")
         self.add_pv('%sUpDnCntr-1_COUNTS'%self.SGpv, attr="ckTime")
+        self.Enable = 1
 
     def enable(self):
+        self.Enable = 1
+
+    def disable(self):
         self.Enable = 0
     
     def default_clock(self, freq=10000):
@@ -66,14 +72,33 @@ class sgz_pty(Device):
         self.buf_in4 = '1'
     
     def ckTime_reset(self):
+        ckT = self.ckTime
         self._clockreset = "1!"
+        timeout = 1
+        tm = time.time()
+        while self.ckTime>ckT:
+            time.sleep(0.001)
+            if time.time()-tm>timeout:
+                raise TimeoutError
     
     def memory_clear(self):
         self.D = 1
         self.PROC = 1
+        timeout = 1
+        tm = time.time()
+        while self.get_eventN()>0:
+            time.sleep(0.001)
+            if time.time()-tm>timeout:
+                raise TimeoutError
 
     def buffer_clear(self):
         self.F = 1
+        timeout = 1
+        tm = time.time()
+        while self.get_buffN()>0:
+            time.sleep(0.001)
+            if time.time()-tm>timeout:
+                raise TimeoutError
 
     def get_eventN(self):
         return self.VALI
@@ -84,8 +109,19 @@ class sgz_pty(Device):
     def get_time(self):
         return self.VALA
 
+    def set_detout_in(self):
+        self.in1 = 'det_out'
+        self.in2 = 'det_out'
+
+    def set_trigout_in(self):
+        self.in1 = 'trig_out'
+        self.in2 = 'trig_out'
+
     def get_data(self):
         return [self.VALA, self.VALB, self.VALC, self.VALD]
     
     def get_position(self):
-        return [self.VALB, self.VALC, self.VALD]
+        return [self.VALB[self.VALI], self.VALC[self.VALI], self.VALD[self.VALI]]
+    
+    def get_pos_array(self):
+        return [self.VALB[0:self.VALI], self.VALC[0:self.VALI], self.VALD[0:self.VALI]]

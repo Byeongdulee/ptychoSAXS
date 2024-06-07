@@ -2009,7 +2009,7 @@
      <x>0</x>
      <y>0</y>
      <width>1580</width>
-     <height>22</height>
+     <height>31</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -2020,6 +2020,7 @@
     <addaction name="actionSave_flyscan_result"/>
     <addaction name="separator"/>
     <addaction name="actionSet_the_default_vel_acc"/>
+    <addaction name="actionPrint_flyscan_settings"/>
    </widget>
    <widget class="QMenu" name="menuACS">
     <property name="title">
@@ -2075,9 +2076,24 @@
     <property name="title">
      <string>Softglue</string>
     </property>
+    <widget class="QMenu" name="menuSet_Input">
+     <property name="title">
+      <string>Set Input</string>
+     </property>
+     <addaction name="actionTrigout"/>
+     <addaction name="actionDetout"/>
+    </widget>
     <addaction name="actionMemory_clear_before_scan"/>
     <addaction name="actionckTime_reset_before_scan"/>
+    <addaction name="menuSet_Input"/>
     <addaction name="actionReset"/>
+   </widget>
+   <widget class="QMenu" name="menuDetectors">
+    <property name="title">
+     <string>Detectors</string>
+    </property>
+    <addaction name="actionSAXS"/>
+    <addaction name="actionWAXS"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuHexapod"/>
@@ -2085,6 +2101,7 @@
    <addaction name="menuSmarAct"/>
    <addaction name="menuQDS"/>
    <addaction name="menuSoftglue"/>
+   <addaction name="menuDetectors"/>
    <addaction name="menuScan"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -2238,6 +2255,56 @@
   <action name="actionReset">
    <property name="text">
     <string>Reset</string>
+   </property>
+  </action>
+  <action name="actionSet_Trigout_In">
+   <property name="text">
+    <string>Set Trigout In</string>
+   </property>
+  </action>
+  <action name="actionSet_Detout_In">
+   <property name="text">
+    <string>Set Detout In</string>
+   </property>
+  </action>
+  <action name="actionTrigout">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Input 1 (Trig)</string>
+   </property>
+  </action>
+  <action name="actionDetout">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Input 2 (Det)</string>
+   </property>
+  </action>
+  <action name="actionPrint_flyscan_settings">
+   <property name="text">
+    <string>Print flyscan settings</string>
+   </property>
+  </action>
+  <action name="actionSAXS">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>SAXS</string>
+   </property>
+  </action>
+  <action name="actionWAXS">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>WAXS</string>
    </property>
   </action>
  </widget>
