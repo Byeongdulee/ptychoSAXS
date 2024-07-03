@@ -20,6 +20,9 @@ class sgz_pty(Device):
         self.add_pv('%sBUFFER-4_IN_Signal'%self.SGpv, attr="buf_in4")
         self.add_pv('%sAND-3_IN1_Signal'%self.SGpv, attr="in1")
         self.add_pv('%sAND-4_IN1_Signal'%self.SGpv, attr="in2")
+        self.add_pv('%sFI1_Signal'%self.SGpv, attr="ch_input1")
+        self.add_pv('%sFO1_Signal'%self.SGpv, attr="ch_output1")
+        self.add_pv('%sFO1_Signal'%self.SGpv, attr="ch_output2")
         self.add_pv('%sDivByN-2_N'%self.SGpv, attr="div2")
         self.add_pv('%sDivByN-1_N'%self.SGpv, attr="div1")
         self.add_pv('%sDivByN-2_N'%self.SGpv, attr="div2")
@@ -116,6 +119,9 @@ class sgz_pty(Device):
     def set_trigout_in(self):
         self.in1 = 'trig_out'
         self.in2 = 'trig_out'
+        self.ch_input1 = 'trig_out' # input from the hexapod
+        self.ch_output1 = 'trig_out' # to trigger SAXS
+        self.ch_output2 = 'trig_out' # to trigger WAXS
 
     def get_data(self):
         return [self.VALA, self.VALB, self.VALC, self.VALD]

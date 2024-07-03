@@ -54,9 +54,10 @@ class AD_Pilatus(Device):
         while not self.FileWriteComplete():
             time.sleep(0.1)
             
-    def SetExposureTime(self, t):
+    def SetExposureTime(self, t, period=0.1):
         "set exposure time, re-acquire offset correction"
         self.AcquireTime = t
+        self.AcquirePeriod = period
 
     def SetMultiFrames(self, n_trig, n_cap):
         """set number of images(triggers) for camera
