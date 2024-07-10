@@ -34,15 +34,27 @@ class pilatus(AD_Pilatus):
 			self.FileWrite()
 		self.CCD_waitFileWriting()
 
-	def fly_ready(self, expt, x_points, y_points=1, wait=False):
+	def set_fly_configuration(self):
+		self.AutoIncrement = 0
+		self.FileNumber = 1
+		self.FilePath = '/ramdisk/'
+		self.filePut('FilePath', '/ramdisk/')
+		self.filePut('AutoIncrement', 1)
+		self.filePut('AutoSave', 1)
+		self.filePut('FileWriteMode', 1)
+
+	def fly_ready(self, expt, x_points, y_points=1, wait=False, period=0, isTest=False):
 		Npoints = x_points*y_points
 		self.SetExposureTime(expt)
+		if period>0:
+			self.SetExposurePeriod(period)
 		self.setArrayCounter(0)
 		self.setFileTemplate('%s%s_data_%5.5d.h5')
 		self.SetMultiFrames(Npoints, x_points)
-		self.StartCapture()
-		if wait:
-			self.wait_capturedone()
+		if not isTest:
+			self.StartCapture()
+			if wait:
+				self.wait_capturedone()
 
 	def set_scanNumberAsfilename(self):
 		fw_dir = caget(f"{beamlinePV}data:userDir")

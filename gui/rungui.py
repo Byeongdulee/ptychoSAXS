@@ -33,6 +33,10 @@ import numpy as np
 from tools.softglue import sgz_pty
 s12softglue = sgz_pty()
 
+#Delay generator
+import tools.dg645 as dg645
+dg645_12ID = dg645.dg645_12ID.open_from_uri(dg645.ADDRESS_12IDC)
+
 # detectors
 from tools.detectors import pilatus
 import re
@@ -217,8 +221,18 @@ class tweakmotors(QMainWindow):
         self.ui.actionPrint_flyscan_settings.triggered.connect(lambda: self.print_fly_settings(0))
         self.ui.actionSAXS.triggered.connect(lambda: self.select_detectors(1))
         self.ui.actionWAXS.triggered.connect(lambda: self.select_detectors(2))
+        self.ui.actionReset_to_Fly_mode.triggered.connect(self.reset_det_flymode)
+        self.ui.actionChannels_to_record.triggered.connect(self.choose_softglue_channels)
+        self.ui.actionSave_current_results.triggered.connect(self.save_softglue)
         self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
         self.pts.signals.AxisNameSignal.connect(self.update_motorname)
+        self.ui.actionTestFly.triggered.connect(self.scantest)
+        self.softglue_channels = ['B', 'C', 'D']
+        self.ui.ed_workingfolder.returnPressed.connect(self.update_workingfolder)
+        self.ui.ed_scanname.returnPressed.connect(self.update_scanname)
+
+        # set default softglue collection freq. 10 micro seconds.
+        s12softglue.set_count_freq(10)
 
         self.rpos = []
         self.mpos = []
@@ -293,15 +307,41 @@ class tweakmotors(QMainWindow):
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
 
+    def update_workingfolder(self):
+        self.working_folder = self.ui.ed_workingfolder.text()
+
+    def update_scanname(self):
+        txt = self.ui.ed_scanname.text()
+        for det in self.detector:
+            if det is not None:
+                det.filePut('FileName', txt)
+
+    def choose_softglue_channels(self):
+        strv = ''
+        for i, ch in enumerate(self.softglue_channels):
+            if i==0:
+                strv = ch
+            else:
+                strv = "%s, %s"% (strv, ch)
+        text, okPressed = QInputDialog.getText(self, "Channels of SoftGlueZinq to Record","Channels:", QLineEdit.Normal, strv)
+        if okPressed:
+            self.softglue_channels = [x.strip() for x in text.split(',')]
+            print(self.softglue_channels)
+
+    def reset_det_flymode(self):
+        for det in self.detector:
+            if det is not None:
+                det.set_fly_configuration()
+
     def set_softglue_in(self, val):
         if val==1:
             self.ui.actionDetout.setChecked(False)
             self.ui.actionTrigout.setChecked(True)
-            s12softglue.set_trigout_in()
+            s12softglue.set_count_freq(10)
         if val==2:
             self.ui.actionDetout.setChecked(True)
             self.ui.actionTrigout.setChecked(False)
-            s12softglue.set_detout_in()
+            s12softglue.set_count_freq(100)
             
     def stopscan(self):
         self.isStopScanIssued = True
@@ -357,6 +397,12 @@ class tweakmotors(QMainWindow):
                                             "Units:", ('0', '1', '2'), current=1, editable=False)
         self._qds_y_sensor = int(text)
 
+    def scantest(self):
+        if self.ui.actionTestFly.isChecked():
+            self.ui.actionTestFly.setChecked(True)
+        else:
+            self.ui.actionTestFly.setChecked(False)
+            self.detector[1] = None
     def fit_wobble_eccentricity(self):
         tp = np.asarray(self.mpos)
         rp = np.asarray(self.rpos)
@@ -508,12 +554,14 @@ class tweakmotors(QMainWindow):
                 self.detector[0] = pilatus('S12-PILATUS1:')
             else:
                 self.ui.actionSAXS.setChecked(False)
+                self.detector[0] = None
         if N==2:
             if self.ui.actionWAXS.isChecked():
                 self.ui.actionWAXS.setChecked(True)
                 self.detector[1] = pilatus('12idcPIL:')
             else:
                 self.ui.actionWAXS.setChecked(False)
+                self.detector[1] = None
         
     def select_flymode(self):
         if self.ui.actionEnable_fly_with_controller.isChecked():  # when checked, this value is False
@@ -523,11 +571,43 @@ class tweakmotors(QMainWindow):
             self.hexapod_flymode = HEXAPOD_FLYMODE_STANDARD
             self.ui.actionEnable_fly_with_controller.setChecked(False)
 
+    def save_softglue(self):
+        # read softglue data
+        foldername = self.ui.ed_workingfolder.text()
+        if len(foldername) ==0:
+            foldername = os.getcwd()
+        t, dt = s12softglue.get_arrays(self.softglue_channels)
+        # save softglue data
+        filename = ""
+        for det in self.detector:
+            if det is not None:
+                fn = det.File_FullFileName_RBV
+                fn = fn.tostring()
+                filename = os.path.basename(fn.decode('utf-8')).rstrip('\x00')
+                filename = filename.rstrip('.h5')
+        if len(filename) ==0:
+            print("****** Error: No detector was triggered.")
+            return
+        else:
+            print(f"Total {len(t)} data will be saved under {foldername}.")
+        for i, td in enumerate(t):
+            scanname = '%s_%i.dat' % (filename, i)
+            dt2 = np.column_stack((td, dt[0][i], dt[1][i], dt[2][i]))
+            np.savetxt(os.path.join(foldername, scanname), dt2, fmt="%1.8e %1.8e %1.8e %1.8e")
+
     def flydone(self, value):
+        isTestRun = self.ui.actionTestFly.isChecked()
+        if isTestRun:
+            return
         self.isscan = False
         self.updatepos()
+        s12softglue.flush()
         if self.signalmotor not in self.pts.hexapod.axes:        
             self.pts.set_speed(self.signalmotor, self._prev_vel, self._prev_acc)
+        try:
+            self.save_softglue()
+        except:
+            print("Error in softglue saving....")
         print("fly done.......")
     
     def timescanstop(self):
@@ -802,6 +882,7 @@ class tweakmotors(QMainWindow):
                 step = -step
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step, step)
+        print(pos)
         if len(scanname):
             scanname=axis
         else:
@@ -825,6 +906,10 @@ class tweakmotors(QMainWindow):
         self.rpos = []
         self.mpos = []
         
+        print("")
+        isTestRun = self.ui.actionTestFly.isChecked()
+        if isTestRun:
+            print("**** Test Run:")
         self.isfly = True
         if self.ui.actionMemory_clear_before_scan.isChecked():
             s12softglue.memory_clear()
@@ -843,6 +928,9 @@ class tweakmotors(QMainWindow):
         except:
             step = 0.1
             self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText("%0.3f"%step)
+        if step<0.05:
+            showerror('step time should equal or greater than 0.05 seconds.')
+            return        
         pos = self.pts.get_pos(axis)
         if axis in self.pts.hexapod.axes:
             if self.ui.cb_reversescandir.isChecked():
@@ -855,13 +943,28 @@ class tweakmotors(QMainWindow):
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
 #                print("Running the fly scan with controller")
                 self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
-                expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
+                #expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
+                period = self.pts.hexapod.scantime/self.pts.hexapod.pulse_number
+                expt = period-0.015
+                # set the delay generator
+                if expt != dg645_12ID._exposuretime:
+                    dg645_12ID.set_pilatus_fly(expt)
+                N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
+                print(f"Total {np.round(N_counts/self.pts.hexapod.pulse_number)} encoder positions will be collected per a shot.")
+                if N_counts>100000:
+                    print(f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed.")
+
                 for det in self.detector:
-                    print(type(det))
                     if det is not None:
-                        print(f"exposure time is set to {expt} seconds.")
-                        det.fly_ready(expt, self.pts.hexapod.pulse_number)
-                self.pts.hexapod.run_traj(axis)
+                        print(f"Exposure time set to %0.3f seconds for {det._prefix}."% expt)
+                        try:
+                            det.fly_ready(expt, self.pts.hexapod.pulse_number, period=period, isTest=isTestRun)
+                        except TimeoutError:
+                            print(f"Detector, {det._prefix}, hasnt started yet.")
+                            #showerror("Detector timeout.")
+                            return
+                if not isTestRun:
+                    self.pts.hexapod.run_traj(axis)
                 while self.pts.ismoving(axis):
                     time.sleep(0.01)
 
@@ -909,6 +1012,11 @@ class tweakmotors(QMainWindow):
                 self.pts.mv(axis, fe, wait=True)
                 print("Should be in run.")
         #self.isscan = False
+
+        # check if data collections are all done..
+        for det in self.detector:
+            if det is not None:
+                det.ForceStop(2)
 
     def print_fly_settings(self, motornumber):
         print('')

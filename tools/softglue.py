@@ -1,5 +1,6 @@
 import time
 from epics import Device, PV
+import numpy as np
 
 class sgz_pty(Device):
     basePV = "12IFMZ:"
@@ -21,9 +22,8 @@ class sgz_pty(Device):
         self.add_pv('%sAND-3_IN1_Signal'%self.SGpv, attr="in1")
         self.add_pv('%sAND-4_IN1_Signal'%self.SGpv, attr="in2")
         self.add_pv('%sFI1_Signal'%self.SGpv, attr="ch_input1")
-        self.add_pv('%sFO1_Signal'%self.SGpv, attr="ch_output1")
-        self.add_pv('%sFO1_Signal'%self.SGpv, attr="ch_output2")
-        self.add_pv('%sDivByN-2_N'%self.SGpv, attr="div2")
+        #self.add_pv('%sFO1_Signal'%self.SGpv, attr="ch_output1")
+        #self.add_pv('%sFO1_Signal'%self.SGpv, attr="ch_output2")
         self.add_pv('%sDivByN-1_N'%self.SGpv, attr="div1")
         self.add_pv('%sDivByN-2_N'%self.SGpv, attr="div2")
         self.add_pv('%sDivByN-3_N'%self.SGpv, attr="div3")
@@ -32,6 +32,7 @@ class sgz_pty(Device):
         self.add_pv('%sDivByN-3_CLOCK_Signal'%self.SGpv, attr="div3clock")
         self.add_pv('%sUpDnCntr-1_CLEAR_Signal'%self.SGpv, attr="_clockreset")
         self.add_pv('%sUpDnCntr-1_COUNTS'%self.SGpv, attr="ckTime")
+        self.add_pv('%sscalToStream-1_FLUSH_Signal'%self.SGpv, attr="_flush")
         self.Enable = 1
 
     def enable(self):
@@ -45,28 +46,38 @@ class sgz_pty(Device):
         self.div1clock = "ck10"
         self.div2clock = "ck10"
         self.div3clock = "ck10"
-        self.clock_in = 10000000 # 10MHz
-        self.div1 = self.clock_in/freq
-        self.div2 = self.clock_in/freq
-        self.div3 = self.clock_in/freq
+        if self.div1clock == 'ck10':
+            clock_in = 10E6 # 10MHz
+        elif self.div1clock == 'ck20':
+            clock_in = 20E6 # 20MHz
+        self.div1 = clock_in/freq
+        self.div2 = clock_in/1E6
+        self.div3 = clock_in/freq
 
-    def set_clock_in(self, clock=10000000):
-        assert clock not in [10000000, 20000000], "Clock can be 10E6 or 20E6"
-        self.clock_in = clock
-        if clock == 10000000:
+    def set_clock_in(self, clock=10E6):
+        assert clock not in [10E6, 20E6], "Clock can be 10E6 or 20E6"
+        if clock == 10E6:
             self.div1clock = "ck10"
             self.div2clock = "ck10"
             self.div3clock = "ck10"
-        if clock == 20000000:
+        if clock == 20E6:
             self.div1clock = "ck20"
             self.div2clock = "ck20"
             self.div3clock = "ck20"
 
-    def set_count_freq(self, freq=10000):
-        # default clock 10 kHz
-        self.div1 = self.clock_in/freq
-        self.div2 = self.clock_in/freq
-        self.div3 = self.clock_in/freq
+    def set_count_freq(self, freq=10):
+        # unit of the freq is [micro second]
+        if self.div1clock == 'ck10':
+            clock_in = 10E6 # 10MHz
+        elif self.div1clock == 'ck20':
+            clock_in = 20E6 # 20MHz
+
+        self.div1 = clock_in/1E6*freq*10
+        self.div2 = clock_in/1E6
+        self.div3 = clock_in/1E6*freq*10
+    
+    def number_acquisition(self, exptime, N=1):
+        return np.round(exptime/((self.div1/self.div2)*1E-6)*N)
     
     def _reset(self):
         self.buf_in4 = '0'
@@ -112,22 +123,76 @@ class sgz_pty(Device):
     def get_time(self):
         return self.VALA
 
-    def set_detout_in(self):
-        self.in1 = 'det_out'
-        self.in2 = 'det_out'
-
     def set_trigout_in(self):
         self.in1 = 'trig_out'
         self.in2 = 'trig_out'
-        self.ch_input1 = 'trig_out' # input from the hexapod
-        self.ch_output1 = 'trig_out' # to trigger SAXS
-        self.ch_output2 = 'trig_out' # to trigger WAXS
+        self.ch_input1 = 'trig_out'
 
-    def get_data(self):
-        return [self.VALA, self.VALB, self.VALC, self.VALD]
+    def get_arrays_fulltime(self, pos = ['B', 'C', 'D']):
+        arr = []
+        for p in pos:
+            data = self.get_array(p)
+            arr.append(data)
+        return arr
     
-    def get_position(self):
-        return [self.VALB[self.VALI], self.VALC[self.VALI], self.VALD[self.VALI]]
+    def get_latest_positions(self, pos = ['B', 'C', 'D']):
+        arr = []
+        for p in pos:
+            data = self.get_array(p)
+            arr.append(data[self.VALI])
+        return arr
+        
+    def get_arrays(self, pos = ['B', 'C', 'D']):
+        # returns time and position arrays
+        t, ind = self.get_timearray()
+        arr = []
+        for p in pos:
+            data = self.get_array(p)
+            dt = []
+            for i in range(len(ind)-1):
+                dt.append(data[(ind[i]+1):ind[i+1]])
+            arr.append(dt)
+        return (t, arr)
     
-    def get_pos_array(self):
-        return [self.VALB[0:self.VALI], self.VALC[0:self.VALI], self.VALD[0:self.VALI]]
+    def get_array(self, pos='B'):
+        fieldname = f'VAL{pos}'
+        val = getattr(self, fieldname)
+        return val
+
+    def get_timearray(self):
+        # returns (time in second, time bin indices)
+        if self.div1clock == 'ck10':
+            clock_in = 100000000 # 10MHz
+        elif self.div1clock == 'ck20':
+            clock_in = 200000000 # 20MHz
+        ckTime_unit = clock_in/self.div2
+        timearray = self.get_array('A') 
+        d = np.diff(timearray)
+        p0 = np.where(d<-1*(self.div1/self.div2))
+        p0 = p0[0]
+        if len(p0)>1:
+            p0 = p0[0]
+        p = np.where(d>self.div1/self.div2)
+        p = p[0]
+        data = []
+        index = [p0]
+        for i in range(len(p)):
+            if i==0:
+                index_start = p0
+            else:
+                index_start = p[i-1]
+            index.append(p[i])
+            data.append(timearray[(index_start+1):p[i]]/ckTime_unit)
+        return (data, index)
+        #timearray = timearray[0:self.VALI]
+        #return timearray
+    
+    def flush(self):
+        time.sleep(0.1)
+        self._flush = '0'
+        time.sleep(0.001)
+        self._flush = '1'
+    
+    def cleanup(self, arrays):
+        # remove data that does not vary with time.
+        timearray = self.get_timearray()

@@ -10,6 +10,7 @@ PILATUSMODE = 2
 class AD_Pilatus(Device):
     camattrs = ('NumImages', 'NumTriggers', 
                 'ImageMode', 'TriggerMode',
+                'AutoIncrement', 'FileNumber', 'FilePath',
                 'Acquire', 'Acquire_RBV', 'AcquireTime', 'AcquirePeriod',
                 'Armed', 'ArrayCounter', 'ArrayCounter_RBV')
 
@@ -34,16 +35,17 @@ class AD_Pilatus(Device):
             pvname = '%s%s%s' % (prefix, filesaver, p)
             self.add_pv(pvname, attr='File_'+p)
 
-    def Arm(self, nimg = 1):
+    def Arm(self, nimg = 0):
         self.ImageMode = 1
         self.Acquire = 0 # stop acquire
-        self.NumImages = nimg
+        if nimg>0:
+            self.NumImages = nimg
         self.Acquire = 1
         self.CCD_waitstarted()
 
     def CCD_waitstarted(self):
         t = time.time()
-        TIMEOUT = 0.5
+        TIMEOUT = 2
         while self.Armed == 0:
             self.Acquire = 1
             time.sleep(0.01)
@@ -54,9 +56,12 @@ class AD_Pilatus(Device):
         while not self.FileWriteComplete():
             time.sleep(0.1)
             
-    def SetExposureTime(self, t, period=0.1):
+    def SetExposureTime(self, t):
         "set exposure time, re-acquire offset correction"
         self.AcquireTime = t
+
+    def SetExposurePeriod(self, period):
+        "set exposure time, re-acquire offset correction"
         self.AcquirePeriod = period
 
     def SetMultiFrames(self, n_trig, n_cap):
@@ -75,8 +80,7 @@ class AD_Pilatus(Device):
         # set filesaver
         self.filePut('NumCapture',    n_cap)
         self.filePut('EnableCallbacks', 1)
-        self.filePut('FileNumber',    1)
-        self.filePut('AutoIncrement', 1)
+        #self.filePut('FileNumber',    1)
         time.sleep(0.25)
 
     def StartCapture(self):
@@ -85,19 +89,39 @@ class AD_Pilatus(Device):
         self.filePut('FileWriteMode', 1)  # capture
         time.sleep(0.05)
         self.filePut('Capture', 1)  # start capture
-        self.Acquire = 1
+        self.Arm()
         time.sleep(0.25)
+
+    def ForceStop(self, timeouttime = 2):
+        t0 = time.time()
+        Ncapr = self.getNumCaptured()
+        NcapAll = self.fileGet('NumCapture')
+        timeout = False
+        while (Ncapr<NcapAll):
+            time.sleep(0.01)
+            if self.Acquire_RBV == 1:
+                Ncapr = self.getNumCaptured()
+            else:
+                break
+            if (time.time()-t0) > timeouttime:
+                print(time.time()-t0)
+                timeout = True
+        if timeout:
+            if self.fileGet('Capture_RBV') > 0:
+                self.filePut('Capture', 0)  # start capture
+            self.FileWrite()
+            self.CCD_waitFileWriting()
+            if self.Acquire_RBV > 0:
+                self.Acquire = 0
 
     def CCD_waitCaptureDone(self):
         #t0 = time.time()
         Ncapr = self.getNumCaptured()
-        #Ncoll = self.getArrayCounter()
         NcapAll = self.fileGet('NumCapture')
         while (Ncapr<NcapAll):
             time.sleep(0.01)
-            if self.Acquire_RBV.get() == 1:
+            if self.Acquire_RBV == 1:
                 Ncapr = self.getNumCaptured()
-        #        Ncoll = self.getArrayCounter()
             else:
                 break
         

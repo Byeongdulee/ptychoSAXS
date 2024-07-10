@@ -8,7 +8,7 @@ BEAMLINE_12IDB = 0
 BEAMLINE_12IDC = 1
 
 ADDRESS_12IDB = "tcpip://164.54.122.66:5025" # 12idb
-ADDRESS_12IDC = "tcpip://164.54.122.33:5025" # 12idc 
+ADDRESS_12IDC = "tcpip://dg645.xray.aps.anl.gov:5025" # 12idc 
 #DG = ik.srs.SRSDG645.open_from_uri(address)
 UBZ_SHUTTER_DEADTIME = 0.005   # 5 ms.
 SOFTWARE_INIT_DEADTIME = 0.001
@@ -245,6 +245,7 @@ class dg645_12ID(SRSDG645):
     
     def __init__(self, filelike):
         super(SRSDG645, self).__init__(filelike)
+        self._exposuretime = 0
     # ENUMS #
         
     class Instruments(IntEnum):
@@ -274,7 +275,7 @@ class dg645_12ID(SRSDG645):
         :rtype: `_dg645Instrument`
         """
         return ProxyList(self, _dg645Instrument, dg645_12ID.Instruments)
-        
+
     def pilatus(self, DGexpt, *kwd):
         self.set_pilatus(DGexpt, *kwd)
         self.trigger()
@@ -287,7 +288,6 @@ class dg645_12ID(SRSDG645):
         self.instrument["detector"].polarity = 1
         
         self.trigger_source = trigger_source
-
         if (DGNimage>1):
             if (DGexpt >= Cycperiod):
                 raise ValueError("Image period should be longer than the exposure time + 0.004")
@@ -301,6 +301,10 @@ class dg645_12ID(SRSDG645):
         self.instrument["inhibitor"].delay = detector_delay
         self.instrument["inhibitor"].pulsewidth = DGexpt
 
+        if Cycperiod == 0:
+            self.enable_burst_mode = 0
+            return
+        
         longesttime = delaytime + DGexpt + UBZ_SHUTTER_DEADTIME*2
         if (detector_delay+DGexpt) > longesttime:
             longesttime = detector_delay+DGexpt
@@ -356,7 +360,11 @@ class dg645_12ID(SRSDG645):
         else:
             self.burst_enable = 0
 
-    def set_pilatus_fly(self, DGexpt, DGNimage=1, Cycperiod=0,trigger_source=TSRC_EXTERNAL_RISING_EGDES):
+    def set_pilatus_fly(self, DGexpt=0.001, trigger_source=TSRC_EXTERNAL_RISING_EGDES):
+        # this mode can be used for a fly scan.
+        # leave the shutter open
+        # trigger DG with external risign edge
+        # default exposure time is 0.001 # 1ms long pulse.
 
         self.instrument["struck"].polarity = 0
         self.instrument["detector"].polarity = 1
@@ -364,6 +372,7 @@ class dg645_12ID(SRSDG645):
         self.trigger_source = trigger_source
 
         delaytime = 0
+        self._exposuretime = DGexpt
     
         dA = delaytime # shutter
         lAB = DGexpt
@@ -376,44 +385,16 @@ class dg645_12ID(SRSDG645):
 	
         dG = dC
         lGH = DGexpt
-        longesttime = dA+lAB
-        if ((dE+lEF) > longesttime) :
-            longesttime = dE+lEF
-        if (Cycperiod < longesttime) :
-            raise TimeoutError("Cycperiod should be longer than a single pulse")
 
-        Cycdelay = SOFTWARE_INIT_DEADTIME
-
-        self.burst_init()
-        time.sleep(0.01)
-        if (DGNimage > 1):
-            if (DGexpt >= Cycperiod):
-                raise TimeoutError("Cycperiod should be longer than a single pulse")
-#        print(dA, lAB, dC, lCD, dE, lEF, dG, lGH)
         self.instrument["shutter"].delay = dA
-        time.sleep(0.1)
-#        self.check_error()
         self.instrument["shutter"].pulsewidth = lAB
-#        self.check_error()
         self.instrument["detector"].delay = dC
-#        self.check_error()
         self.instrument["detector"].pulsewidth = lCD
-#        self.check_error()
         self.instrument["struck"].delay = dE
-#        self.check_error()
         self.instrument["struck"].pulsewidth = lEF
-#        self.check_error()
         self.instrument["inhibitor"].delay = dG
-#        self.check_error()
         self.instrument["inhibitor"].pulsewidth = lGH
-#        self.check_error()
-
-        if ((Cycperiod < DG645_BURST_MAX_TIME) and (DGNimage > 1)):
-            self.burst_set(DGNimage, Cycperiod, Cycdelay)
-#            self.check_error()
-        else:
-            self.burst_enable = 0
-        self.check_error()
+        self.enable_burst_mode = 0
 
     def PE(self, DGexpt, *kwd):
         self.set_PE(DGexpt, *kwd)
