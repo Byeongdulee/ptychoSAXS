@@ -42,7 +42,7 @@ class sgz_pty(Device):
         self.Enable = 0
     
     def default_clock(self, freq=10000):
-        # default clock 10 kHz
+        # default clock 10 kHz and collect 10,000 pnts/second -- > 0.1 millisconds/pnt
         self.div1clock = "ck10"
         self.div2clock = "ck10"
         self.div3clock = "ck10"
@@ -190,7 +190,7 @@ class sgz_pty(Device):
             clock_in = 100000000 # 10MHz
         elif self.div1clock == 'ck20':
             clock_in = 200000000 # 20MHz
-        ckTime_unit = clock_in/self.div2
+        ckTime_unit = clock_in/(self.div1/self.div2)
         timearray = self.get_array('A') 
         d = np.diff(timearray)
         p0 = np.where(d<-1*(self.div1/self.div2))

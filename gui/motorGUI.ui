@@ -2346,7 +2346,7 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>10 micro-seconds</string>
+    <string>every 0.1 millie-seconds</string>
    </property>
   </action>
   <action name="actionDetout">
@@ -2354,7 +2354,7 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>100 micro-seconds</string>
+    <string>every 1 millie-seconds</string>
    </property>
   </action>
   <action name="actionPrint_flyscan_settings">
