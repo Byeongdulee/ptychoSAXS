@@ -128,6 +128,31 @@ class sgz_pty(Device):
         self.in2 = 'trig_out'
         self.ch_input1 = 'trig_out'
 
+    def get_position(self, pos = ['B', 'C', 'D']):
+        self.memory_clear()
+        while (self.VALI!=0):
+            self.PROC = 1
+            time.sleep(0.01)
+        #time.sleep(0.02)
+        self.in1 = '1'
+        self.in2 = '1'
+        while (self.VALI<10):
+            self.PROC = 1
+            time.sleep(0.01)
+        #time.sleep(timeout)
+        data = self.get_array('A')
+        lastind = 0
+        for dd in range(self.VALI):
+            if data[self.VALI-dd]!=0:
+                lastind = self.VALI-dd
+                break
+        self.set_trigout_in()
+        arr = []
+        for p in pos:
+            data = self.get_array(p)
+            arr.append(data[lastind])
+        return arr
+    
     def get_arrays_fulltime(self, pos = ['B', 'C', 'D']):
         arr = []
         for p in pos:

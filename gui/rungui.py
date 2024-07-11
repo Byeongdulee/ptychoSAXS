@@ -230,7 +230,8 @@ class tweakmotors(QMainWindow):
         self.softglue_channels = ['B', 'C', 'D']
         self.ui.ed_workingfolder.returnPressed.connect(self.update_workingfolder)
         self.ui.ed_scanname.returnPressed.connect(self.update_scanname)
-
+        if os.name != 'nt':
+            self.ui.menuQDS.setDisabled(True)
         # set default softglue collection freq. 10 micro seconds.
         s12softglue.set_count_freq(10)
 
@@ -300,10 +301,10 @@ class tweakmotors(QMainWindow):
         # detectors
         self.detector = [None]*2
 
-        #self.ui.installEventFilter(self)
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_qds)
-        self.timer.start(100)        
+        if os.name == 'nt':
+            self.timer = QTimer()
+            self.timer.timeout.connect(self.update_qds)
+            self.timer.start(100)        
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
 
@@ -757,8 +758,12 @@ class tweakmotors(QMainWindow):
                 self.is_selfsaved = True
 
     def get_qds_pos(self, isrefavailable = True):
-        r, a = self.pts.qds.get_position()
-        r = r[0]
+        if os.name == 'nt':
+            r, a = self.pts.qds.get_position()
+            r = r[0]
+        else:
+            r = self.pts.qds.get_position(self.softglue_channels)
+
         if isrefavailable:
             r = [r[0]/1000-self.ref_X, r[1]/1000-self.ref_Z, r[2]/1000-self.ref_Z2]
         else:
