@@ -583,15 +583,16 @@ class tweakmotors(QMainWindow):
     def save_softglue(self):
         # read softglue data
         foldername = self.ui.ed_workingfolder.text()
-        if len(foldername) ==0:
-            foldername = os.getcwd()
+        if len(foldername) == 0:
+            return
+            #foldername = os.getcwd()
         t, dt = s12softglue.get_arrays(self.softglue_channels)
         # save softglue data
         filename = ""
         for det in self.detector:
             if det is not None:
                 fn = det.File_FullFileName_RBV
-                fn = fn.tostring()
+                fn = fn.tobytes()
                 filename = os.path.basename(fn.decode('utf-8')).rstrip('\x00')
                 filename = filename.rstrip('.h5')
         if len(filename) ==0:
@@ -953,7 +954,8 @@ class tweakmotors(QMainWindow):
                     st = t 
                     step = -step
 #            print(self.hexapod_flymode, "fly mode")
-            if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
+            if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET):
+#            if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
 #                print("Running the fly scan with controller")
                 direction = int(step)/abs(step)
                 self.pts.hexapod.set_traj(axis, tm, fe-st, st, direction, abs(step), 50)
@@ -982,7 +984,8 @@ class tweakmotors(QMainWindow):
                 while self.pts.ismoving(axis):
                     time.sleep(0.01)
 
-            if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD) or (axis != "X"):
+            if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD):
+#            if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD) or (axis != "X"):
                 print(" Running the fly scan without controller")
                 self.pts.mv(axis, st, wait=True)
                 self._prev_vel,self._prev_acc = self.pts.get_speed(axis)
