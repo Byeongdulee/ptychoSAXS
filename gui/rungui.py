@@ -589,8 +589,17 @@ class tweakmotors(QMainWindow):
         if len(foldername) == 0:
             return
             #foldername = os.getcwd()
-        time.sleep(0.5)
-        t, dt = s12softglue.get_arrays(self.softglue_channels)
+        N_cnt = 0
+        if hasattr(self.pts.hexapod, "pulse_number"):
+            N_cnt = self.pts.hexapod.pulse_number
+        t = []
+        timeout = 1
+        ct0 = time.time()
+        while len(t)<N_cnt:
+            t, dt = s12softglue.get_arrays(self.softglue_channels)
+            time.sleep(0.1)
+            if (time.time()-ct0 > timeout):
+                break
         # save softglue data
         filename = ""
         for det in self.detector:
@@ -930,7 +939,10 @@ class tweakmotors(QMainWindow):
             print("**** Test Run:")
         self.isfly = True
         if self.ui.actionMemory_clear_before_scan.isChecked():
-            s12softglue.memory_clear()
+            try:
+                s12softglue.memory_clear()
+            except TimeoutError:
+                print("softglue memory_clear timeout")
         # disable fit menu
         self.ui.actionFit_QDS_phi.setEnabled(False)
 
