@@ -947,7 +947,8 @@ class tweakmotors(QMainWindow):
 #            print(self.hexapod_flymode, "fly mode")
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
 #                print("Running the fly scan with controller")
-                self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
+                direction = int(step)/abs(step)
+                self.pts.hexapod.set_traj(axis, tm, fe-st, st, direction, abs(step), 50)
                 #expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
                 period = self.pts.hexapod.scantime/self.pts.hexapod.pulse_number
                 expt = period-0.015
@@ -1051,7 +1052,8 @@ class tweakmotors(QMainWindow):
                     st = t 
                     step = -step
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
-                self.pts.hexapod.set_traj(tm, fe-st, st, 50, step)
+                direction = int(step)/abs(step)
+                self.pts.hexapod.set_traj(axis, tm, fe-st, st, direction, abs(step), 50)
             else:
                 print("Currently, the flyscan only works for X axis.")
         else:
