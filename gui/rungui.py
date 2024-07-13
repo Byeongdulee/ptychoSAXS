@@ -132,7 +132,7 @@ class tweakmotors(QMainWindow):
         self._qds_x_sensor = 0
         self._qds_y_sensor = 1
         self.is_selfsaved = False
-        if hasattr(self.pts.gonio, 'channel_names'):
+        if not hasattr(self.pts.gonio, 'channel_names'):
             self.pts.gonio.channel_names = [""]
             self.pts.gonio.units = [""]
         for i, name in enumerate(self.pts.gonio.channel_names):
