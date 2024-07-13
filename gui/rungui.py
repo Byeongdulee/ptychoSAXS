@@ -593,6 +593,7 @@ class tweakmotors(QMainWindow):
         if hasattr(self.pts.hexapod, "pulse_number"):
             N_cnt = self.pts.hexapod.pulse_number
         t = []
+        time.sleep(0.5)
         timeout = 2
         ct0 = time.time()
         while len(t)<N_cnt:
