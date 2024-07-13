@@ -246,7 +246,7 @@ class tweakmotors(QMainWindow):
         self.rpos = []
         self.mpos = []
         self.threadpool = QThreadPool.globalInstance()
-        self.datapath = ""
+        self.working_folder = ""
         # qds
         self.ref_X = 0
         self.ref_Z = 0
@@ -316,8 +316,11 @@ class tweakmotors(QMainWindow):
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
 
-    def update_workingfolder(self):
-        self.working_folder = self.ui.ed_workingfolder.text()
+    def update_workingfolder(self, folder=""):
+        if len(folder) == 0:
+            self.working_folder = self.ui.ed_workingfolder.text()
+        else:
+            self.ui.ed_workingfolder.setText(self.working_folder)
 
     def update_scanname(self):
         txt = self.ui.ed_scanname.text()
@@ -586,6 +589,7 @@ class tweakmotors(QMainWindow):
         if len(foldername) == 0:
             return
             #foldername = os.getcwd()
+        time.sleep(0.5)
         t, dt = s12softglue.get_arrays(self.softglue_channels)
         # save softglue data
         filename = ""
@@ -1086,9 +1090,9 @@ class tweakmotors(QMainWindow):
             filename = filename + ".txt"
         d = os.path.dirname(filename)
         if len(d) == 0:
-            filename = os.path.join(self.datapath, filename)
+            filename = os.path.join(self.working_folder, filename)
         else:
-            self.datapath = d
+            self.working_folder = d
         return filename
     
     def save_qds(self, filename = '', saveoption = "w"):
@@ -1144,9 +1148,9 @@ class tweakmotors(QMainWindow):
             filename = filename + ".txt"
         d = os.path.dirname(filename)
         if len(d) == 0:
-            filename = os.path.join(self.datapath, filename)
+            filename = os.path.join(self.working_folder, filename)
         else:
-            self.datapath = d
+            self.working_folder = d
         # rea
         data = self.pts.hexapod.get_records()
         print("Done.. Preparing to plot.")
@@ -1160,8 +1164,8 @@ class tweakmotors(QMainWindow):
             showerror("PanDA is needed.")
             return
         qds_data = qds_data/1000
-        print(self.pts.hexapod.wave_start, " wave_start position")
-        qds_data = qds_data[-1]-qds_data-self.pts.hexapod.wave_start*1000
+        #print(self.pts.hexapod.wave_start, " wave_start position")
+        #qds_data = qds_data[-1]-qds_data-self.pts.hexapod.wave_start*1000
         axis = "X"
         for data in l_data:
             #ndata = data[axis][0].size
@@ -1411,7 +1415,8 @@ class tweakmotors(QMainWindow):
             except:
                 pass
         elif cmd == "setfolder":
-            self.datapath = folder
+            self.working_folder = folder
+            self.update_workingfolder(self.working_folder)
         else:
             print(f"Invalid command {cmd} is recieved.")
 
