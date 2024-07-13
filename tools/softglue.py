@@ -169,6 +169,7 @@ class sgz_pty(Device):
         
     def get_arrays(self, pos = ['B', 'C', 'D']):
         # returns time and position arrays
+        self.PROC = 1
         t, ind = self.get_timearray()
         arr = []
         for p in pos:

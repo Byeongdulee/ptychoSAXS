@@ -596,8 +596,10 @@ class tweakmotors(QMainWindow):
         timeout = 1
         ct0 = time.time()
         while len(t)<N_cnt:
-            t, dt = s12softglue.get_arrays(self.softglue_channels)
+            s12softglue.PROC = 1
             time.sleep(0.1)
+            t, dt = s12softglue.get_arrays(self.softglue_channels)
+            print(len(t))
             if (time.time()-ct0 > timeout):
                 break
         # save softglue data
