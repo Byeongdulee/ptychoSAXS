@@ -132,11 +132,12 @@ class tweakmotors(QMainWindow):
         self._qds_x_sensor = 0
         self._qds_y_sensor = 1
         self.is_selfsaved = False
-        for i, name in enumerate(self.pts.gonio.channel_names):
-            #if self.pts.gonio.connected[i]:
-            motornames.append(name)
-        for name in self.pts.gonio.units:
-            motorunits.append(name)
+        if hasattr(self.pts.gonio, 'channel_names'):
+            for i, name in enumerate(self.pts.gonio.channel_names):
+                #if self.pts.gonio.connected[i]:
+                motornames.append(name)
+            for name in self.pts.gonio.units:
+                motorunits.append(name)
 
         enable = False
         for i, name in enumerate(motornames):
