@@ -597,17 +597,15 @@ class tweakmotors(QMainWindow):
         timeout = 2
         ct0 = time.time()
         while len(t)<N_cnt:
-            #s12softglue.PROC = 1
-            #time.sleep(0.1)
             try:
                 t, dt = s12softglue.get_arrays(self.softglue_channels)
             except:
                 t = []
-            print(f"length of t is {len(t)}, and N_pulses is {N_cnt}")
+            #print(f"length of t is {len(t)}, and N_pulses is {N_cnt}")
             if (time.time()-ct0 > timeout):
                 print("timeout")
                 break
-        # save softglue data
+            time.sleep(0.25)
         filename = ""
         for det in self.detector:
             if det is not None:
