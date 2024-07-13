@@ -593,14 +593,15 @@ class tweakmotors(QMainWindow):
         if hasattr(self.pts.hexapod, "pulse_number"):
             N_cnt = self.pts.hexapod.pulse_number
         t = []
-        timeout = 1
+        timeout = 2
         ct0 = time.time()
         while len(t)<N_cnt:
             s12softglue.PROC = 1
             time.sleep(0.1)
             t, dt = s12softglue.get_arrays(self.softglue_channels)
-            print(len(t))
+            print(f"length of t is {len(t)}, and N_pulses is {N_cnt}")
             if (time.time()-ct0 > timeout):
+                print("timeout")
                 break
         # save softglue data
         filename = ""
