@@ -610,19 +610,19 @@ class tweakmotors(QMainWindow):
             np.savetxt(os.path.join(foldername, scanname), dt2, fmt="%1.8e %1.8e %1.8e %1.8e")
 
     def flydone(self, value):
+        print("fly done.......")
         isTestRun = self.ui.actionTestFly.isChecked()
         if isTestRun:
             return
         self.isscan = False
         self.updatepos()
         s12softglue.flush()
-        if self.signalmotor not in self.pts.hexapod.axes:        
-            self.pts.set_speed(self.signalmotor, self._prev_vel, self._prev_acc)
+        #if self.signalmotor not in self.pts.hexapod.axes:        
+        #    self.pts.set_speed(self.signalmotor, self._prev_vel, self._prev_acc)
         try:
             self.save_softglue()
         except:
             print("Error in softglue saving....")
-        print("fly done.......")
     
     def timescanstop(self):
         self.isscan = False

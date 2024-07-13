@@ -215,7 +215,7 @@ class sgz_pty(Device):
     def flush(self):
         time.sleep(0.1)
         self._flush = '0'
-        time.sleep(0.001)
+        time.sleep(0.1)
         self._flush = '1'
     
     def cleanup(self, arrays):
