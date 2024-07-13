@@ -598,7 +598,10 @@ class tweakmotors(QMainWindow):
         while len(t)<N_cnt:
             #s12softglue.PROC = 1
             #time.sleep(0.1)
-            t, dt = s12softglue.get_arrays(self.softglue_channels)
+            try:
+                t, dt = s12softglue.get_arrays(self.softglue_channels)
+            except:
+                t = []
             print(f"length of t is {len(t)}, and N_pulses is {N_cnt}")
             if (time.time()-ct0 > timeout):
                 print("timeout")
