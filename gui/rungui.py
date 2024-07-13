@@ -134,7 +134,6 @@ class tweakmotors(QMainWindow):
         self.is_selfsaved = False
         if hasattr(self.pts.gonio, 'channel_names'):
             for i, name in enumerate(self.pts.gonio.channel_names):
-                #if self.pts.gonio.connected[i]:
                 motornames.append(name)
             for name in self.pts.gonio.units:
                 motorunits.append(name)
@@ -158,9 +157,13 @@ class tweakmotors(QMainWindow):
         self.motornames = []
         self.motorunits = []
         for i, name in enumerate(motornames):
-            if self.pts.isconnected(name):
-                self.motornames.append(name)
-                self.motorunits.append(motorunits[i])
+            try:
+                if self.pts.isconnected(name):
+                    self.motornames.append(name)
+                    self.motorunits.append(motorunits[i])
+            except:
+                print(f"{name} is not connected.")
+                pass
         # motors for 2d and 3d scans.....
         xm = self.motornames.index('X')
         ym = self.motornames.index('Y')
