@@ -594,7 +594,7 @@ class tweakmotors(QMainWindow):
             N_cnt = self.pts.hexapod.pulse_number
         t = []
         time.sleep(0.5)
-        timeout = 2
+        timeout = 5
         ct0 = time.time()
         while len(t)<N_cnt:
             try:
@@ -605,7 +605,7 @@ class tweakmotors(QMainWindow):
             if (time.time()-ct0 > timeout):
                 print("timeout")
                 break
-            time.sleep(0.25)
+            time.sleep(0.5)
         filename = ""
         for det in self.detector:
             if det is not None:
