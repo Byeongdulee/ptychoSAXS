@@ -52,10 +52,13 @@ class pilatus(AD_Pilatus):
 		self.setFileTemplate('%s%s_data_%5.5d.h5')
 		self.SetMultiFrames(Npoints, x_points)
 		if not isTest:
-			self.StartCapture()
-			if wait:
-				self.wait_capturedone()
-
+			try:
+				self.StartCapture()
+				if wait:
+					self.wait_capturedone()
+			except TimeoutError:
+				raise TimeoutError
+			
 	def set_scanNumberAsfilename(self):
 		fw_dir = caget(f"{beamlinePV}data:userDir")
 		self.setFilePath(fw_dir)

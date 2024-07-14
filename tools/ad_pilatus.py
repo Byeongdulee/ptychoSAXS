@@ -41,7 +41,10 @@ class AD_Pilatus(Device):
         if nimg>0:
             self.NumImages = nimg
         self.Acquire = 1
-        self.CCD_waitstarted()
+        try:
+            self.CCD_waitstarted()
+        except TimeoutError:
+            raise TimeoutError
 
     def CCD_waitstarted(self):
         t = time.time()

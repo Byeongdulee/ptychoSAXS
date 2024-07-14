@@ -10,11 +10,16 @@ class sgz_pty(Device):
     sg10.put("ck10")
     sg20 = PV('%s20MHZ_CLOCK_Signal'%SGpv)
     sg20.put("ck20")
-    attrs = ('VALA', 'VALB', 'VALC', 'VALD', 'VALE', 'VALF', 'VALI', 'VALJ', 'PROC', 'D', 'F')
-
+#    attrs = ('VALB', 'VALC', 'VALD', 'VALE', 'VALF', 'VALG', 'VALH', 'PROC', 'D', 'F')
+    attrs = ('VALA', 'VALB', 'VALC', 'VALD', 'VALE', 'VALF', 'VALG', 'VALH', 'PROC', 'D', 'F')
+    data = []
+    index = 0
     def __init__(self, prefix = dmaPV):
         myattrs =list(self.attrs)
         Device.__init__(self, prefix, delim='.', attrs=myattrs)
+#        self.add_pv('%s.VALA'%prefix, attr = 'VALA')
+        self.add_pv('%s.VALI'%prefix, attr = 'VALI')
+        self.add_pv('%s.VALJ'%prefix, attr = 'VALJ')
         self.add_pv('%sEnable'%prefix, attr = 'Enable')
         self.add_pv('%sBUFFER-1_IN_Signal'%self.SGpv, attr="buf_in1")
         self.add_pv('%sBUFFER-2_IN_Signal'%self.SGpv, attr="buf_in2")
@@ -34,6 +39,9 @@ class sgz_pty(Device):
         self.add_pv('%sUpDnCntr-1_COUNTS'%self.SGpv, attr="ckTime")
         self.add_pv('%sscalToStream-1_FLUSH_Signal'%self.SGpv, attr="_flush")
         self.Enable = 1
+
+    def onChange(self, value, **kws):
+        self.index = value
 
     def enable(self):
         self.Enable = 1
@@ -190,16 +198,25 @@ class sgz_pty(Device):
             clock_in = 100000000 # 10MHz
         elif self.div1clock == 'ck20':
             clock_in = 200000000 # 20MHz
+        else:
+            clock_in = 100000000 # 10MHz
+        if self.div1 is None:
+            self.div1 = 1000
+        if self.div2 is None:
+            self.div2 = 10
         ckTime_unit = clock_in/(self.div1/self.div2)
-        timearray = self.get_array('A') 
+        timearray = self.get_array('A')
         d = np.diff(timearray)
         p0 = np.where(d<-1*(self.div1/self.div2))
         p0 = p0[0]
-        if len(p0)>1:
+        if type(p0) == np.ndarray:
             p0 = p0[0]
         p = np.where(d>self.div1/self.div2)
         p = p[0]
         data = []
+        if p0>p[0]:
+            p0 = p[0]
+            p = p[1:]
         index = [p0]
         for i in range(len(p)):
             if i==0:

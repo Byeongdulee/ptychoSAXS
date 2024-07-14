@@ -1991,6 +1991,13 @@
          </layout>
         </item>
         <item>
+         <widget class="QProgressBar" name="progressBar">
+          <property name="value">
+           <number>24</number>
+          </property>
+         </widget>
+        </item>
+        <item>
          <spacer name="verticalSpacer">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
@@ -2074,7 +2081,7 @@
      <x>0</x>
      <y>0</y>
      <width>1423</width>
-     <height>31</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -2134,6 +2141,7 @@
     </property>
     <addaction name="actionTestFly"/>
     <addaction name="separator"/>
+    <addaction name="actionSet_waittime_between_scans"/>
     <addaction name="action2D_scan"/>
     <addaction name="action3D_scan"/>
     <addaction name="separator"/>
@@ -2399,6 +2407,11 @@
    </property>
    <property name="text">
     <string>Check to test fly parameters</string>
+   </property>
+  </action>
+  <action name="actionSet_waittime_between_scans">
+   <property name="text">
+    <string>Set waittime between scans</string>
    </property>
   </action>
  </widget>
