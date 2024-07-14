@@ -307,6 +307,7 @@ class tweakmotors(QMainWindow):
         self.updatepos()
 
         # detectors
+        self.det_readout_time = 0.015 # detector minimum readout time.
         self.detector = [None]*2
 
         if os.name == 'nt':
@@ -963,9 +964,7 @@ class tweakmotors(QMainWindow):
         except:
             step = 0.1
             self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText("%0.3f"%step)
-        if step<0.05:
-            showerror('step time should equal or greater than 0.05 seconds.')
-            return        
+       
         pos = self.pts.get_pos(axis)
         if axis in self.pts.hexapod.axes:
             if self.ui.cb_reversescandir.isChecked():
@@ -982,7 +981,15 @@ class tweakmotors(QMainWindow):
                 self.pts.hexapod.set_traj(axis, tm, fe-st, st, direction, abs(step), 50)
                 #expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
                 period = self.pts.hexapod.scantime/self.pts.hexapod.pulse_number
-                expt = period-0.015
+                expt = period-self.det_readout_time
+                if expt <= 0:
+                    print(f"Note that after subtracting the detector readout time {self.det_readout_time} s, the exposure time becomes equal or less than 0.")
+                    print("******* Cannot run.")
+                    return
+                if abs(step) <= 0.033:
+                    print(f"Note that Max speed of Pilatus2M is 30Hz.")
+                    print("******* Cannot run.")
+                    return
                 # set the delay generator
                 if expt != dg645_12ID._exposuretime:
                     dg645_12ID.set_pilatus_fly(expt)
@@ -1150,16 +1157,16 @@ class tweakmotors(QMainWindow):
         if self.is_selfsaved:
             self.is_selfsaved = False
 
-    def fly_result(self, filename=""):
-        if len(filename)==0:
-            w = QWidget()
-            w.resize(320, 240)
-            # Set window title
-            w.setWindowTitle("Save QDS Data As")
-            fn = QFileDialog.getSaveFileName(w, 'Save File', '', 'Text (*.txt *.dat)',None, QFileDialog.DontUseNativeDialog)
-            filename = fn[0]
-            if filename == "":
-                return 0
+    def fly_result(self):
+        #if len(filename)==0:
+        w = QWidget()
+        w.resize(320, 240)
+        # Set window title
+        w.setWindowTitle("Save QDS Data As")
+        fn = QFileDialog.getSaveFileName(w, 'Save File', '', 'Text (*.txt *.dat)',None, QFileDialog.DontUseNativeDialog)
+        filename = fn[0]
+        if filename == "":
+            return 0
         # filename handling
         if ".txt" not in filename:
             filename = filename + ".txt"
@@ -1170,36 +1177,44 @@ class tweakmotors(QMainWindow):
             self.working_folder = d
         # rea
         data = self.pts.hexapod.get_records()
-        print("Done.. Preparing to plot.")
+        #print("Done.. Preparing to plot.")
         if isinstance(data, type({})):
             l_data = [data]
         else:
             l_data = data
-        try:
-            qds_data = s12softglue.get_pos_array()
-        except:
-            showerror("PanDA is needed.")
-            return
-        qds_data = qds_data/1000
+        # try:
+        #     qds_data = s12softglue.get_pos_array()
+        # except:
+        #     showerror("PanDA is needed.")
+        #     return
+        # qds_data = qds_data/1000
         #print(self.pts.hexapod.wave_start, " wave_start position")
         #qds_data = qds_data[-1]-qds_data-self.pts.hexapod.wave_start*1000
-        axis = "X"
+        try:
+            axis = self.signalmotor
+        except:
+            axis = 'X'
         for data in l_data:
             #ndata = data[axis][0].size
             #x = range(0, ndata)
             if len(filename)>0:
+                print(f"Target, Encoder, and Pulse positions for axis {axis} are saved in {filename}.")
                 target = data[axis][0]*1000
                 encoded = data[axis][1]*1000
-                target = target[self.pts.hexapod.pulse_positions_index]
-                encoded = encoded[self.pts.hexapod.pulse_positions_index]
+                ind = np.zeros(target.shape, int)
+                ind[self.pts.hexapod.pulse_positions_index] = 1
+                #target = target[self.pts.hexapod.pulse_positions_index]
+                #encoded = encoded[self.pts.hexapod.pulse_positions_index]
                 try:
-                    dt2 = np.column_stack((target, encoded, qds_data))
-                    np.savetxt(filename, dt2, fmt="%1.8e %1.8e %1.8e")
+                    dt2 = np.column_stack((target, encoded, ind))
+#                    dt2 = np.column_stack((target, encoded, qds_data))
+                    np.savetxt(filename, dt2, fmt="%1.8e %1.8e %i")
+#                    np.savetxt(filename, dt2, fmt="%1.8e %1.8e %1.8e")
                 except:
                     print(target.shape, " encoded data")
                     print(encoded.shape, " encoded data")
-                    print(qds_data.shape, " qds data")
-
+                    #print(qds_data.shape, " qds data")
+                print("Done...")
     def clearplot(self):
         #self.isscan = False
         ax = self.figure.get_axes()
