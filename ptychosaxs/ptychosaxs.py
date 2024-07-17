@@ -48,6 +48,7 @@ class instruments(object):
         self.mvx(target, relative=True)
 
     def ismoving(self, axis):
+        print("now in is moving")
         if axis == "phi":
             ismoving = not self.phi.in_position
         if axis in self.hexapod.axes:
@@ -63,7 +64,6 @@ class instruments(object):
             return float(self.posphi)
         if axis in self.hexapod.axes:
             pos = self.hexapod.get_pos()
-            #print(pos)
             return float(pos[axis])
         if axis in self.gonio.channel_names:
             ch = self.gonio.channel_names.index(axis)

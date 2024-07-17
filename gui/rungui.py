@@ -12,6 +12,7 @@ import asyncio
 from asyncqt import QEventLoop
 from server_json import UDPserver, create_server
 import json
+import epics
 
 from PyQt5 import uic, QtCore, QtGui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget
@@ -650,11 +651,6 @@ class tweakmotors(QMainWindow):
         ct0 = time.time()
 
         while s12softglue.VALI<N_cnt*self.countsperexposure:
-            #try:
-            #    t, dt = s12softglue.get_arrays(self.softglue_channels)
-            #except:
-            #    t = []
-            #print(f"length of t is {len(t)}, and N_pulses is {N_cnt}")
             if (time.time()-ct0 > timeout):
                 print("timeout")
                 break
@@ -663,16 +659,18 @@ class tweakmotors(QMainWindow):
         filename = ""
         for det in self.detector:
             if det is not None:
+                fnum = det.fileGet('FileNumber_RBV')
                 fn = det.fileGet('FullFileName_RBV', as_string=True)
-                #fn = fn.tobytes()
-                #filename = os.path.basename(fn.decode('utf-8')).rstrip('\x00')
+                if str(fnum-1) not in fn:
+                    fn = det.fileGet('FullFileName_RBV', as_string=True)
                 filename = os.path.basename(fn)
                 filename = filename.rstrip('.h5')
         if len(filename) ==0:
-            print("****** Error: No detector was triggered.")
-            return
-        else:
-            print(f"Total {len(t)} data will be saved under {foldername}.")
+            print("****** Error: detector ioc does not response.")
+            filename = "temp%i"%int(time.time())
+
+        print(f"Total {len(t)} data will be saved under {foldername} with names of {filename}.")
+
         for i, td in enumerate(t):
             if i>=N_cnt:
                 continue
@@ -682,12 +680,17 @@ class tweakmotors(QMainWindow):
 
     def flydone(self, value=0):
         print("fly done.......")
+#        pos = self.pts.get_pos('X')
+#        print(f'X position is at {pos} in flydone.')
         isTestRun = self.ui.actionTestFly.isChecked()
         if isTestRun:
             return
         self.isscan = False
-        self.updatepos()
-        s12softglue.flush()
+        try:
+            self.updatepos()
+            s12softglue.flush()
+        except:
+            print("error here.....")
         #if self.signalmotor not in self.pts.hexapod.axes:        
         #    self.pts.set_speed(self.signalmotor, self._prev_vel, self._prev_acc)
         try:
@@ -745,8 +748,11 @@ class tweakmotors(QMainWindow):
         self.threadpool.start(w)
         
     def fly2d(self, xmotor=0, ymotor=1, scanname = ""):
+        self.isStopScanIssued = False
+
         if self.ui.actionckTime_reset_before_scan.isChecked():
             s12softglue.ckTime_reset()
+
         motor = [xmotor, ymotor]
         for m in motor:
             n = m+1
@@ -763,7 +769,9 @@ class tweakmotors(QMainWindow):
         w.signal.finished.connect(self.flydone2d)
         self.threadpool.start(w)
 
+
     def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname=""):
+        self.isStopScanIssued = False
         if self.ui.actionckTime_reset_before_scan.isChecked():
             s12softglue.ckTime_reset()
         motor = [xmotor, ymotor, phimotor]
@@ -783,9 +791,7 @@ class tweakmotors(QMainWindow):
         self.threadpool.start(w)
 
     def fly(self, motornumber=-1):
-        if self.ui.actionckTime_reset_before_scan.isChecked():
-            s12softglue.ckTime_reset()
-
+        self.isStopScanIssued = False
         if motornumber<0:
             pb = self.sender()
             objname = pb.objectName()
@@ -808,6 +814,7 @@ class tweakmotors(QMainWindow):
         self.threadpool.start(w)
 
     def stepscan(self, motornumber=-1):
+        self.isStopScanIssued = False
         if motornumber<0:
             pb = self.sender()
             objname = pb.objectName()
@@ -981,8 +988,10 @@ class tweakmotors(QMainWindow):
         n = ymotor+1
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
-        #tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
         step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+
+        maxexposuretime = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%(xmotor+1)).text())
+        epics.caput('12idc:scaler1.TP', maxexposuretime+5)
 
         if st>fe:
             step = -1*abs(step)
@@ -1007,24 +1016,31 @@ class tweakmotors(QMainWindow):
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 return
+            # try:
+            # except:
+            #     print("error epics")
             print()
-            print(f"Y position : {value}")
+            print(f"Y position : %0.3f" % value)
             t0 = time.time()
             self.pts.mv(axis, value)
+            ismoving = True
+            while ismoving:
+                ismoving = self.pts.ismoving(axis)
+            print("All motors are ready for fly scan.")
             # fly here
-            try:
-                self.fly0(xmotor)
-            except TimeoutError:
-                self.ui.progressBar.setValue(0)
-                self.ui.statusbar.showMessage("Detector Timeout Error !!!!!!")
-                break
+            self.fly0(xmotor)
+#            print("CCCC")
             self.flydone()
+            # try:
+            #epics.caput('12idc:scaler1.CNT', 0)
+            # except:
+            #     print("epics 2 error")
             t1 = time.time()
             while (time.time()-t1 < self.waittime_between_scans):
                 time.sleep(0.01)
             timeelapsed = time.time()-t0
             print(f"Remaining time for the current 2D scan is {np.round(timeelapsed*(len(pos)-i-1),2)}s")
-            self.ui.progressBar.setValue(np.round((i+1)/len(pos)*100))
+            self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
             #await save_softglue(self.pts.hexapod.pulse_number, self.softglue_channels,
             #                    self.working_folder, filename)
             #while self.isfly:
@@ -1038,23 +1054,29 @@ class tweakmotors(QMainWindow):
         self.signalmotorunit = self.motorunits[motornumber]
         self.rpos = []
         self.mpos = []
-        
-        print("")
-        isTestRun = self.ui.actionTestFly.isChecked()
-        if isTestRun:
-            print("**** Test Run:")
-        self.isfly = True
+        print("fly0 to start")
+        if self.ui.actionckTime_reset_before_scan.isChecked():
+            s12softglue.ckTime_reset()
         if self.ui.actionMemory_clear_before_scan.isChecked():
             try:
                 s12softglue.memory_clear()
             except TimeoutError:
                 print("softglue memory_clear timeout")
+
+        print("")
+        isTestRun = self.ui.actionTestFly.isChecked()
+        if isTestRun:
+            print("**** Test Run:")
+        self.isfly = True
+
         # disable fit menu
         self.ui.actionFit_QDS_phi.setEnabled(False)
 
         n = motornumber+1
 
+
         if not self.ui.cb_keepprevscan.isChecked():
+#            print("Clear plot")
             self.clearplot()
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
@@ -1064,7 +1086,6 @@ class tweakmotors(QMainWindow):
         except:
             step = 0.1
             self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText("%0.3f"%step)
-       
         pos = self.pts.get_pos(axis)
         if axis in self.pts.hexapod.axes:
             if self.ui.cb_reversescandir.isChecked():
@@ -1078,6 +1099,7 @@ class tweakmotors(QMainWindow):
 #            if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
 #                print("Running the fly scan with controller")
                 direction = int(step)/abs(step)
+#                print("Will set the traj up")
                 self.pts.hexapod.set_traj(axis, tm, fe-st, st, direction, abs(step), 50)
                 #expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
                 period = self.pts.hexapod.scantime/self.pts.hexapod.pulse_number
@@ -1092,7 +1114,10 @@ class tweakmotors(QMainWindow):
                     return
                 # set the delay generator
                 if expt != dg645_12ID._exposuretime:
-                    dg645_12ID.set_pilatus_fly(expt)
+                    try:
+                        dg645_12ID.set_pilatus_fly(expt)
+                    except:
+                        print("EEEEE")
                 N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
                 self.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
                 print(f"Total {self.countsperexposure} encoder positions will be collected per a shot.")
@@ -1104,16 +1129,46 @@ class tweakmotors(QMainWindow):
                         print(f"Exposure time set to %0.3f seconds for {det._prefix}."% expt)
                         try:
                             det.fly_ready(expt, self.pts.hexapod.pulse_number, period=period, isTest=isTestRun)
+#                            print("det is ready.")
                         except TimeoutError:
-                            msg = f"Detector, {det._prefix}, hasnt started yet."
+                            msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
                             print(msg)
                             self.ui.statusbar.showMessage(msg)
                             #showerror("Detector timeout.")
                             return
+#                print("Ready for traj")
+                pos = self.pts.get_pos(axis)
+#                print(f"pos is {pos} before traj run start.")
                 if not isTestRun:
-                    self.pts.hexapod.run_traj(axis)
-                while self.pts.ismoving(axis):
-                    time.sleep(0.01)
+                    self.pts.hexapod.goto_start_pos(axis)
+                    epics.caput('12idc:scaler1.CNT', 1)
+                    istraj_running = False
+                    timeout = 5
+                    i = 0
+                    while not istraj_running:
+                        try:
+                            self.pts.hexapod.run_traj(axis)
+                        except:
+                            pass
+                        time.sleep(0.25)
+                        istraj_running = self.is_traj_running()
+                        i = i+1
+                        if i>timeout:
+                            print("traj scan command is resent for 5 times to the hexapod without success.")
+                            break
+#                print("Run_traj is sent command in rungui.")
+                isattarget = False
+                while not isattarget:
+                    try:
+                        isattarget = self.pts.hexapod.isattarget(axis)
+                    except:
+                        isattarget = False
+                    #print("Waiting to be done...")
+                    time.sleep(0.1)
+                epics.caput('12idc:scaler1.CNT', 0)
+                pos = self.pts.get_pos(axis)
+#                print(f"pos is {pos} after the traj run done.")
+#                print("AAAA")
 
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD):
 #            if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD) or (axis != "X"):
@@ -1166,6 +1221,11 @@ class tweakmotors(QMainWindow):
             if det is not None:
                 det.ForceStop(2)
 
+    def is_traj_running(self):
+        if s12softglue.get_eventN() == 0:
+            return False
+        else:
+            return True
     def print_fly_settings(self, motornumber):
         print('')
         print("Currently, the flyscan only works for X axis of the hexapod.")
@@ -1314,8 +1374,9 @@ class tweakmotors(QMainWindow):
                     np.savetxt(filename, dt2, fmt="%1.8e %1.8e %i")
 #                    np.savetxt(filename, dt2, fmt="%1.8e %1.8e %1.8e")
                 except:
-                    print(target.shape, " encoded data")
-                    print(encoded.shape, " encoded data")
+                    print("Error in fly_result.")
+                    #print(target.shape, " encoded data")
+                    #print(encoded.shape, " encoded data")
                     #print(qds_data.shape, " qds data")
                 print("Done...")
     def clearplot(self):
@@ -1373,6 +1434,8 @@ class tweakmotors(QMainWindow):
         self.updatepos(axis)
     
     def update_qds(self):
+        if self.isfly:
+            return
         r = self.get_qds_pos()
 #        print(r)
         self.ui.lcd_X.display("%0.3f" % (r[0]))     

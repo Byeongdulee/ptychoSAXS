@@ -16,28 +16,28 @@ class sgz_pty(Device):
     index = 0
     def __init__(self, prefix = dmaPV):
         myattrs =list(self.attrs)
-        Device.__init__(self, prefix, delim='.', attrs=myattrs)
+        Device.__init__(self, prefix, delim='.', attrs=myattrs, timeout=10)
 #        self.add_pv('%s.VALA'%prefix, attr = 'VALA')
-        self.add_pv('%s.VALI'%prefix, attr = 'VALI')
-        self.add_pv('%s.VALJ'%prefix, attr = 'VALJ')
-        self.add_pv('%sEnable'%prefix, attr = 'Enable')
-        self.add_pv('%sBUFFER-1_IN_Signal'%self.SGpv, attr="buf_in1")
-        self.add_pv('%sBUFFER-2_IN_Signal'%self.SGpv, attr="buf_in2")
-        self.add_pv('%sBUFFER-4_IN_Signal'%self.SGpv, attr="buf_in4")
-        self.add_pv('%sAND-3_IN1_Signal'%self.SGpv, attr="in1")
-        self.add_pv('%sAND-4_IN1_Signal'%self.SGpv, attr="in2")
-        self.add_pv('%sFI1_Signal'%self.SGpv, attr="ch_input1")
+        self.add_pv('%s.VALI'%prefix, attr = 'VALI', timeout=10)
+        self.add_pv('%s.VALJ'%prefix, attr = 'VALJ', timeout=10)
+        self.add_pv('%sEnable'%prefix, attr = 'Enable', timeout=10)
+        self.add_pv('%sBUFFER-1_IN_Signal'%self.SGpv, attr="buf_in1", timeout=10)
+        self.add_pv('%sBUFFER-2_IN_Signal'%self.SGpv, attr="buf_in2", timeout=10)
+        self.add_pv('%sBUFFER-4_IN_Signal'%self.SGpv, attr="buf_in4", timeout=10)
+        self.add_pv('%sAND-3_IN1_Signal'%self.SGpv, attr="in1", timeout=10)
+        self.add_pv('%sAND-4_IN1_Signal'%self.SGpv, attr="in2", timeout=10)
+        self.add_pv('%sFI1_Signal'%self.SGpv, attr="ch_input1", timeout=10)
         #self.add_pv('%sFO1_Signal'%self.SGpv, attr="ch_output1")
         #self.add_pv('%sFO1_Signal'%self.SGpv, attr="ch_output2")
-        self.add_pv('%sDivByN-1_N'%self.SGpv, attr="div1")
-        self.add_pv('%sDivByN-2_N'%self.SGpv, attr="div2")
-        self.add_pv('%sDivByN-3_N'%self.SGpv, attr="div3")
-        self.add_pv('%sDivByN-1_CLOCK_Signal'%self.SGpv, attr="div1clock")
-        self.add_pv('%sDivByN-2_CLOCK_Signal'%self.SGpv, attr="div2clock")
-        self.add_pv('%sDivByN-3_CLOCK_Signal'%self.SGpv, attr="div3clock")
-        self.add_pv('%sUpDnCntr-1_CLEAR_Signal'%self.SGpv, attr="_clockreset")
-        self.add_pv('%sUpDnCntr-1_COUNTS'%self.SGpv, attr="ckTime")
-        self.add_pv('%sscalToStream-1_FLUSH_Signal'%self.SGpv, attr="_flush")
+        self.add_pv('%sDivByN-1_N'%self.SGpv, attr="div1", timeout=10)
+        self.add_pv('%sDivByN-2_N'%self.SGpv, attr="div2", timeout=10)
+        self.add_pv('%sDivByN-3_N'%self.SGpv, attr="div3", timeout=10)
+        self.add_pv('%sDivByN-1_CLOCK_Signal'%self.SGpv, attr="div1clock", timeout=10)
+        self.add_pv('%sDivByN-2_CLOCK_Signal'%self.SGpv, attr="div2clock", timeout=10)
+        self.add_pv('%sDivByN-3_CLOCK_Signal'%self.SGpv, attr="div3clock", timeout=10)
+        self.add_pv('%sUpDnCntr-1_CLEAR_Signal'%self.SGpv, attr="_clockreset", timeout=10)
+        self.add_pv('%sUpDnCntr-1_COUNTS'%self.SGpv, attr="ckTime", timeout=10)
+        self.add_pv('%sscalToStream-1_FLUSH_Signal'%self.SGpv, attr="_flush", timeout=10)
         self.Enable = 1
 
     def onChange(self, value, **kws):
@@ -95,18 +95,18 @@ class sgz_pty(Device):
     
     def ckTime_reset(self):
         ckT = self.ckTime
-        self._clockreset = "1!"
-        timeout = 1
+        timeout = 10
+        self.put('_clockreset', "1!", timeout=timeout)
         tm = time.time()
-        while self.ckTime>ckT:
-            time.sleep(0.001)
+        while self.get('ckTime', timeout=timeout)>ckT:
+            time.sleep(0.1)
             if time.time()-tm>timeout:
                 raise TimeoutError
     
     def memory_clear(self):
         self.D = 1
         self.PROC = 1
-        timeout = 1
+        timeout = 5
         tm = time.time()
         while self.get_eventN()>0:
             time.sleep(0.001)
@@ -115,7 +115,7 @@ class sgz_pty(Device):
 
     def buffer_clear(self):
         self.F = 1
-        timeout = 1
+        timeout = 5
         tm = time.time()
         while self.get_buffN()>0:
             time.sleep(0.001)
@@ -189,7 +189,9 @@ class sgz_pty(Device):
     
     def get_array(self, pos='B'):
         fieldname = f'VAL{pos}'
-        val = getattr(self, fieldname)
+        timeout = 10
+        i = 0
+        val = self.get(fieldname, timeout=10)
         return val
 
     def get_timearray(self):

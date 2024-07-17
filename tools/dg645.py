@@ -474,6 +474,15 @@ class dg645_12ID(SRSDG645):
         for each in range(self.instrument.__len__()):
             amp = self.instrument[each].level_amplitude
             print("\t%i:  %s\t: %s" % (each, self.instrument[each].name, amp))
+        print('Amplitudes Offset:')
+        for each in range(self.instrument.__len__()):
+            amp = self.instrument[each].level_offset
+            print("\t%i:  %s\t: %s" % (each, self.instrument[each].name, amp))
+        print('')
+        print('Pulse Width:')
+        for each in range(self.instrument.__len__()):
+            amp = self.instrument[each].pulsewidth
+            print("\t%i:  %s\t: %s" % (each, self.instrument[each].name, amp))
         print('')
         print('Polarities:')
         for each in range(self.instrument.__len__()):

@@ -48,11 +48,12 @@ class AD_Pilatus(Device):
 
     def CCD_waitstarted(self):
         t = time.time()
-        TIMEOUT = 2
+        TIMEOUT = 10
         while self.Armed == 0:
             self.Acquire = 1
-            time.sleep(0.01)
+            time.sleep(0.1)
             if abs(time.time()-t)>TIMEOUT:
+                print("CCD Arming timeout.")
                 raise TimeoutError
             
     def CCD_waitFileWriting(self):
