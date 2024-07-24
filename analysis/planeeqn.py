@@ -4,8 +4,8 @@ from scipy.optimize import curve_fit
 import sys
 
 R_cyl = 50 # radius of the cylinderical mirror in mm
-R_sensor = 45 # horizontal position of the vertical sensor in mm
-th_sensor = 72 # angle between the vertical sensor to the cradle X, degree
+R_sensor = 10 # horizontal position of the vertical sensor in mm
+th_sensor = -30 # angle between the vertical sensor to the cradle X, degree
 th_sensor = np.deg2rad(th_sensor)
 POSITION_UNIT_NM = 0
 POSITION_UNIT_UM = 1
@@ -29,7 +29,7 @@ def pol2cart(r, th):
     yc = r*np.sin(th)
     return xc, yc
 
-def fit_wobble(xdata, ydata):
+def fit_wobble(xdata, ydata, th0 = th_sensor, R = R_sensor):
     # input xdata should be in degree
     # input ydata should be in mm unit
     
@@ -40,11 +40,11 @@ def fit_wobble(xdata, ydata):
     bmi = -0.01
     bma = 0.01
 
-    popt, pcov = curve_fit(CylinderTopPlane, xdata, ydata, bounds=([ami,bmi,offmi, th_sensor-np.pi, R_sensor-2], 
-                                                            [ama, bma, offma, th_sensor+np.pi, R_sensor+2]))
+    popt, pcov = curve_fit(CylinderTopPlane, xdata, ydata, bounds=([ami,bmi,offmi, np.deg2rad(th0)-np.pi, R-2], 
+                                                            [ama, bma, offma, np.deg2rad(th0)+np.pi, R+2]))
     return popt, pcov
 
-def fit_eccentricity(xdata, ydata):
+def fit_eccentricity(xdata, ydata, R=R_cyl):
     # input xdata should be in degree
     # input ydata should be in mm unit
     
@@ -55,14 +55,14 @@ def fit_eccentricity(xdata, ydata):
     th0mi = -np.pi
     th0ma = np.pi
 
-    popt, pcov = curve_fit(CylinderSidePlane, xdata, ydata, bounds=([rmi,th0mi,offmi, R_cyl-0.01], 
-                                                            [rma, th0ma, offma, R_cyl+0.01]))
+    popt, pcov = curve_fit(CylinderSidePlane, xdata, ydata, bounds=([rmi,th0mi,offmi, R-0.01], 
+                                                            [rma, th0ma, offma, R+0.01]))
     return popt, pcov
 
 def get_wobble_fitcurve(x, popt):
     print(f"Tilt U to {-np.rad2deg(popt[1])} and V to {-np.rad2deg(popt[0])} degrees.")
     lbl = 'fit: a=%0.3e, b=%0.3e, \noff_set=%0.1f um, th0=%1.1f deg,\n R=%5.1fmm' % (popt[0],popt[1],
-                                                                                     popt[2]*1000,popt[3]*180/np.pi,
+                                                                                     popt[2]*1000, np.rad2deg(popt[3]),
                                                                                      popt[4])
     return CylinderTopPlane(x, *popt), lbl
 
@@ -70,7 +70,7 @@ def get_eccen_fitcurve(x, popt):
     xc, yc = pol2cart(popt[0], popt[1])
     print(f"xc is {xc}mm and yc is {yc} mm.")
     lbl = 'fit: xc=%0.2f um, yc=%0.2f um, \nr=%0.1f um, th=%0.1f deg, \noff_set=%0.1f um, Rc=%5.1fmm' % (xc*1000, yc*1000, 
-                                                                      popt[0]*1000,popt[1]*180/np.pi,
+                                                                      popt[0]*1000, np.rad2deg(popt[1]),
                                                                       popt[2]*1000, popt[3])
     return CylinderSidePlane(x, *popt), lbl
 

@@ -2107,6 +2107,7 @@
     <addaction name="actionSelect_units"/>
     <addaction name="actionSelect_QDS_for_X"/>
     <addaction name="actionSelect_QDS_for_Y"/>
+    <addaction name="actionSet_Interferometer_Param"/>
     <addaction name="separator"/>
     <addaction name="actionSelect_time_intervals"/>
     <addaction name="actionRun"/>
@@ -2412,6 +2413,11 @@
   <action name="actionSet_waittime_between_scans">
    <property name="text">
     <string>Set waittime between scans</string>
+   </property>
+  </action>
+  <action name="actionSet_Interferometer_Param">
+   <property name="text">
+    <string>Set Interferometer Param</string>
    </property>
   </action>
  </widget>
