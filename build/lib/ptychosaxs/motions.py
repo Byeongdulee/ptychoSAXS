@@ -86,7 +86,7 @@ class motors(object):
         self.mvx(target, relative=True)
 
     def ismoving(self, axis):
-        print("now in is moving")
+#        print("now in is moving")
         if axis == "phi":
             ismoving = not self.phi.in_position
         if axis in self.hexapod.axes:

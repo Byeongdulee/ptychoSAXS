@@ -13,5 +13,6 @@ setup(
        "acspy",
        "pyqudis",
        "pihexapod",
+       "py12inifunc",
    ],
 )
