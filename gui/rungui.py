@@ -43,6 +43,7 @@ dg645_12ID = dg645.dg645_12ID.open_from_uri(dg645.ADDRESS_12IDC)
 from tools.detectors import pilatus
 import re
 import analysis.planeeqn as eqn
+import py12inifunc
 
 from typing import List
 
@@ -53,6 +54,7 @@ QDS_UNIT_UM = 1
 QDS_UNIT_MM = 2
 QDS_UNIT_DEFAULT = QDS_UNIT_UM  # default QDS output is um
 DEFAULTS = {'xmotor':0, 'ymotor':1, 'phimotor':6}
+inifilename = "pty-co-saxs.ini"
 
 async def showerror(msg):
     dlg = QMessageBox()
@@ -151,11 +153,29 @@ class tweakmotors(QMainWindow):
         motornames = ['X', 'Y', 'Z', 'U', 'V', 'W', 'phi']
         motorunits = ['mm', 'mm', 'mm', 'deg', 'deg', 'deg', 'deg']
         self.hexapod_flymode = HEXAPOD_FLYMODE_STANDARD
-        self._qds_unit = QDS_UNIT_DEFAULT
-        self._qds_x_sensor = 0
-        self._qds_y_sensor = 1
+
         self.is_selfsaved = False
-        self.countsperexposure = 0
+        self.parameters = py12inifunc.ini(inifilename)
+        try:
+            self.parameters.readini()
+        except:
+            self.parameters._qds_unit = QDS_UNIT_DEFAULT
+            self.parameters._qds_x_sensor = 0
+            self.parameters._qds_y_sensor = 1
+            self.parameters.countsperexposure = 0
+            self.parameters.working_folder = ""
+            self.parameters._ref_X = 0
+            self.parameters._ref_Z = 0
+            self.parameters._ref_Z2 = 0
+            self.parameters._qds_time_interval = 0.1
+            self.parameters._waittime_between_scans = 1
+            self.parameters._qds_R_vert = 10.0 # 10mm
+            self.parameters._qds_th0_vert = -30.0 # degree
+            self.parameters._qds_R_cyl = 50.0 # mm
+            self.parameters.softglue_channels = ['B', 'C', 'D']
+        self.isscan = False
+        self.isfly = False
+
         if not hasattr(self.pts.gonio, 'channel_names'):
             self.pts.gonio.channel_names = [""]
             self.pts.gonio.units = [""]
@@ -260,7 +280,7 @@ class tweakmotors(QMainWindow):
         self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
         self.pts.signals.AxisNameSignal.connect(self.update_motorname)
         self.ui.actionTestFly.triggered.connect(self.scantest)
-        self.softglue_channels = ['B', 'C', 'D']
+        self.ui.ed_workingfolder.setText(self.parameters.working_folder)
         self.ui.ed_workingfolder.returnPressed.connect(self.update_workingfolder)
         self.ui.ed_scanname.returnPressed.connect(self.update_scanname)
         self.ui.actionSet_waittime_between_scans.triggered.connect(self.set_waittime_between_scans)
@@ -272,13 +292,7 @@ class tweakmotors(QMainWindow):
         self.rpos = []
         self.mpos = []
         self.threadpool = QThreadPool.globalInstance()
-        self.working_folder = ""
-        # qds
-        self.ref_X = 0
-        self.ref_Z = 0
-        self.ref_Z2 = 0
-        self.isscan = False
-        self.isfly = False
+
         self.ui.pb_resetx.clicked.connect(self.reset_qdsX)
         self.ui.pb_resetz.clicked.connect(self.reset_qdsZ)
         self.ui.pb_resetz_2.clicked.connect(self.reset_qdsZ2)
@@ -295,11 +309,6 @@ class tweakmotors(QMainWindow):
         self.ui.pb_recordz2_2.clicked.connect(lambda: self.record_qdsZ(5))
         self.ui.pb_recordz3_2.clicked.connect(lambda: self.record_qdsZ(6))
         self.ui.progressBar.setValue(0)
-        self._qds_time_interval = 0.1
-        self.waittime_between_scans = 1
-        self._qds_R_vert = 10.0 # 10mm
-        self._qds_th0_vert = -30.0 # degree
-        self._qds_R_cyl = 50.0 # mm
         # figure to plot
         # a figure instance to plot on
         self.figure = plt.figure()
@@ -348,31 +357,33 @@ class tweakmotors(QMainWindow):
 
     def set_interferometer_params(self):
         #dialog = InputDialog(labels=["R0 for the top sensor(mm)","th0 for the top sensor(mm)"])
-        value, okPressed = QInputDialog.getDouble(self, "The top sensor positions","R0 (mm):", self._qds_R_vert)
+        value, okPressed = QInputDialog.getDouble(self, "The top sensor positions","R0 (mm):", self.parameters._qds_R_vert)
         if okPressed:
-            self._qds_R_vert = value
-        value, okPressed = QInputDialog.getDouble(self, "The top sensor positions","th (deg):", self._qds_th0_vert, -360.0, 360.0, 2)
+            self.parameters._qds_R_vert = value
+        value, okPressed = QInputDialog.getDouble(self, "The top sensor positions","th (deg):", self.parameters._qds_th0_vert, -360.0, 360.0, 2)
         if okPressed:
-            self._qds_th0_vert = value
-        value, okPressed = QInputDialog.getDouble(self, "The horizontal sensor positions","R (mm):", self._qds_R_cyl)
+            self.parameters._qds_th0_vert = value
+        value, okPressed = QInputDialog.getDouble(self, "The horizontal sensor positions","R (mm):", self.parameters._qds_R_cyl)
         if okPressed:
-            self._qds_R_cyl = value
+            self.parameters._qds_R_cyl = value
+        self.parameters.writeini()
 
     def set_waittime_between_scans(self):
-        if hasattr(self, 'waittime_between_scans'):
-            wtime = self.waittime_between_scans
+        if hasattr(self, '_waittime_between_scans'):
+            wtime = self.parameters._waittime_between_scans
         else:
             wtime = 1.0
         value, okPressed = QInputDialog.getDouble(self, "How long stay idle between scans?","sleep time (s):", wtime)
         if okPressed:
-            self.waittime_between_scans = value
-            print(self.softglue_channels)
+            self.parameters._waittime_between_scans = value
+            print(self.parameters.softglue_channels)
 
     def update_workingfolder(self, folder=""):
         if len(folder) == 0:
-            self.working_folder = self.ui.ed_workingfolder.text()
+            self.parameters.working_folder = self.ui.ed_workingfolder.text()
+            self.parameters.writeini()
         else:
-            self.ui.ed_workingfolder.setText(self.working_folder)
+            self.ui.ed_workingfolder.setText(self.parameters.working_folder)
 
     def update_scanname(self):
         txt = self.ui.ed_scanname.text()
@@ -382,15 +393,15 @@ class tweakmotors(QMainWindow):
 
     def choose_softglue_channels(self):
         strv = ''
-        for i, ch in enumerate(self.softglue_channels):
+        for i, ch in enumerate(self.parameters.softglue_channels):
             if i==0:
                 strv = ch
             else:
                 strv = "%s, %s"% (strv, ch)
         text, okPressed = QInputDialog.getText(self, "Channels of SoftGlueZinq to Record","Channels:", QLineEdit.Normal, strv)
         if okPressed:
-            self.softglue_channels = [x.strip() for x in text.split(',')]
-            print(self.softglue_channels)
+            self.parameters.softglue_channels = [x.strip() for x in text.split(',')]
+#            print(self.parameters.softglue_channels)
 
     def reset_det_flymode(self):
         for det in self.detector:
@@ -441,25 +452,29 @@ class tweakmotors(QMainWindow):
         text, ok = QInputDialog().getItem(self, "Select QDS units",
                                             "Units:", ('nm', 'um', 'mm'), current=1, editable=False)
         if text =="nm":
-            self._qds_unit = QDS_UNIT_NM
+            self.parameters._qds_unit = QDS_UNIT_NM
         if text =="um":
-            self._qds_unit = QDS_UNIT_UM
+            self.parameters._qds_unit = QDS_UNIT_UM
         if text =="mm":
-            self._qds_unit = QDS_UNIT_MM
+            self.parameters._qds_unit = QDS_UNIT_MM
+        self.parameters.writeini()
     
     def select_timeintervals(self):
-        val, ok = QInputDialog().getDouble(self, "QDS acqusition time intervals", "time intervals(s)", self._qds_time_interval)
-        self._qds_time_interval = val
+        val, ok = QInputDialog().getDouble(self, "QDS acqusition time intervals", "time intervals(s)", self.parameters._qds_time_interval)
+        self.parameters._qds_time_interval = val
+        self.parameters.writeini()
 
     def select_qds_x(self):
         text, ok = QInputDialog().getItem(self, "Select QDS units",
-                                            "Units:", ('0', '1', '2'), current=1, editable=False)
-        self._qds_x_sensor = int(text)
+                                            "Units:", ('0', '1', '2'), current=self.parameters._qds_x_sensor, editable=False)
+        self.parameters._qds_x_sensor = int(text)
+        self.parameters.writeini()
 
     def select_qds_y(self):
         text, ok = QInputDialog().getItem(self, "Select QDS units",
-                                            "Units:", ('0', '1', '2'), current=1, editable=False)
-        self._qds_y_sensor = int(text)
+                                            "Units:", ('0', '1', '2'), current=self.parameters._qds_y_sensor, editable=False)
+        self.parameters._qds_y_sensor = int(text)
+        self.parameters.writeini()
 
     def scantest(self):
         if self.ui.actionTestFly.isChecked():
@@ -470,8 +485,8 @@ class tweakmotors(QMainWindow):
     def fit_wobble_eccentricity(self):
         tp = np.asarray(self.mpos)
         rp = np.asarray(self.rpos)
-        self.fitdata(xd=tp, yd=rp[:,self._qds_x_sensor], dtype="eccent")
-        self.fitdata(xd=tp, yd=rp[:,self._qds_y_sensor], dtype="wob")
+        self.fitdata(xd=tp, yd=rp[:,self.parameters._qds_x_sensor], dtype="eccent")
+        self.fitdata(xd=tp, yd=rp[:,self.parameters._qds_y_sensor], dtype="wob")
 
     def loadscan(self):
         w = QWidget()
@@ -482,17 +497,17 @@ class tweakmotors(QMainWindow):
         filename = fn[0]
         if filename == "":
             return 0
-        self.fitdata(filename=filename, datacolumn=self._qds_x_sensor+1, dtype="eccent")
-        self.fitdata(filename=filename, datacolumn=self._qds_y_sensor+1, dtype="wob")
+        self.fitdata(filename=filename, datacolumn=self.parameters._qds_x_sensor+1, dtype="eccent")
+        self.fitdata(filename=filename, datacolumn=self.parameters._qds_y_sensor+1, dtype="wob")
 
         self.canvas.draw()
 
     def fitdata(self, filename="", datacolumn=2, xd = [], yd = [], dtype="wobble"):
-        if self._qds_unit == QDS_UNIT_MM:
+        if self.parameters._qds_unit == QDS_UNIT_MM:
             eqn.POSITION_UNIT = eqn.POSITION_UNIT_MM
-        if self._qds_unit == QDS_UNIT_UM:
+        if self.parameters._qds_unit == QDS_UNIT_UM:
             eqn.POSITION_UNIT = eqn.POSITION_UNIT_UM
-        if self._qds_unit == QDS_UNIT_NM:
+        if self.parameters._qds_unit == QDS_UNIT_NM:
             eqn.POSITION_UNIT = eqn.POSITION_UNIT_NM
         if len(filename)>0:
             xd, yd = eqn.loadata(filename=filename, datacolumn=datacolumn)
@@ -500,11 +515,11 @@ class tweakmotors(QMainWindow):
             xd, yd = eqn.loadata(xdata=xd, ydata=yd)
 
         if dtype in "eccentricity":
-            popt, pconv = eqn.fit_eccentricity(xd, yd, R=self._qds_R_cyl)
+            popt, pconv = eqn.fit_eccentricity(xd, yd, R=self.parameters._qds_R_cyl)
             cv, lb = eqn.get_eccen_fitcurve(xd, popt)
             self.plotfits(xd, yd, cv, lb, ax=1)    
         if dtype in "wobble":
-            popt, pconv = eqn.fit_wobble(xd, yd, th0=self._qds_th0_vert, R=self._qds_R_vert)
+            popt, pconv = eqn.fit_wobble(xd, yd, th0=self.parameters._qds_th0_vert, R=self.parameters._qds_R_vert)
             cv, lb = eqn.get_wobble_fitcurve(xd, popt)
             self.plotfits(xd, yd, cv, lb, ax=2) 
 
@@ -649,12 +664,12 @@ class tweakmotors(QMainWindow):
         timeout = 5
         ct0 = time.time()
 
-        while s12softglue.VALI<N_cnt*self.countsperexposure:
+        while s12softglue.VALI<N_cnt*self.parameters.countsperexposure:
             if (time.time()-ct0 > timeout):
                 print("timeout")
                 break
             time.sleep(0.1)
-        t, dt = s12softglue.get_arrays(self.softglue_channels)
+        t, dt = s12softglue.get_arrays(self.parameters.softglue_channels)
         filename = ""
         for det in self.detector:
             if det is not None:
@@ -861,7 +876,7 @@ class tweakmotors(QMainWindow):
             self.rpos.append([r[0], r[1], r[2]])
             t = time.time()-self.t0
             self.mpos.append(t)
-            time.sleep(self._qds_time_interval)
+            time.sleep(self.parameters._qds_time_interval)
             if len(self.mpos)>N_selfsave_points:
                 self.save_qds(self.tempfilename, "a")
                 k = k + 1
@@ -875,10 +890,10 @@ class tweakmotors(QMainWindow):
             r, a = self.pts.qds.get_position()
             r = r[0]
         else:
-            r = self.pts.qds.get_position(self.softglue_channels)
+            r = self.pts.qds.get_position(self.parameters.softglue_channels)
 
         if isrefavailable:
-            r = [r[0]/1000-self.ref_X, r[1]/1000-self.ref_Z, r[2]/1000-self.ref_Z2]
+            r = [r[0]/1000-self.parameters._ref_X, r[1]/1000-self.parameters._ref_Z, r[2]/1000-self.parameters._ref_Z2]
         else:
             r = [r[0]/1000, r[1]/1000, r[2]/1000]
         return r
@@ -1037,13 +1052,13 @@ class tweakmotors(QMainWindow):
             # except:
             #     print("epics 2 error")
             t1 = time.time()
-            while (time.time()-t1 < self.waittime_between_scans):
+            while (time.time()-t1 < self.parameters._waittime_between_scans):
                 time.sleep(0.01)
             timeelapsed = time.time()-t0
             print(f"Remaining time for the current 2D scan is {np.round(timeelapsed*(len(pos)-i-1),2)}s")
             self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
             #await save_softglue(self.pts.hexapod.pulse_number, self.softglue_channels,
-            #                    self.working_folder, filename)
+            #                    self.parameters.working_folder, filename)
             #while self.isfly:
             #    time.sleep(0.02)
 #            filename = "%s%0.3d"%(scanname, i)
@@ -1120,8 +1135,8 @@ class tweakmotors(QMainWindow):
                     except:
                         print("EEEEE")
                 N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
-                self.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
-                print(f"Total {self.countsperexposure} encoder positions will be collected per a shot.")
+                self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
+                print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a shot.")
                 if N_counts>100000:
                     print(f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed.")
 
@@ -1278,9 +1293,9 @@ class tweakmotors(QMainWindow):
             filename = filename + ".txt"
         d = os.path.dirname(filename)
         if len(d) == 0:
-            filename = os.path.join(self.working_folder, filename)
+            filename = os.path.join(self.parameters.working_folder, filename)
         else:
-            self.working_folder = d
+            self.parameters.working_folder = d
         return filename
     
     def save_qds(self, filename = '', saveoption = "w"):
@@ -1294,11 +1309,11 @@ class tweakmotors(QMainWindow):
         if len(fn) == 0:
             filename = self.getfilename()
         # data unit and data
-        if self._qds_unit == QDS_UNIT_MM:
+        if self.parameters._qds_unit == QDS_UNIT_MM:
             self.rpos = self.rpos/1E3
-        if self._qds_unit == QDS_UNIT_UM:
+        if self.parameters._qds_unit == QDS_UNIT_UM:
             pass
-        if self._qds_unit == QDS_UNIT_NM:
+        if self.parameters._qds_unit == QDS_UNIT_NM:
             self.rpos = self.rpos*1E3
         self.save_list(filename, self.mpos, self.rpos, col=[0,1,2], option=saveoption)
         #self.pts.savedata(filename, self.mpos, self.rpos, col=[0,1,2])
@@ -1336,9 +1351,9 @@ class tweakmotors(QMainWindow):
             filename = filename + ".txt"
         d = os.path.dirname(filename)
         if len(d) == 0:
-            filename = os.path.join(self.working_folder, filename)
+            filename = os.path.join(self.parameters.working_folder, filename)
         else:
-            self.working_folder = d
+            self.parameters.working_folder = d
         # rea
         data = self.pts.hexapod.get_records()
         #print("Done.. Preparing to plot.")
@@ -1455,18 +1470,21 @@ class tweakmotors(QMainWindow):
 
     def reset_qdsX(self):
         r = self.get_qds_pos(False)
-        self.ref_X = r[0]
-        #self.ref_X = self.ui.lcd_X.value()  
+        self.parameters._ref_X = r[0]
+        self.parameters.writeini()
+        #self.parameters._ref_X = self.ui.lcd_X.value()  
 
     def reset_qdsZ(self):
         r = self.get_qds_pos(False)
-        self.ref_Z = r[1]
-#        self.ref_Z = self.ui.lcd_Z.value()
+        self.parameters._ref_Z = r[1]
+        self.parameters.writeini()
+#        self.parameters._ref_Z = self.ui.lcd_Z.value()
 
     def reset_qdsZ2(self):
         r = self.get_qds_pos(False)
-        self.ref_Z2 = r[2]
-#        self.ref_Z = self.ui.lcd_Z.value()
+        self.parameters._ref_Z2 = r[2]
+        self.parameters.writeini()
+#        self.parameters._ref_Z = self.ui.lcd_Z.value()
 
     def record_qdsX(self, value):
         txt = str(self.ui.lcd_X.value())
@@ -1614,8 +1632,8 @@ class tweakmotors(QMainWindow):
             except:
                 pass
         elif cmd == "setfolder":
-            self.working_folder = folder
-            self.update_workingfolder(self.working_folder)
+            self.parameters.working_folder = folder
+            self.update_workingfolder(self.parameters.working_folder)
         else:
             print(f"Invalid command {cmd} is recieved.")
 
