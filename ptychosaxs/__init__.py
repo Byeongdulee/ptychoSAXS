@@ -1,1 +1,1 @@
-from .ptychosaxs import ptychosaxs as pts
+from .ptychosaxs2 import ptychosaxs as pts
