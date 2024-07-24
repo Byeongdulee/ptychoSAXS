@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 
 class instruments(motors):
     def __init__(self):
+        motors.__init__(self)
         self.qds = qds
 
     def disconnect(self):
@@ -141,5 +142,3 @@ class instruments(motors):
         plt.ylabel('Positions (um)')
         plt.xlabel(f"Time (/{data['Sample Time']} s)")
         plt.show()
-
-ptychosaxs = instruments()

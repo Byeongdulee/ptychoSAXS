@@ -23,7 +23,8 @@ import time
 
 sys.path.append('..')
 
-from ptychosaxs import pts
+from ptychosaxs import instruments
+pts = instruments()
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -293,12 +294,12 @@ class tweakmotors(QMainWindow):
         self.ui.pb_recordz1_2.clicked.connect(lambda: self.record_qdsZ(4))
         self.ui.pb_recordz2_2.clicked.connect(lambda: self.record_qdsZ(5))
         self.ui.pb_recordz3_2.clicked.connect(lambda: self.record_qdsZ(6))
-        
+        self.ui.progressBar.setValue(0)
         self._qds_time_interval = 0.1
         self.waittime_between_scans = 1
-        self._qds_R_vert = 10 # 10mm
-        self._qds_th0_vert = -30 # degree
-        self._qds_R_cyl = 50 # mm
+        self._qds_R_vert = 10.0 # 10mm
+        self._qds_th0_vert = -30.0 # degree
+        self._qds_R_cyl = 50.0 # mm
         # figure to plot
         # a figure instance to plot on
         self.figure = plt.figure()
@@ -347,14 +348,13 @@ class tweakmotors(QMainWindow):
 
     def set_interferometer_params(self):
         #dialog = InputDialog(labels=["R0 for the top sensor(mm)","th0 for the top sensor(mm)"])
-        value, okPressed = QInputDialog.getDouble(self, "The top sensor positions","R0 (mm):", QLineEdit.Normal, self._qds_R_vert)
+        value, okPressed = QInputDialog.getDouble(self, "The top sensor positions","R0 (mm):", self._qds_R_vert)
         if okPressed:
             self._qds_R_vert = value
-        value, okPressed = QInputDialog.getDouble(self, "The top sensor positions","th (deg):", QLineEdit.Normal, self._qds_th0_vert)
+        value, okPressed = QInputDialog.getDouble(self, "The top sensor positions","th (deg):", self._qds_th0_vert, -360.0, 360.0, 2)
         if okPressed:
             self._qds_th0_vert = value
-            print(f"th angle of the top sensor is at {self._qds_th0_vert} degree.")
-        value, okPressed = QInputDialog.getDouble(self, "The horizontal sensor positions","R (mm):", QLineEdit.Normal, self._qds_R_cyl)
+        value, okPressed = QInputDialog.getDouble(self, "The horizontal sensor positions","R (mm):", self._qds_R_cyl)
         if okPressed:
             self._qds_R_cyl = value
 
@@ -363,7 +363,7 @@ class tweakmotors(QMainWindow):
             wtime = self.waittime_between_scans
         else:
             wtime = 1.0
-        value, okPressed = QInputDialog.getDouble(self, "How long stay idle between scans?","sleep time (s):", QLineEdit.Normal, wtime)
+        value, okPressed = QInputDialog.getDouble(self, "How long stay idle between scans?","sleep time (s):", wtime)
         if okPressed:
             self.waittime_between_scans = value
             print(self.softglue_channels)
@@ -918,6 +918,7 @@ class tweakmotors(QMainWindow):
                 step = -step
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step/2, step)
+        self.ui.progressBar.setValue(0)
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 return
@@ -926,6 +927,7 @@ class tweakmotors(QMainWindow):
             self.rpos.append([r[0], r[1], r[2]])
             #pos = self.get_motorpos(self.signalmotor)
             self.mpos.append(value)
+            self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
 
     def fly3d0(self, xmotor=0, ymotor=1, phimotor=6, scanname = ""):
         # xmotor is for flying

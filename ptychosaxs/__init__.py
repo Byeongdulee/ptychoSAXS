@@ -1,1 +1,2 @@
-from .ptychosaxs2 import ptychosaxs as pts
+from .motions import motors
+from .ptychosaxs import instruments
