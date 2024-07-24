@@ -15,8 +15,8 @@ import json
 import epics
 
 from PyQt5 import uic, QtCore, QtGui
-from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget
-from PyQt5.QtWidgets import QLabel, QLineEdit, QMessageBox, QInputDialog
+from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget, QFormLayout
+from PyQt5.QtWidgets import QLabel, QLineEdit, QMessageBox, QInputDialog, QDialog, QDialogButtonBox
 from PyQt5.QtCore import QTimer, QObject, pyqtSlot, pyqtSignal, QRunnable, QThreadPool, QSize
 
 import time
@@ -43,6 +43,8 @@ from tools.detectors import pilatus
 import re
 import analysis.planeeqn as eqn
 
+from typing import List
+
 HEXAPOD_FLYMODE_WAVELET = 0
 HEXAPOD_FLYMODE_STANDARD = 1
 QDS_UNIT_NM = 0
@@ -60,44 +62,25 @@ async def showerror(msg):
     result = dlg.exec_()
     return result
 
-async def save_softglue(self, N_pulse =0, channels=['B', 'E', 'F'], foldername="", filename=""):
-        # read softglue data
-    if len(foldername) == 0:
-        return
-        #foldername = os.getcwd()
-    N_cnt = N_pulse
-#    if hasattr(self.pts.hexapod, "pulse_number"):
-#        N_cnt = self.pts.hexapod.pulse_number
-    t = []
-    asyncio.sleep(0.5)
-    timeout = 5
-    ct0 = asyncio.time()
-    while len(t)<N_cnt:
-        try:
-            t, dt = s12softglue.get_arrays(channels)
-        except:
-            t = []
-        #print(f"length of t is {len(t)}, and N_pulses is {N_cnt}")
-        if (asyncio.time()-ct0 > timeout):
-            print("timeout")
-            break
-        asyncio.sleep(0.5)
-#    filename = ""
-    for det in self.detector:
-        if det is not None:
-#            fn = det.File_FullFileName_RBV
-#            fn = fn.tobytes()
-#            filename = os.path.basename(fn.decode('utf-8')).rstrip('\x00')
-            filename = filename.rstrip('.h5')
-    if len(filename) ==0:
-        print("****** Error: No detector was triggered.")
-        return
-    else:
-        print(f"Total {len(t)} data will be saved under {foldername}.")
-    for i, td in enumerate(t):
-        scanname = '%s_%i.dat' % (filename, i)
-        dt2 = np.column_stack((td, dt[0][i], dt[1][i], dt[2][i]))
-        np.savetxt(os.path.join(foldername, scanname), dt2, fmt="%1.8e %1.8e %1.8e %1.8e")
+class InputDialog(QDialog):
+    def __init__(self, labels:List[str], parent=None):
+        super().__init__(parent)
+        
+        buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        layout = QFormLayout(self)
+        
+        self.inputs = []
+        for lab in labels:
+            self.inputs.append(QLineEdit(self))
+            layout.addRow(lab, self.inputs[-1])
+        
+        layout.addWidget(buttonBox)
+        
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+    
+    def getInputs(self):
+        return tuple(input.text() for input in self.inputs)
 
 class workerSignals(QObject):
     finished = pyqtSignal(bool)
@@ -249,6 +232,7 @@ class tweakmotors(QMainWindow):
         self.ui.actionSave_flyscan_result.triggered.connect(self.fly_result)
         self.ui.actionFit_QDS_phi.setEnabled(False)
         self.ui.actionFit_QDS_phi.triggered.connect(self.fit_wobble_eccentricity)
+        self.ui.actionSet_Interferometer_Param.triggered.connect(self.set_interferometer_params)
         self.ui.actionLoad_eccentricity_data.triggered.connect(self.load_plot_eccentricity)
         self.ui.actionLoad_wobble_data.triggered.connect(self.load_plot_wobble)
         self.ui.actionSave_scan.triggered.connect(self.savescan)
@@ -312,7 +296,9 @@ class tweakmotors(QMainWindow):
         
         self._qds_time_interval = 0.1
         self.waittime_between_scans = 1
-
+        self._qds_R_vert = 10 # 10mm
+        self._qds_th0_vert = -30 # degree
+        self._qds_R_cyl = 50 # mm
         # figure to plot
         # a figure instance to plot on
         self.figure = plt.figure()
@@ -358,6 +344,19 @@ class tweakmotors(QMainWindow):
             self.timer.start(100)        
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
+
+    def set_interferometer_params(self):
+        #dialog = InputDialog(labels=["R0 for the top sensor(mm)","th0 for the top sensor(mm)"])
+        value, okPressed = QInputDialog.getDouble(self, "The top sensor positions","R0 (mm):", QLineEdit.Normal, self._qds_R_vert)
+        if okPressed:
+            self._qds_R_vert = value
+        value, okPressed = QInputDialog.getDouble(self, "The top sensor positions","th (deg):", QLineEdit.Normal, self._qds_th0_vert)
+        if okPressed:
+            self._qds_th0_vert = value
+            print(f"th angle of the top sensor is at {self._qds_th0_vert} degree.")
+        value, okPressed = QInputDialog.getDouble(self, "The horizontal sensor positions","R (mm):", QLineEdit.Normal, self._qds_R_cyl)
+        if okPressed:
+            self._qds_R_cyl = value
 
     def set_waittime_between_scans(self):
         if hasattr(self, 'waittime_between_scans'):
@@ -501,11 +500,11 @@ class tweakmotors(QMainWindow):
             xd, yd = eqn.loadata(xdata=xd, ydata=yd)
 
         if dtype in "eccentricity":
-            popt, pconv = eqn.fit_eccentricity(xd, yd)
+            popt, pconv = eqn.fit_eccentricity(xd, yd, R=self._qds_R_cyl)
             cv, lb = eqn.get_eccen_fitcurve(xd, popt)
             self.plotfits(xd, yd, cv, lb, ax=1)    
         if dtype in "wobble":
-            popt, pconv = eqn.fit_wobble(xd, yd)
+            popt, pconv = eqn.fit_wobble(xd, yd, th0=self._qds_th0_vert, R=self._qds_R_vert)
             cv, lb = eqn.get_wobble_fitcurve(xd, popt)
             self.plotfits(xd, yd, cv, lb, ax=2) 
 
