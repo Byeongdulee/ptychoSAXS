@@ -138,6 +138,32 @@ class mover(QRunnable):
         self.pts.mvr(self.axis, self.pos)
         self.signal.finished.emit(True)
 
+## shutter stuff.. Could be eventually separated out.
+def open_shutter(self):
+    epics.caput('12ida2:rShtrC:Open', 1)
+
+def close_shutter(self):
+    epics.caput('12ida2:rShtrC:Open', 0)
+
+
+class beamstatus(QObject):
+    onChange = QtCore.pyqtSignal()
+    def __init__(self):
+        self.shutter_val = epics.PV('PB:12ID:STA_C_SCS_CLSD_PL.VAL', callback=self.checkshutter)
+        self.shutter = epics.PV('12ida2:rShtrC:Open')
+
+    def checkshutter(self, value, **kws):
+        if value == 0:
+            self.signal.onChange.emit(False)
+        if value == 1:
+            self.signal.onChange.emit(True)
+
+    def open_shutter(self):
+        self.shutter.put(1)
+
+    def close_shutter(self):
+        self.shutter.put(0)
+
 class tweakmotors(QMainWindow):
 #    resized = QtCore.pyqtSignal()
 
@@ -284,6 +310,7 @@ class tweakmotors(QMainWindow):
         self.ui.ed_workingfolder.returnPressed.connect(self.update_workingfolder)
         self.ui.ed_scanname.returnPressed.connect(self.update_scanname)
         self.ui.actionSet_waittime_between_scans.triggered.connect(self.set_waittime_between_scans)
+        self.ui.actionMonitor_Beamline_Status.triggered.connect(self.set_monitor_beamline_status)
         if os.name != 'nt':
             self.ui.menuQDS.setDisabled(True)
         # set default softglue collection freq. 10 micro seconds.
@@ -309,6 +336,11 @@ class tweakmotors(QMainWindow):
         self.ui.pb_recordz2_2.clicked.connect(lambda: self.record_qdsZ(5))
         self.ui.pb_recordz3_2.clicked.connect(lambda: self.record_qdsZ(6))
         self.ui.progressBar.setValue(0)
+
+        ## shutter control
+#        self.shutter_status = epics.PV('12idc:scaler1.CNT', callback=self.checkshutter) # to test.
+        self.shutter_status = epics.PV('PB:12ID:STA_C_SCS_CLSD_PL.VAL', callback=self.checkshutter)
+
         # figure to plot
         # a figure instance to plot on
         self.figure = plt.figure()
@@ -354,6 +386,32 @@ class tweakmotors(QMainWindow):
             self.timer.start(100)        
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
+
+    def set_monitor_beamline_status(self):
+        if self.ui.actionMonitor_Beamline_Status.isChecked():
+            self.ui.actionMonitor_Beamline_Status.setChecked(True)
+        else:
+            self.ui.actionMonitor_Beamline_Status.setChecked(False)
+
+    def checkshutter(self, value, **kws):
+        if not self.ui.actionMonitor_Beamline_Status.isChecked():
+            return
+        shutter_events = {"time":time.time(), "state": value}
+        #print(f"Value of the shutter is {value}")
+        if value==0:
+            self.isOK2run = False
+            self.run_hold(shutter_events)
+        else:
+            self.isOK2run = True
+
+    def run_hold(self, sevnt):
+        print("run hold executed. This will hold the scan.")
+        self.shutter_events = sevnt
+        while self.isOK2run==False:
+            time.sleep(10)
+        
+    def run_resume(self):
+        pass
 
     def set_interferometer_params(self):
         #dialog = InputDialog(labels=["R0 for the top sensor(mm)","th0 for the top sensor(mm)"])

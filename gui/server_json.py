@@ -19,6 +19,7 @@ class UDPserver(QtCore.QObject):
         super().__init__(parent)
         self._transport = None
         self._counter_message = 0
+        print("UDP Sever Connected...")
 
     @property
     def transport(self):
