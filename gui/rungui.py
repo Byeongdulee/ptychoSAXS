@@ -1510,7 +1510,11 @@ class tweakmotors(QMainWindow):
     def update_qds(self):
         if self.isfly:
             return
-        r = self.get_qds_pos()
+        try:
+            r = self.get_qds_pos()
+        except:
+            print("QDS does not work.")
+            return
 #        print(r)
         self.ui.lcd_X.display("%0.3f" % (r[0]))     
         self.ui.lcd_Z.display("%0.3f" % (r[1]))
