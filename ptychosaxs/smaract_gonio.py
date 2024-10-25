@@ -178,8 +178,12 @@ print("SmarActCTL library version: '{}'.".format(version))
 smaractstage = 'network:sn:MCS2-00012316'
 try:
     buffer = ctl.FindDevices()
+    print("")
     if not (smaractstage in buffer):
         print("MCS2 no devices found.")
+    print("MCS2 is found.")
+    print(buffer)
+    print("")
 except:
     pass
 

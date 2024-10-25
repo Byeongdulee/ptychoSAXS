@@ -44,12 +44,16 @@ class motorSignals(QObject):
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+from epics import Motor
 
 class motors(object):
     def __init__(self):
         self.hexapod = hexapod
         self.phi = phi
         self.gonio = gonio
+        self.newport_piezo[0] = Motor("12idcUC8:m1")
+        self.newport_piezo[1] = Motor("12idcUC8:m3")
+        self.newport_piezo[2] = Motor("12idcUC8:m5")
         self.signals = motorSignals()
 
     def commutate_phi(self):
