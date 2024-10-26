@@ -711,6 +711,7 @@ class tweakmotors(QMainWindow):
         self.pts.set_speed(self.pts.hexapod.axes[0], 5, None)
 
     def scandone(self, value):
+        print("scan done 0000")
         self.isscan = False
         self.updatepos()
         self.plot()
