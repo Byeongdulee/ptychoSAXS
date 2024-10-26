@@ -51,9 +51,10 @@ class motors(object):
         self.hexapod = hexapod
         self.phi = phi
         self.gonio = gonio
-        self.newport_piezo[0] = Motor("12idcUC8:m1")
-        self.newport_piezo[1] = Motor("12idcUC8:m3")
-        self.newport_piezo[2] = Motor("12idcUC8:m5")
+        self.newport_piezo = []
+        self.newport_piezo.append(Motor("12idcUC8:m1"))
+        self.newport_piezo.append(Motor("12idcUC8:m3"))
+        self.newport_piezo.append(Motor("12idcUC8:m5"))
         self.signals = motorSignals()
 
     def commutate_phi(self):
@@ -92,7 +93,13 @@ class motors(object):
     def ismoving(self, axis):
 #        print("now in is moving")
         if 'newport_piezo' in axis:
-            dmov = self.newport_piezo[axis].get('DMOV')
+            if axis == "newport_piezo1":
+                n = 0
+            if axis == "newport_piezo3":
+                n = 1
+            if axis == "newport_piezo5":
+                n = 2
+            dmov = self.newport_piezo[n].get('DMOV')
             if dmov==0:
                 ismoving = True
             if dmov==1:
@@ -109,7 +116,14 @@ class motors(object):
     def get_pos(self, axis):
         #print(axis, " this is the name of axis")
         if 'newport_piezo' in axis:
-            pos = self.newport_piezo[axis].get('RBV')
+            if axis == "newport_piezo1":
+                n = 0
+            if axis == "newport_piezo3":
+                n = 1
+            if axis == "newport_piezo5":
+                n = 2
+            pos = self.newport_piezo[n].get('VAL')
+            return pos
         if axis == "phi":
             return float(self.posphi)
         if axis in self.hexapod.axes:
@@ -133,12 +147,24 @@ class motors(object):
                     ismoving = self.ismoving(axis)
                     time.sleep(0.01)
         if 'newport_piezo' in axis:
-            self.newport_piezo[axis].move(target)
+            if axis == "newport_piezo1":
+                n = 0
+            if axis == "newport_piezo3":
+                n = 1
+            if axis == "newport_piezo5":
+                n = 2
+            print(n, " in newport_piezo")
+            self.newport_piezo[n].move(target)
+            isstarted = False
+            if not isstarted:
+                isstarted = self.ismoving(axis)
+                time.sleep(0.01)
+
             if wait:
                 ismoving = True
                 time.sleep(0.01)
                 while ismoving:
-                    self.signals.AxisPosSignal.emit(self.newport_piezo[axis].RBV)
+                    self.signals.AxisPosSignal.emit(self.newport_piezo[n].VAL)
                     ismoving = self.ismoving(axis)
                     time.sleep(0.01)
 
@@ -182,12 +208,18 @@ class motors(object):
                     ismoving = b['moving']
                     time.sleep(0.02)
         if 'newport_piezo' in axis:
-            self.newport_piezo[axis].move(self.get_pos(axis) + target)
+            if axis == "newport_piezo1":
+                n = 0
+            if axis == "newport_piezo3":
+                n = 1
+            if axis == "newport_piezo5":
+                n = 2
+            self.newport_piezo[n].move(self.get_pos(axis) + target)
             if wait:
                 ismoving = True
                 time.sleep(0.01)
                 while ismoving:
-                    self.signals.AxisPosSignal.emit(self.newport_piezo[axis].RBV)
+                    self.signals.AxisPosSignal.emit(self.newport_piezo[n].VAL)
                     ismoving = self.ismoving(axis)
                     time.sleep(0.01)                    
         if axis in self.hexapod.axes:
@@ -218,7 +250,13 @@ class motors(object):
 
     def get_speed(self, axis):
         if 'newport_piezo' in axis:
-            return self.newport_piezo[axis].get('VBAS')
+            if axis == "newport_piezo1":
+                n = 0
+            if axis == "newport_piezo3":
+                n = 1
+            if axis == "newport_piezo5":
+                n = 2
+            return self.newport_piezo[n].get('VBAS')
         if axis == "phi":
             return self.phi.vel, self.phi.acc
         if axis in self.hexapod.axes:
@@ -230,7 +268,13 @@ class motors(object):
     
     def set_speed(self, axis, vel=1, acc=1):
         if 'newport_piezo' in axis:
-            self.newport_piezo[axis].put('VBAS', vel)
+            if axis == "newport_piezo1":
+                n = 0
+            if axis == "newport_piezo3":
+                n = 1
+            if axis == "newport_piezo5":
+                n = 2
+            self.newport_piezo[n].put('VBAS', vel)
         if axis == "phi":
             self.phi.vel = vel
             self.phi.acc = acc
@@ -250,6 +294,10 @@ class motors(object):
         #self.phi = Axis(acscontroller, 0)
     
     def isconnected(self, axis = 'X'):
+        #print(axis, " This is in motions.py")
+        if "newport" in axis:
+        #    print(axis, " 22222 This is in motions.py")
+            return True
         if axis in self.gonio.channel_names:
             ax = self.gonio.channel_names.index(axis)
             return self.gonio.connected[ax]

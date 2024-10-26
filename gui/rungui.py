@@ -212,6 +212,14 @@ class tweakmotors(QMainWindow):
             if len(unit)>0:
                 motorunits.append(unit)
 
+        # append newport_piezo
+        motornames.append('newport_piezo1')
+        motornames.append('newport_piezo3')
+        motornames.append('newport_piezo5')
+        motorunits.append('mm')
+        motorunits.append('mm')
+        motorunits.append('mm')
+
         enable = False
         for i, name in enumerate(motornames):
             n = i+1
@@ -230,14 +238,19 @@ class tweakmotors(QMainWindow):
         # if not done, later it will try to update the position of disconnected motors    
         self.motornames = []
         self.motorunits = []
+        print(motornames, " line 241")
         for i, name in enumerate(motornames):
             try:
+                print(name)
+                print(self.pts.isconnected(name))
                 if self.pts.isconnected(name):
+                    print(name)
                     self.motornames.append(name)
                     self.motorunits.append(motorunits[i])
             except:
                 print(f"{name} is not connected.")
                 pass
+        print(motornames, " line 252")
         # motors for 2d and 3d scans.....
         xm = self.motornames.index('X')
         ym = self.motornames.index('Y')
@@ -251,6 +264,7 @@ class tweakmotors(QMainWindow):
             self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stepscan(-1))
             self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).clicked.connect(lambda: self.fly(-1))
             self.ui.findChild(QLineEdit, "ed_%i"%n).returnPressed.connect(lambda: self.mv(-1, None))
+            print(name, " This is in tweakmtors .....")
             if self.pts.isconnected(name):
                 enable = True
             else:
@@ -1598,8 +1612,8 @@ class tweakmotors(QMainWindow):
             yl = 'Z position (um)'
             self.ax2.set_ylabel(yl)
             self.ax3.set_ylabel(yl)
-        except:
-            print("There was error in the plot")
+        except Exception as e:
+            print(e)
             pass
         self.canvas.draw()
 
