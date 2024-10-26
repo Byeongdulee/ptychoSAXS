@@ -29,6 +29,14 @@ pts = instruments()
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
+
+# plot of struck scaler.
+import datetime
+#import matplotlib.pyplot as plt
+#import matplotlib.animation as animation
+#import random
+
+
 import numpy as np
 
 #from tools.panda import get_pandadata
@@ -38,6 +46,9 @@ s12softglue = sgz_pty()
 #Delay generator
 import tools.dg645 as dg645
 dg645_12ID = dg645.dg645_12ID.open_from_uri(dg645.ADDRESS_12IDC)
+
+# struck
+from tools import struck
 
 # detectors
 from tools.detectors import pilatus
@@ -239,19 +250,19 @@ class tweakmotors(QMainWindow):
         # if not done, later it will try to update the position of disconnected motors    
         self.motornames = []
         self.motorunits = []
-        print(motornames, " line 241")
+#        print(motornames, " line 241")
         for i, name in enumerate(motornames):
             try:
-                print(name)
-                print(self.pts.isconnected(name))
+#                print(name)
+#                print(self.pts.isconnected(name))
                 if self.pts.isconnected(name):
-                    print(name)
+#                    print(name)
                     self.motornames.append(name)
                     self.motorunits.append(motorunits[i])
             except:
                 print(f"{name} is not connected.")
                 pass
-        print(motornames, " line 252")
+#        print(motornames, " line 252")
         # motors for 2d and 3d scans.....
         xm = self.motornames.index('X')
         ym = self.motornames.index('Y')
@@ -265,7 +276,7 @@ class tweakmotors(QMainWindow):
             self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stepscan(-1))
             self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).clicked.connect(lambda: self.fly(-1))
             self.ui.findChild(QLineEdit, "ed_%i"%n).returnPressed.connect(lambda: self.mv(-1, None))
-            print(name, " This is in tweakmtors .....")
+#            print(name, " This is in tweakmtors .....")
             if self.pts.isconnected(name):
                 enable = True
             else:
@@ -315,6 +326,7 @@ class tweakmotors(QMainWindow):
         self.ui.actionPrint_flyscan_settings.triggered.connect(lambda: self.print_fly_settings(0))
         self.ui.actionSAXS.triggered.connect(lambda: self.select_detectors(1))
         self.ui.actionWAXS.triggered.connect(lambda: self.select_detectors(2))
+        self.ui.actionStruck.triggered.connect(lambda: self.select_detectors(3))
         self.ui.actionReset_to_Fly_mode.triggered.connect(self.reset_det_flymode)
         self.ui.actionChannels_to_record.triggered.connect(self.choose_softglue_channels)
         self.ui.actionSave_current_results.triggered.connect(self.save_softglue)
@@ -328,6 +340,10 @@ class tweakmotors(QMainWindow):
         self.ui.actionMonitor_Beamline_Status.triggered.connect(self.set_monitor_beamline_status)
         if os.name != 'nt':
             self.ui.menuQDS.setDisabled(True)
+
+        # Struck
+        self.isStruckCountNeeded = False
+
         # set default softglue collection freq. 10 micro seconds.
         s12softglue.set_count_freq(10)
 
@@ -697,6 +713,7 @@ class tweakmotors(QMainWindow):
     def scandone(self, value):
         self.isscan = False
         self.updatepos()
+        self.plot()
         print("scan done.......")
     
     def select_detectors(self, N):
@@ -714,6 +731,17 @@ class tweakmotors(QMainWindow):
             else:
                 self.ui.actionWAXS.setChecked(False)
                 self.detector[1] = None
+        if N==3:
+            if self.ui.actionStruck.isChecked():
+                self.ui.actionStruck.setChecked(True)
+                self.isStruckCountNeeded = True
+                print("Struct in on")
+#                self.detector[1] = pilatus('12idcPIL:')
+            else:
+                self.ui.actionStruck.setChecked(False)
+                self.isStruckCountNeeded = False
+                print("Struck is off")
+#                self.detector[1] = None
         
     def select_flymode(self):
         if self.ui.actionEnable_fly_with_controller.isChecked():  # when checked, this value is False
@@ -774,6 +802,7 @@ class tweakmotors(QMainWindow):
             return
         self.isscan = False
         try:
+            self.plot()
             self.updatepos()
             s12softglue.flush()
         except:
@@ -986,7 +1015,7 @@ class tweakmotors(QMainWindow):
 
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
-        #tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        expt = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
         step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
 
         # disable fit menu
@@ -1004,15 +1033,63 @@ class tweakmotors(QMainWindow):
                 fe = st
                 st = t 
                 step = -step
+#        print(st, fe, step, expt)
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step/2, step)
+        if len(pos)==1:
+            pos = np.array([st, fe])
         self.ui.progressBar.setValue(0)
+
+        # prepare to collect Detector images
+        # set the delay generator
+        if expt != dg645_12ID._exposuretime:
+            try:
+                dg645_12ID.set_pilatus_fly(expt)
+            except:
+                print("EEEEE")
+
+        if self.isStruckCountNeeded:
+            struck.mcs_counter_init()
+
+        if len(self.detector)>0:
+            for det in self.detector:
+                if det is not None:
+                    print(f"Exposure time set to %0.3f seconds for {det._prefix}."% expt)
+                    try:
+                        det.fly_ready(expt, len(pos))
+    #                            print("det is ready.")
+                    except TimeoutError:
+                        msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
+                        print(msg)
+                        self.ui.statusbar.showMessage(msg)
+                        #showerror("Detector timeout.")
+                        return
+
+        self.plotlabels = []
+
+        ## make a plot if needed.
+#        print(pos)
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 return
             self.pts.mv(axis, value)
-            r = self.get_qds_pos()
-            self.rpos.append([r[0], r[1], r[2]])
+            #print(value)
+            if self.isStruckCountNeeded:
+                if len(self.detector)>0:
+                    struck.arm_mcs_counter()
+                    struck.mcs_counter_waitstarted()
+                    dg645_12ID.trigger()
+                else:
+                    struck.mcs_counter_count(expt)
+                while struck.strk.scaler.CNT:
+                    time.sleep(0.01)
+                cnts = struck.read_scaler_all()
+            #    print(cnts)
+                # Append new data
+                self.rpos.append([cnts[2], cnts[3], cnts[4]])
+            else:
+                r = self.get_qds_pos()
+                self.rpos.append([r[0], r[1], r[2]])
             #pos = self.get_motorpos(self.signalmotor)
             self.mpos.append(value)
             self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
@@ -1229,8 +1306,13 @@ class tweakmotors(QMainWindow):
                 pos = self.pts.get_pos(axis)
 #                print(f"pos is {pos} before traj run start.")
                 if not isTestRun:
+                    if self.isStruckCountNeeded:
+                        struck.mcs_init()
+                        struck.mcs_ready(N_counts, tm+10)
+                        struck.arm_mcs()
+                    else:
+                        epics.caput('12idc:scaler1.CNT', 1)
                     self.pts.hexapod.goto_start_pos(axis)
-                    epics.caput('12idc:scaler1.CNT', 1)
                     istraj_running = False
                     timeout = 5
                     i = 0
@@ -1254,7 +1336,10 @@ class tweakmotors(QMainWindow):
                         isattarget = False
                     #print("Waiting to be done...")
                     time.sleep(0.1)
-                epics.caput('12idc:scaler1.CNT', 0)
+                if self.isStruckCountNeeded:
+                    struck.strk.stop()
+                else:
+                    epics.caput('12idc:scaler1.CNT', 0)
                 pos = self.pts.get_pos(axis)
 #                print(f"pos is {pos} after the traj run done.")
 #                print("AAAA")
@@ -1381,13 +1466,16 @@ class tweakmotors(QMainWindow):
                 fn = filename
         if len(fn) == 0:
             filename = self.getfilename()
-        # data unit and data
-        if self.parameters._qds_unit == QDS_UNIT_MM:
-            self.rpos = self.rpos/1E3
-        if self.parameters._qds_unit == QDS_UNIT_UM:
+        if self.isStruckCountNeeded:
             pass
-        if self.parameters._qds_unit == QDS_UNIT_NM:
-            self.rpos = self.rpos*1E3
+        else:
+            # data unit and data
+            if self.parameters._qds_unit == QDS_UNIT_MM:
+                self.rpos = self.rpos/1E3
+            if self.parameters._qds_unit == QDS_UNIT_UM:
+                pass
+            if self.parameters._qds_unit == QDS_UNIT_NM:
+                self.rpos = self.rpos*1E3
         self.save_list(filename, self.mpos, self.rpos, col=[0,1,2], option=saveoption)
         #self.pts.savedata(filename, self.mpos, self.rpos, col=[0,1,2])
 
@@ -1590,9 +1678,20 @@ class tweakmotors(QMainWindow):
                 self.ui.z3_2.setText(txt)
 
     def plot(self):
-        
-        r = np.asarray(self.rpos)
-        pos = np.asarray(self.mpos)
+        if self.isStruckCountNeeded:
+            if self.isfly:
+                #print("this is fly in plot")
+                pos = np.asarray(self.mpos)
+                r = struck.read_mcs([0, 1, 2])
+            else:
+                #print("this is scan in plot")
+                #print(self.rpos)
+                r = np.asarray(self.rpos)
+                pos = np.asarray(self.mpos)
+
+        else:
+            r = np.asarray(self.rpos)
+            pos = np.asarray(self.mpos)
         try:
             xl = f"{self.signalmotor} ({self.signalmotorunit})"
         except:
@@ -1602,17 +1701,26 @@ class tweakmotors(QMainWindow):
             self.ax.clear()
             self.ax.plot(pos, r[:,0], 'r')
             self.ax.set_xlabel(xl)
-            yl = 'X position (um)'
-            self.ax.set_ylabel(yl)
+            # if struck is selected, it will plot struck
+            if len(self.plotlabels) == 0:
+                if self.isStruckCountNeeded:
+                    yl = struck.strk.scaler.NM2
+                    yl2 = struck.strk.scaler.NM3
+                    yl3 = struck.strk.scaler.NM4
+                else:
+                    yl = 'X position (um)'
+                    yl2 = 'Z position (um)'
+                    yl3 = 'Z position (um)'                
+                self.plotlabels = [yl, yl2, yl3]
+            self.ax.set_ylabel(self.plotlabels[0])
             self.ax2.clear()
             self.ax2.plot(pos, r[:,1], 'b')
             self.ax2.set_xlabel(xl)
             self.ax3.clear()
             self.ax3.plot(pos, r[:,2], 'k')
             self.ax3.set_xlabel(xl)
-            yl = 'Z position (um)'
-            self.ax2.set_ylabel(yl)
-            self.ax3.set_ylabel(yl)
+            self.ax2.set_ylabel(self.plotlabels[1])
+            self.ax3.set_ylabel(self.plotlabels[2])
         except Exception as e:
             print(e)
             pass

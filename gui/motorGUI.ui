@@ -126,7 +126,7 @@
          <enum>QLayout::SetNoConstraint</enum>
         </property>
         <item>
-         <layout class="QGridLayout" name="gridLayout_2" rowstretch="0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0">
+         <layout class="QGridLayout" name="gridLayout_2" rowstretch="0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0" columnstretch="0,0,0,0,0,0,0,0,0,0,50,0,0,0,0,0" columnminimumwidth="0,0,0,0,0,0,0,0,0,0,0,100,0,0,0,0">
           <property name="sizeConstraint">
            <enum>QLayout::SetNoConstraint</enum>
           </property>
@@ -600,6 +600,12 @@
           </item>
           <item row="2" column="10">
            <widget class="QLineEdit" name="ed_lup_1_N">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
             <property name="maximumSize">
              <size>
               <width>100</width>
@@ -949,19 +955,6 @@
             </property>
            </widget>
           </item>
-          <item row="1" column="11" colspan="2">
-           <widget class="QLabel" name="label_18">
-            <property name="maximumSize">
-             <size>
-              <width>100</width>
-              <height>16777215</height>
-             </size>
-            </property>
-            <property name="text">
-             <string>run time [fly]</string>
-            </property>
-           </widget>
-          </item>
           <item row="8" column="5">
            <widget class="QLineEdit" name="ed_7_tweak">
             <property name="maximumSize">
@@ -1242,6 +1235,12 @@
           </item>
           <item row="1" column="10">
            <widget class="QLabel" name="label_17">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
             <property name="maximumSize">
              <size>
               <width>100</width>
@@ -1249,7 +1248,7 @@
              </size>
             </property>
             <property name="text">
-             <string>step or step time [fly]</string>
+             <string>step[step]/expt[fly]</string>
             </property>
            </widget>
           </item>
@@ -1915,6 +1914,19 @@
             </property>
            </widget>
           </item>
+          <item row="1" column="11">
+           <widget class="QLabel" name="label_18">
+            <property name="maximumSize">
+             <size>
+              <width>100</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>expt[step]/run time[fly]</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </item>
         <item>
@@ -2518,6 +2530,7 @@
     </property>
     <addaction name="actionSAXS"/>
     <addaction name="actionWAXS"/>
+    <addaction name="actionStruck"/>
     <addaction name="separator"/>
     <addaction name="actionReset_to_Fly_mode"/>
    </widget>
@@ -2772,6 +2785,14 @@
    </property>
    <property name="text">
     <string>Monitor Beamline Status On</string>
+   </property>
+  </action>
+  <action name="actionStruck">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Struck</string>
    </property>
   </action>
  </widget>
