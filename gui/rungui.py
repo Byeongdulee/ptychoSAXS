@@ -1074,18 +1074,18 @@ class tweakmotors(QMainWindow):
                 return
             self.pts.mv(axis, value)
             #print(value)
-            if self.isStruckCountNeeded:
-                if len(self.detector)>0:
-                    struck.arm_mcs_counter()
-                    struck.mcs_counter_waitstarted()
-                    dg645_12ID.trigger()
-                else:
-                    struck.mcs_counter_count(expt)
+            if len(self.detector)>0:
+                struck.arm_mcs_counter()
+                struck.mcs_counter_waitstarted()
+                dg645_12ID.trigger()
                 while struck.strk.scaler.CNT:
                     time.sleep(0.01)
+            if self.isStruckCountNeeded:
+                if len(self.detector)==0:
+                    struck.mcs_counter_count(expt)
+                    while struck.strk.scaler.CNT:
+                        time.sleep(0.01)
                 cnts = struck.read_scaler_all()
-            #    print(cnts)
-                # Append new data
                 self.rpos.append([cnts[2], cnts[3], cnts[4]])
             else:
                 r = self.get_qds_pos()
