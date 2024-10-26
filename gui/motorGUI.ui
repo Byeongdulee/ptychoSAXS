@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1423</width>
-    <height>716</height>
+    <height>801</height>
    </rect>
   </property>
   <property name="maximumSize">
@@ -209,7 +209,7 @@
           <item row="9" column="13">
            <widget class="QPushButton" name="pb_lup_8">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
@@ -246,14 +246,14 @@
           <item row="7" column="13">
            <widget class="QPushButton" name="pb_lup_6">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
           <item row="6" column="13">
            <widget class="QPushButton" name="pb_lup_5">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
@@ -434,7 +434,7 @@
           <item row="3" column="13">
            <widget class="QPushButton" name="pb_lup_2">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
@@ -749,7 +749,7 @@
           <item row="4" column="13">
            <widget class="QPushButton" name="pb_lup_3">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
@@ -828,7 +828,7 @@
           <item row="2" column="13">
            <widget class="QPushButton" name="pb_lup_1">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
@@ -845,7 +845,7 @@
           <item row="8" column="13">
            <widget class="QPushButton" name="pb_lup_7">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
@@ -1069,7 +1069,7 @@
           <item row="5" column="13">
            <widget class="QPushButton" name="pb_lup_4">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
@@ -1364,7 +1364,7 @@
           <item row="11" column="13">
            <widget class="QPushButton" name="pb_lup_10">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
@@ -1505,7 +1505,7 @@
           <item row="10" column="13">
            <widget class="QPushButton" name="pb_lup_9">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
@@ -1519,7 +1519,7 @@
           <item row="12" column="13">
            <widget class="QPushButton" name="pb_lup_11">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
@@ -1876,21 +1876,21 @@
           <item row="13" column="13">
            <widget class="QPushButton" name="pb_lup_12">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
           <item row="14" column="13">
            <widget class="QPushButton" name="pb_lup_13">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
           <item row="15" column="13">
            <widget class="QPushButton" name="pb_lup_14">
             <property name="text">
-             <string>lup scan</string>
+             <string>step scan</string>
             </property>
            </widget>
           </item>
