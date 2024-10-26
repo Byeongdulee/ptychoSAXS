@@ -149,8 +149,9 @@ def close_shutter(self):
 class beamstatus(QObject):
     onChange = QtCore.pyqtSignal()
     def __init__(self):
-        self.shutter_val = epics.PV('PB:12ID:STA_C_SCS_CLSD_PL.VAL', callback=self.checkshutter)
-        self.shutter = epics.PV('12ida2:rShtrC:Open')
+        # A station shutter..
+        self.shutter_val = epics.PV('PB:12ID:STA_A_FES_CLSD_PL', callback=self.checkshutter)
+        self.shutter = epics.PV('12ida2:rShtrA:Open')
 
     def checkshutter(self, value, **kws):
         if value == 0:
