@@ -43,6 +43,9 @@
           <height>20</height>
          </size>
         </property>
+        <property name="toolTip">
+         <string>Experiment log file and softglue data will be saved in this folder.</string>
+        </property>
         <property name="maxLength">
          <number>500</number>
         </property>
@@ -55,6 +58,9 @@
           <width>500</width>
           <height>20</height>
          </size>
+        </property>
+        <property name="toolTip">
+         <string>Filename for 2D detector data</string>
         </property>
        </widget>
       </item>
@@ -2438,7 +2444,7 @@
      <x>0</x>
      <y>0</y>
      <width>1423</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -2481,6 +2487,8 @@
     <addaction name="actionLoad_eccentricity_data"/>
     <addaction name="actionLoad_wobble_data"/>
     <addaction name="actionLoad_scan"/>
+    <addaction name="separator"/>
+    <addaction name="actionSet_Log_Filename"/>
     <addaction name="separator"/>
     <addaction name="actionSave_scan"/>
    </widget>
@@ -2793,6 +2801,11 @@
    </property>
    <property name="text">
     <string>Struck</string>
+   </property>
+  </action>
+  <action name="actionSet_Log_Filename">
+   <property name="text">
+    <string>Set Log Filename</string>
    </property>
   </action>
  </widget>

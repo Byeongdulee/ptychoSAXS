@@ -211,6 +211,13 @@ class tweakmotors(QMainWindow):
             self.parameters._qds_th0_vert = -30.0 # degree
             self.parameters._qds_R_cyl = 50.0 # mm
             self.parameters.softglue_channels = ['B', 'C', 'D']
+            self.parameters.logfilename = ""
+            self.parameters.scan_number = 0
+        if not hasattr(self.parameters, 'scan_number'):
+            self.parameters.scan_number = 0
+        if not hasattr(self.parameters, 'logfilename'):
+            self.parameters.logfilename = ""
+
         self.isscan = False
         self.isfly = False
 
@@ -293,6 +300,7 @@ class tweakmotors(QMainWindow):
             self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setEnabled(enable)               
             self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setEnabled(enable)               
         
+        self.ui.actionSet_Log_Filename.triggered.connect(self.set_logfilename)
         self.ui.actionRun.triggered.connect(self.timescan)
         self.ui.actionStop.triggered.connect(self.timescanstop)
         self.ui.actionClear.triggered.connect(self.clearplot)
@@ -455,6 +463,14 @@ class tweakmotors(QMainWindow):
         value, okPressed = QInputDialog.getDouble(self, "The horizontal sensor positions","R (mm):", self.parameters._qds_R_cyl)
         if okPressed:
             self.parameters._qds_R_cyl = value
+        self.parameters.writeini()
+
+    def set_logfilename(self):
+        strv = self.parameters.logfilename
+        text, okPressed = QInputDialog.getText(self, "Log file","Filename:", QLineEdit.Normal, strv)
+        if okPressed:
+            self.parameters.logfilename = text
+            self.parameters.scan_number = 0
         self.parameters.writeini()
 
     def set_waittime_between_scans(self):
@@ -711,12 +727,31 @@ class tweakmotors(QMainWindow):
         self.pts.set_speed(self.pts.hexapod.axes[0], 5, None)
 
     def scandone(self, value):
-        print("scan done 0000")
+        print("scan done")
         self.isscan = False
         self.updatepos()
         self.plot()
-        print("scan done.......")
-    
+        if len(self.parameters.logfilename)>0:
+            pos = np.asarray(self.mpos)
+            r = np.asarray(self.rpos)
+            self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
+            scaninfo = []
+            scaninfo.append('#I detector_filename')
+            for det in self.detector:
+                if det is not None:
+                    fnum = det.fileGet('FileNumber_RBV')
+                    fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    if str(fnum-1) not in fn:
+                        fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    filename = os.path.basename(fn)
+                    scaninfo.append(filename)
+            if len(scaninfo)>1:
+                self.write_scaninfo_to_logfile(scaninfo)
+            scaninfo = []
+            scaninfo.append('#D')
+            scaninfo.append(time.ctime())
+        self.parameters.scan_number =+ 1
+
     def select_detectors(self, N):
         if N==1:
             if self.ui.actionSAXS.isChecked():
@@ -815,6 +850,26 @@ class tweakmotors(QMainWindow):
         except:
             print("Error in softglue saving....")
         self.isfly = False
+        if len(self.parameters.logfilename)>0:
+            pos = np.asarray(self.mpos)
+            r = struck.read_mcs([0, 1, 2])
+            self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
+            scaninfo = []
+            scaninfo.append('#I detector_filename')
+            for det in self.detector:
+                if det is not None:
+                    fnum = det.fileGet('FileNumber_RBV')
+                    fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    if str(fnum-1) not in fn:
+                        fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    filename = os.path.basename(fn)
+                    scaninfo.append(filename)
+            if len(scaninfo)>1:
+                self.write_scaninfo_to_logfile(scaninfo)
+            scaninfo = []
+            scaninfo.append('#D')
+            scaninfo.append(time.ctime())
+        self.parameters.scan_number =+ 1
 
     def flydone2d(self, value=0):
         print("2D fly done.......")
@@ -871,16 +926,30 @@ class tweakmotors(QMainWindow):
             s12softglue.ckTime_reset()
 
         motor = [xmotor, ymotor]
+                # logging
+        scaninfo = []
+        scaninfo.append('\n#S')
+        scaninfo.append(self.parameters.scan_number)
+        scaninfo.append('fly2d')
         for m in motor:
             n = m+1
             try:
+                scaninfo.append(n)
                 st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
                 fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
                 tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+                scaninfo.append(st)
+                scaninfo.append(fe)
+                scaninfo.append(tm)            
             except:
                 showerror("Check scan paramters.")
                 return 0
-        
+
+        self.write_scaninfo_to_logfile(scaninfo)
+        scaninfo = []
+        scaninfo.append('#D')
+        scaninfo.append(time.ctime())
+
         self.isscan = True
         w = Worker(self.fly2d0, xmotor, ymotor, scanname=scanname)
         w.signal.finished.connect(self.flydone2d)
@@ -892,16 +961,29 @@ class tweakmotors(QMainWindow):
         if self.ui.actionckTime_reset_before_scan.isChecked():
             s12softglue.ckTime_reset()
         motor = [xmotor, ymotor, phimotor]
+        # logging
+        scaninfo = []
+        scaninfo.append('\n#S')
+        scaninfo.append(self.parameters.scan_number)
+        scaninfo.append('fly3d')
         for m in motor:
             n = m+1
             try:
+                scaninfo.append(n)
                 st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
                 fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
                 tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+                scaninfo.append(st)
+                scaninfo.append(fe)
+                scaninfo.append(tm)
             except:
                 showerror("Check scan paramters.")
                 return 0
-        
+        self.write_scaninfo_to_logfile(scaninfo)
+        scaninfo = []
+        scaninfo.append('#D')
+        scaninfo.append(time.ctime())
+
         self.isscan = True
         w = Worker(self.fly3d0, xmotor, ymotor, phimotor, scanname=scanname)
         w.signal.finished.connect(self.flydone3d)
@@ -917,6 +999,12 @@ class tweakmotors(QMainWindow):
         else:
             n = motornumber + 1
 
+        # logging
+        scaninfo = []
+        scaninfo.append('\n#S')
+        scaninfo.append(self.parameters.scan_number)
+        scaninfo.append('fly')
+        scaninfo.append(n)        
         try:
             st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
             fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
@@ -924,11 +1012,39 @@ class tweakmotors(QMainWindow):
         except:
             showerror("Check scan paramters.")
             return 0
-        
+
+        scaninfo.append(st)
+        scaninfo.append(fe)
+        scaninfo.append(tm)
+        self.write_scaninfo_to_logfile(scaninfo)
+
         self.isscan = True
         w = Worker(self.fly0, motornumber)
         w.signal.finished.connect(self.flydone)
         self.threadpool.start(w)
+
+    def write_scaninfo_to_logfile(self, strlist):
+        if len(self.parameters.logfilename) == 0:
+            return 0
+        with open(self.parameters.logfilename, "a") as f:
+            for i, m in enumerate(strlist):
+                if i==0:
+                    strv = "%s"%str(m)
+                else:
+                    strv = "%s    %s"%(strv, str(m))
+            f.write("%s\n"%strv)
+
+    def log_data(self, data_list):
+        if len(self.parameters.logfilename) == 0:
+            return 0
+        strv = ""
+        with open(self.parameters.logfilename, "a") as f:
+            for i, m in enumerate(data_list):
+                if i==0:
+                    strv = "%0.8f"%m
+                else:
+                    strv = "%s    %0.8f"%(strv, m)
+            f.write("%s\n"%strv)
 
     def stepscan(self, motornumber=-1):
         self.isStopScanIssued = False
@@ -949,6 +1065,35 @@ class tweakmotors(QMainWindow):
             showerror("Check scan parameters.")
             return 0
         
+        # logging
+        scaninfo = []
+        scaninfo.append('\n#S')
+        scaninfo.append(self.parameters.scan_number)
+        scaninfo.append('step_scan')
+        scaninfo.append(self.motornames[motornumber])
+        scaninfo.append(st)
+        scaninfo.append(fe)
+        scaninfo.append(step)
+        self.write_scaninfo_to_logfile(scaninfo)
+        scaninfo = []
+        scaninfo.append('#D')
+        scaninfo.append(time.ctime())
+        self.write_scaninfo_to_logfile(scaninfo)
+        # logging datatype
+        scaninfo = []
+        scaninfo.append('#H')
+        if self.isStruckCountNeeded:
+            scaninfo.append(self.motornames[motornumber])
+            scaninfo.append(struck.strk.scaler.NM2)
+            scaninfo.append(struck.strk.scaler.NM3)
+            scaninfo.append(struck.strk.scaler.NM4)
+        else:
+            scaninfo.append(self.motornames[motornumber])
+            scaninfo.append('QDS1')
+            scaninfo.append('QDS2')
+            scaninfo.append('QDS3')
+        self.write_scaninfo_to_logfile(scaninfo)    
+        # start the scan
         self.isscan = True
         
         w = Worker(self.stepscan0, motornumber)
@@ -1034,7 +1179,8 @@ class tweakmotors(QMainWindow):
                 fe = st
                 st = t 
                 step = -step
-#        print(st, fe, step, expt)
+
+        # start scan..
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step/2, step)
         if len(pos)==1:
@@ -1067,7 +1213,7 @@ class tweakmotors(QMainWindow):
                         return
 
         self.plotlabels = []
-
+        
         ## make a plot if needed.
 #        print(pos)
         for i, value in enumerate(pos):
@@ -1088,9 +1234,13 @@ class tweakmotors(QMainWindow):
                         time.sleep(0.01)
                 cnts = struck.read_scaler_all()
                 self.rpos.append([cnts[2], cnts[3], cnts[4]])
+                # data = [value, cnts[2],cnts[3],cnts[4]]
+                # self.log_data(data)
             else:
                 r = self.get_qds_pos()
                 self.rpos.append([r[0], r[1], r[2]])
+                # data = [value, [r[0], r[1], r[2]]]
+                # self.log_data(data)
             #pos = self.get_motorpos(self.signalmotor)
             self.mpos.append(value)
             self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
@@ -1133,7 +1283,14 @@ class tweakmotors(QMainWindow):
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 return
+            
+            # loging phi angle information
             print(f"phi position : {value}")
+            scaninfo = []
+            scaninfo.append('#I phi = ')
+            scaninfo.append(value)
+            self.write_scaninfo_to_logfile(scaninfo) 
+
             self.pts.mv(axis, value)
             # fly here
             scan="%s%0.3d"%(scanname, i)
@@ -1158,7 +1315,7 @@ class tweakmotors(QMainWindow):
         step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
 
         maxexposuretime = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%(xmotor+1)).text())
-        epics.caput('12idc:scaler1.TP', maxexposuretime+5)
+        #epics.caput('12idc:scaler1.TP', maxexposuretime+5)
 
         if st>fe:
             step = -1*abs(step)
@@ -1188,6 +1345,11 @@ class tweakmotors(QMainWindow):
             #     print("error epics")
             print()
             print(f"Y position : %0.3f" % value)
+            scaninfo = []
+            scaninfo.append('#I Y = ')
+            scaninfo.append(value)
+            self.write_scaninfo_to_logfile(scaninfo) 
+
             t0 = time.time()
             self.pts.mv(axis, value)
             ismoving = True
@@ -1253,6 +1415,26 @@ class tweakmotors(QMainWindow):
         except:
             step = 0.1
             self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText("%0.3f"%step)
+        if abs(tm) <= 0.033:
+            print(f"Note that Max speed of Pilatus2M is 30Hz.")
+            print("******* Cannot run.")
+            return
+        
+        # logging datatype
+        scaninfo = []
+        scaninfo.append('#H')
+        if self.isStruckCountNeeded:
+            scaninfo.append(self.motornames[motornumber])
+            scaninfo.append(struck.strk.scaler.NM2)
+            scaninfo.append(struck.strk.scaler.NM3)
+            scaninfo.append(struck.strk.scaler.NM4)
+        else:
+            scaninfo.append(self.motornames[motornumber])
+            scaninfo.append('QDS1')
+            scaninfo.append('QDS2')
+            scaninfo.append('QDS3')
+        self.write_scaninfo_to_logfile(scaninfo)  
+
         pos = self.pts.get_pos(axis)
         if axis in self.pts.hexapod.axes:
             if self.ui.cb_reversescandir.isChecked():
