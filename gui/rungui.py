@@ -861,6 +861,7 @@ class tweakmotors(QMainWindow):
                 r = struck.read_mcs([0, 1, 2])
             else:
                 r = np.asarray(self.rpos)
+            print(r)
             self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
             scaninfo = []
             scaninfo.append('#I detector_filename')
