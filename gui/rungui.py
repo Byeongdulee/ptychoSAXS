@@ -469,7 +469,8 @@ class tweakmotors(QMainWindow):
         strv = self.parameters.logfilename
         text, okPressed = QInputDialog.getText(self, "Log file","Filename:", QLineEdit.Normal, strv)
         if okPressed:
-            self.parameters.logfilename = text
+            foldername = self.ui.ed_workingfolder.text()
+            self.parameters.logfilename = os.path.join(foldername, text)
             self.parameters.scan_number = 0
         self.parameters.writeini()
 
