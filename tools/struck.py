@@ -38,7 +38,7 @@ def read_scaler_all(lastch=8):
 def mcs_ready(imagN, TotalMeasurementTime):
 	mcs_init()
 	strk.NuseAll = imagN
-	strk.CountOnStart = 0
+	strk.CountOnStart = 1
 	strk.PresetReal = TotalMeasurementTime
 	
 def mcs_getready():
@@ -52,7 +52,7 @@ def mcs_init():
     strk.ChannelAdvance = 1
     strk.scaler.CONT = 0
     strk.SCAN = 2
-    strk.CountOnStart = 0
+    strk.CountOnStart = 1
     strk.Channel1Source = 0
     strk.UserLED = 0
     strk.Prescale = 1

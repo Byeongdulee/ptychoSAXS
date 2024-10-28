@@ -230,8 +230,8 @@ class tweakmotors(QMainWindow):
 
         # append newport_piezo
         motornames.append('newport_piezo1')
+        motornames.append('newport_piezo2')
         motornames.append('newport_piezo3')
-        motornames.append('newport_piezo5')
         motorunits.append('mm')
         motorunits.append('mm')
         motorunits.append('mm')
@@ -413,7 +413,7 @@ class tweakmotors(QMainWindow):
         self.updatepos()
 
         # detectors
-        self.det_readout_time = 0.015 # detector minimum readout time.
+        self.det_readout_time = 0.02 # detector minimum readout time.
         self.detector = [None]*2
 
         if os.name == 'nt':
@@ -856,13 +856,15 @@ class tweakmotors(QMainWindow):
             print("Error in softglue saving....")
         self.isfly = False
         if len(self.parameters.logfilename)>0:
-            pos = np.asarray(self.mpos)
             if self.isStruckCountNeeded:
                 r = struck.read_mcs([0, 1, 2])
+                pos = np.arange(len(r[0]))
+                self.mpos = pos
+                print("Number of MCS channels : ", len(r))
             else:
+                pos = np.asarray(self.mpos)
                 r = np.asarray(self.rpos)
-            print(r)
-            self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
+            self.save_nparray(self.parameters.logfilename, pos,r,[0,1,2],"a")
             scaninfo = []
             scaninfo.append('#I detector_filename')
             for det in self.detector:
@@ -878,6 +880,7 @@ class tweakmotors(QMainWindow):
             scaninfo = []
             scaninfo.append('#D')
             scaninfo.append(time.ctime())
+            self.write_scaninfo_to_logfile(scaninfo)
         self.parameters.scan_number =+ 1
         self.parameters.writeini()
 
@@ -1400,7 +1403,7 @@ class tweakmotors(QMainWindow):
         self.signalmotorunit = self.motorunits[motornumber]
         self.rpos = []
         self.mpos = []
-        print("fly0 to start")
+        self.plotlabels = []
         if self.ui.actionckTime_reset_before_scan.isChecked():
             s12softglue.ckTime_reset()
         if self.ui.actionMemory_clear_before_scan.isChecked():
@@ -1481,6 +1484,7 @@ class tweakmotors(QMainWindow):
                 # set the delay generator
                 if expt != dg645_12ID._exposuretime:
                     try:
+                        print(f"Acutal exposure time: {expt}s.")
                         dg645_12ID.set_pilatus_fly(expt)
                     except:
                         print("EEEEE")
@@ -1504,11 +1508,12 @@ class tweakmotors(QMainWindow):
                             return
 #                print("Ready for traj")
                 pos = self.pts.get_pos(axis)
-#                print(f"pos is {pos} before traj run start.")
+                print(f"pos is {pos} before traj run start.")
                 if not isTestRun:
                     if self.isStruckCountNeeded:
                         struck.mcs_init()
-                        struck.mcs_ready(N_counts, tm+10)
+                        struck.mcs_ready(self.pts.hexapod.pulse_number, tm+10)
+                        print(self.pts.hexapod.pulse_number, " MCS Ncouts updated.")
                         struck.arm_mcs()
                     else:
                         epics.caput('12idc:scaler1.CNT', 1)
@@ -1542,11 +1547,10 @@ class tweakmotors(QMainWindow):
                     epics.caput('12idc:scaler1.CNT', 0)
                 pos = self.pts.get_pos(axis)
 #                print(f"pos is {pos} after the traj run done.")
-#                print("AAAA")
 
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD):
 #            if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD) or (axis != "X"):
-                print(" Running the fly scan without controller")
+#                print(" Running the fly scan without controller")
                 self.pts.mv(axis, st, wait=True)
                 self._prev_vel,self._prev_acc = self.pts.get_speed(axis)
                 print("     prev speed was ", self._prev_vel)
@@ -1685,6 +1689,14 @@ class tweakmotors(QMainWindow):
                 strv = ""
                 for cind in col:
                     strv = "%s    %0.5e"%(strv, rpos[i][cind])
+                f.write("%0.5e%s\n"%(m, strv))
+
+    def save_nparray(self, filename, mpos, rpos, col, option="w"):
+        with open(filename, option) as f:
+            for i, m in enumerate(mpos):
+                strv = ""
+                for cind in col:
+                    strv = "%s    %0.5e"%(strv, rpos[cind][i])
                 f.write("%0.5e%s\n"%(m, strv))
 
     def savescan(self, filename=""):
@@ -1881,8 +1893,12 @@ class tweakmotors(QMainWindow):
         if self.isStruckCountNeeded:
             if self.isfly:
                 #print("this is fly in plot")
-                pos = np.asarray(self.mpos)
+                #pos = np.asarray(self.mpos)
                 r = struck.read_mcs([0, 1, 2])
+                pos = np.arange(len(r[0]))
+                r = np.stack(r).T
+                r = np.asarray(r)
+                xl = "N"
             else:
                 #print("this is scan in plot")
                 #print(self.rpos)

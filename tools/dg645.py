@@ -17,6 +17,7 @@ DG645_BURST_MAX_TIME = 41
 # import dg645 as DG
 # a = DG.dg645_12ID.open_from_uri(DG.addressB)
 # a.pilatus(0.1, 5, 2)
+# 
 # a.instrument["shutter"].delay
 # a.instrument["shutter"].pulsewidth
 # a.instrument["shutter"].polarity
@@ -234,10 +235,11 @@ class dg645_12ID(SRSDG645):
     '''
         For DG645 at 12ID-B
         Front 2 BNCs will be used: 
+            
             AB for shutter
             CD for detectors 
             EF for struck
-            GH for inhibitor
+            GH for inhibitor and softglue
             
         Need to use "Burtst mode", which determine the number of delay cycle or shots.
         "Single shot triggering" will trigger N bursts.
@@ -354,6 +356,7 @@ class dg645_12ID(SRSDG645):
         self.instrument["struck"].pulsewidth = lEF
         self.instrument["inhibitor"].delay = dG
         self.instrument["inhibitor"].pulsewidth = lGH
+
         if ((Cycperiod < DG645_BURST_MAX_TIME) and (DGNimage > 1)):
             self.burst_set(DGNimage, Cycperiod, Cycdelay)
             self.check_error()
@@ -393,7 +396,10 @@ class dg645_12ID(SRSDG645):
         self.instrument["struck"].delay = dE
         self.instrument["struck"].pulsewidth = lEF
         self.instrument["inhibitor"].delay = dG
-        self.instrument["inhibitor"].pulsewidth = lGH
+        self.instrument["inhibitor"].pulsewidth = lGH        
+        #self.instrument["softglue"].delay = dG    
+        #self.instrument["softglue"].pulsewidth = lGH
+
         self.enable_burst_mode = 0
 
     def PE(self, DGexpt, *kwd):
@@ -423,6 +429,8 @@ class dg645_12ID(SRSDG645):
         self.instrument["struck"].pulsewidth = 0.001
         self.instrument["inhibitor"].delay = UBZ_SHUTTER_DEADTIME
         self.instrument["inhibitor"].pulsewidth = DGexpt
+        #self.instrument["softglue"].delay = UBZ_SHUTTER_DEADTIME    
+        #self.instrument["softglue"].pulsewidth = DGexpt
         Cycdelay = SOFTWARE_INIT_DEADTIME
         if ((Cycperiod < DG645_BURST_MAX_TIME) and (DGNimage > 1)):
             self.burst_set(DGNimage, Cycperiod, Cycdelay)

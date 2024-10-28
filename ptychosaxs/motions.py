@@ -53,8 +53,8 @@ class motors(object):
         self.gonio = gonio
         self.newport_piezo = []
         self.newport_piezo.append(Motor("12idcUC8:m1"))
+        self.newport_piezo.append(Motor("12idcUC8:m2"))
         self.newport_piezo.append(Motor("12idcUC8:m3"))
-        self.newport_piezo.append(Motor("12idcUC8:m5"))
         self.signals = motorSignals()
 
     def commutate_phi(self):
@@ -95,9 +95,9 @@ class motors(object):
         if 'newport_piezo' in axis:
             if axis == "newport_piezo1":
                 n = 0
-            if axis == "newport_piezo3":
+            if axis == "newport_piezo2":
                 n = 1
-            if axis == "newport_piezo5":
+            if axis == "newport_piezo3":
                 n = 2
             dmov = self.newport_piezo[n].get('DMOV')
             if dmov==0:
@@ -118,9 +118,9 @@ class motors(object):
         if 'newport_piezo' in axis:
             if axis == "newport_piezo1":
                 n = 0
-            if axis == "newport_piezo3":
+            if axis == "newport_piezo2":
                 n = 1
-            if axis == "newport_piezo5":
+            if axis == "newport_piezo3":
                 n = 2
             pos = self.newport_piezo[n].get('VAL')
             return pos
@@ -149,9 +149,9 @@ class motors(object):
         if 'newport_piezo' in axis:
             if axis == "newport_piezo1":
                 n = 0
-            if axis == "newport_piezo3":
+            if axis == "newport_piezo2":
                 n = 1
-            if axis == "newport_piezo5":
+            if axis == "newport_piezo3":
                 n = 2
             print(n, " in newport_piezo")
             self.newport_piezo[n].move(target)
@@ -210,9 +210,9 @@ class motors(object):
         if 'newport_piezo' in axis:
             if axis == "newport_piezo1":
                 n = 0
-            if axis == "newport_piezo3":
+            if axis == "newport_piezo2":
                 n = 1
-            if axis == "newport_piezo5":
+            if axis == "newport_piezo3":
                 n = 2
             self.newport_piezo[n].move(self.get_pos(axis) + target)
             if wait:
@@ -252,9 +252,9 @@ class motors(object):
         if 'newport_piezo' in axis:
             if axis == "newport_piezo1":
                 n = 0
-            if axis == "newport_piezo3":
+            if axis == "newport_piezo2":
                 n = 1
-            if axis == "newport_piezo5":
+            if axis == "newport_piezo3":
                 n = 2
             return self.newport_piezo[n].get('VBAS')
         if axis == "phi":
@@ -270,9 +270,9 @@ class motors(object):
         if 'newport_piezo' in axis:
             if axis == "newport_piezo1":
                 n = 0
-            if axis == "newport_piezo3":
+            if axis == "newport_piezo2":
                 n = 1
-            if axis == "newport_piezo5":
+            if axis == "newport_piezo3":
                 n = 2
             self.newport_piezo[n].put('VBAS', vel)
         if axis == "phi":

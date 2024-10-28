@@ -17,7 +17,7 @@ class mcs(Struck):
     def mcs_config(self, imagN, TotalMeasurementTime):
         self.mcs_init()
         self.NuseAll = imagN
-        self.CountOnStart = 0
+        self.CountOnStart = 1
         self.PresetReal = TotalMeasurementTime
         
     def mcs_getready(self):
@@ -31,7 +31,7 @@ class mcs(Struck):
         self.ChannelAdvance = 1
         self.scaler.CONT = 0
         self.SCAN = 2
-        self.CountOnStart = 0
+        self.CountOnStart = 1
         self.Channel1Source = 0
         self.UserLED = 0
         self.Prescale = 1
