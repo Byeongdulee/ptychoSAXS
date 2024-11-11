@@ -85,7 +85,7 @@ class sgz_pty(Device):
         self.div3 = clock_in/1E6*freq*10
     
     def number_acquisition(self, exptime, N=1):
-        return np.round(exptime/((self.div1/self.div2)*1E-6)*N)
+        return np.round(exptime/((self.div1/self.div2)*1E-6)*N) 
     
     def _reset(self):
         self.buf_in4 = '0'

@@ -323,7 +323,7 @@
              </size>
             </property>
             <property name="text">
-             <string>2</string>
+             <string>10</string>
             </property>
            </widget>
           </item>
@@ -781,7 +781,7 @@
              </size>
             </property>
             <property name="text">
-             <string>-0.5</string>
+             <string>-0.01</string>
             </property>
            </widget>
           </item>
@@ -870,7 +870,7 @@
              </size>
             </property>
             <property name="text">
-             <string>0.1</string>
+             <string>0.0005</string>
             </property>
            </widget>
           </item>
@@ -986,7 +986,7 @@
              </size>
             </property>
             <property name="text">
-             <string>0.5</string>
+             <string>0.01</string>
             </property>
            </widget>
           </item>
@@ -2444,7 +2444,7 @@
      <x>0</x>
      <y>0</y>
      <width>1423</width>
-     <height>22</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -2583,6 +2583,12 @@
    </property>
   </action>
   <action name="actionEnable_fly_with_controller">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Enable fly with controller</string>
    </property>
@@ -2719,7 +2725,7 @@
     <bool>true</bool>
    </property>
    <property name="checked">
-    <bool>true</bool>
+    <bool>false</bool>
    </property>
    <property name="text">
     <string>every 0.1 millie-seconds</string>
@@ -2727,6 +2733,9 @@
   </action>
   <action name="actionDetout">
    <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
     <bool>true</bool>
    </property>
    <property name="text">

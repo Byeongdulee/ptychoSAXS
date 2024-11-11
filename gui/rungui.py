@@ -64,8 +64,17 @@ QDS_UNIT_NM = 0
 QDS_UNIT_UM = 1
 QDS_UNIT_MM = 2
 QDS_UNIT_DEFAULT = QDS_UNIT_UM  # default QDS output is um
-DEFAULTS = {'xmotor':0, 'ymotor':1, 'phimotor':6}
+DEFAULTS = {'xmotor':0, 'ymotor':2, 'phimotor':6}  #vertical stage is Z in the scan_gui, change 'ymotor' from 1 to 2, JD
 inifilename = "pty-co-saxs.ini"
+
+def rstrip_from_char(string, char):
+    """Removes characters from the right of the string starting from the first occurrence of 'char'."""
+#    print(f'{string=}')
+#    print(f'{char=}')
+    if char in string:
+        index = string.rfind(char)
+        return string[:index]
+    return string
 
 async def showerror(msg):
     dlg = QMessageBox()
@@ -190,7 +199,8 @@ class tweakmotors(QMainWindow):
         # this should came from the pts.
         motornames = ['X', 'Y', 'Z', 'U', 'V', 'W', 'phi']
         motorunits = ['mm', 'mm', 'mm', 'deg', 'deg', 'deg', 'deg']
-        self.hexapod_flymode = HEXAPOD_FLYMODE_STANDARD
+        self.hexapod_flymode = HEXAPOD_FLYMODE_WAVELET
+#        self.hexapod_flymode = HEXAPOD_FLYMODE_STANDARD
 
         self.is_selfsaved = False
         self.parameters = py12inifunc.ini(inifilename)
@@ -207,7 +217,7 @@ class tweakmotors(QMainWindow):
             self.parameters._ref_Z = 0
             self.parameters._ref_Z2 = 0
             self.parameters._qds_time_interval = 0.1
-            self.parameters._waittime_between_scans = 1
+            self.parameters._waittime_between_scans = 1 
             self.parameters._qds_R_vert = 10.0 # 10mm
             self.parameters._qds_th0_vert = -30.0 # degree
             self.parameters._qds_R_cyl = 50.0 # mm
@@ -268,8 +278,12 @@ class tweakmotors(QMainWindow):
                 pass
 #        print(motornames, " line 252")
         # motors for 2d and 3d scans.....
-        xm = self.motornames.index('X')
-        ym = self.motornames.index('Y')
+        #xm = self.motornames.index('X') #JD
+        #ym = self.motornames.index('Y') #JD
+        #Better get them from DEFAULTS instead of hard coded. 
+        xm=DEFAULTS['xmotor']  #JD
+        ym=DEFAULTS['ymotor']  #JD
+
         phim = self.motornames.index('phi')
         # update GUI
         for i, name in enumerate(self.motornames):
@@ -302,7 +316,7 @@ class tweakmotors(QMainWindow):
         self.ui.actionStop.triggered.connect(self.timescanstop)
         self.ui.actionClear.triggered.connect(self.clearplot)
         self.ui.actionEnable_fly_with_controller.setCheckable(True)
-        self.ui.actionEnable_fly_with_controller.setChecked(False)
+        self.ui.actionEnable_fly_with_controller.setChecked(True)
         self.ui.actionEnable_fly_with_controller.triggered.connect(self.select_flymode) # hexapod flyscan type.
         self.ui.actionSet_the_default_vel_acc.triggered.connect(self.sethexapodvel_default)  # hexapod set vel acc into default
         self.ui.actionSet_default_speed.triggered.connect(self.setphivel_default)
@@ -350,7 +364,7 @@ class tweakmotors(QMainWindow):
         self.isStruckCountNeeded = False
 
         # set default softglue collection freq. 10 micro seconds.
-        s12softglue.set_count_freq(10)
+        s12softglue.set_count_freq(100)
 
         self.rpos = []
         self.mpos = []
@@ -805,7 +819,6 @@ class tweakmotors(QMainWindow):
         time.sleep(0.5)
         timeout = 5
         ct0 = time.time()
-
         while s12softglue.VALI<N_cnt*self.parameters.countsperexposure:
             if (time.time()-ct0 > timeout):
                 print("timeout")
@@ -816,11 +829,17 @@ class tweakmotors(QMainWindow):
         for det in self.detector:
             if det is not None:
                 fnum = det.fileGet('FileNumber_RBV')
+#                print(f'{fnum=}')
                 fn = det.fileGet('FullFileName_RBV', as_string=True)
-                if str(fnum-1) not in fn:
-                    fn = det.fileGet('FullFileName_RBV', as_string=True)
+#                print(f'{fn=}')
+                #if str(fnum-1) not in fn:
+                #    fn = det.fileGet('FullFileName_RBV', as_string=True)
                 filename = os.path.basename(fn)
-                filename = filename.rstrip('.h5')
+#                print(filename)
+#                print(rstrip_from_char(filename, "_"))
+                filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
+#                print(filename)
+                #filename = filename.rstrip('.h5')
         if len(filename) ==0:
             print("****** Error: detector ioc does not response.")
             filename = "temp%i"%int(time.time())
@@ -835,6 +854,9 @@ class tweakmotors(QMainWindow):
             np.savetxt(os.path.join(foldername, scanname), dt2, fmt="%1.8e %1.8e %1.8e %1.8e")
 
     def flydone(self, value=0):
+        for key in self.motor_p0:
+            self.mv(key, self.motor_p0[key])
+
         print("fly done.......")
 #        pos = self.pts.get_pos('X')
 #        print(f'X position is at {pos} in flydone.')
@@ -850,10 +872,6 @@ class tweakmotors(QMainWindow):
             print("error here.....")
         #if self.signalmotor not in self.pts.hexapod.axes:        
         #    self.pts.set_speed(self.signalmotor, self._prev_vel, self._prev_acc)
-        try:
-            self.save_softglue()
-        except:
-            print("Error in softglue saving....")
         self.isfly = False
         if len(self.parameters.logfilename)>0:
             if self.isStruckCountNeeded:
@@ -875,16 +893,25 @@ class tweakmotors(QMainWindow):
                         fn = det.fileGet('FullFileName_RBV', as_string=True)
                     filename = os.path.basename(fn)
                     scaninfo.append(filename)
+                    while det.fileGet('WriteFile_RBV'):
+                        time.sleep(0.1)
             if len(scaninfo)>1:
                 self.write_scaninfo_to_logfile(scaninfo)
             scaninfo = []
             scaninfo.append('#D')
             scaninfo.append(time.ctime())
             self.write_scaninfo_to_logfile(scaninfo)
+        try:
+            self.save_softglue()
+        except:
+            print("Error in softglue saving....")
         self.parameters.scan_number =+ 1
         self.parameters.writeini()
 
     def flydone2d(self, value=0):
+        for key in self.motor_p0:
+            self.mv(key, self.motor_p0[key])
+#            self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.4f"%self.motor_p0[m])
         print("2D fly done.......")
         isTestRun = self.ui.actionTestFly.isChecked()
         if isTestRun:
@@ -898,6 +925,8 @@ class tweakmotors(QMainWindow):
         self.isfly = False
 
     def flydone3d(self, value=0):
+        for key in self.motor_p0:
+            self.mv(key, self.motor_p0[key])        
         print("3D fly done.......")
         isTestRun = self.ui.actionTestFly.isChecked()
         if isTestRun:
@@ -934,22 +963,29 @@ class tweakmotors(QMainWindow):
         
     def fly2d(self, xmotor=0, ymotor=1, scanname = ""):
         self.isStopScanIssued = False
+        for det in self.detector: #JD
+            if det is not None:  #JD
+                det.filePut('FileNumber', 1)  #JD
 
         if self.ui.actionckTime_reset_before_scan.isChecked():
             s12softglue.ckTime_reset()
 
         motor = [xmotor, ymotor]
+        print(f'fly2d:{xmotor=}; {ymotor=}') #JD
                 # logging
         scaninfo = []
         scaninfo.append('\n#S')
         scaninfo.append(self.parameters.scan_number)
         scaninfo.append('fly2d')
+        initial_motorpos = {}
         for m in motor:
             n = m+1
             try:
                 scaninfo.append(n)
-                st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-                fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+                p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+                initial_motorpos[m] = p0
+                st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+                fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
                 tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
                 step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
                 scaninfo.append(st)
@@ -959,12 +995,11 @@ class tweakmotors(QMainWindow):
             except:
                 showerror("Check scan paramters.")
                 return 0
-
+        self.motor_p0 = initial_motorpos
         self.write_scaninfo_to_logfile(scaninfo)
         scaninfo = []
         scaninfo.append('#D')
         scaninfo.append(time.ctime())
-
         self.isscan = True
         w = Worker(self.fly2d0, xmotor, ymotor, scanname=scanname)
         w.signal.finished.connect(self.flydone2d)
@@ -981,12 +1016,15 @@ class tweakmotors(QMainWindow):
         scaninfo.append('\n#S')
         scaninfo.append(self.parameters.scan_number)
         scaninfo.append('fly3d')
+        initial_motorpos = {}
         for m in motor:
             n = m+1
             try:
                 scaninfo.append(n)
-                st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-                fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+                initial_motorpos[m] = p0
+                p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+                st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+                fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
                 tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
                 step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
                 scaninfo.append(st)
@@ -996,6 +1034,7 @@ class tweakmotors(QMainWindow):
             except:
                 showerror("Check scan paramters.")
                 return 0
+        self.motor_p0 = initial_motorpos
         self.write_scaninfo_to_logfile(scaninfo)
         scaninfo = []
         scaninfo.append('#D')
@@ -1021,16 +1060,19 @@ class tweakmotors(QMainWindow):
         scaninfo.append('\n#S')
         scaninfo.append(self.parameters.scan_number)
         scaninfo.append('fly')
-        scaninfo.append(n)        
+        scaninfo.append(n)    
+        initial_motorpos = {}    
         try:
-            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+            p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+            initial_motorpos[motornumber] = p0
+            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
             tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
             step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
         except:
             showerror("Check scan paramters.")
             return 0
-
+        self.motor_p0 = initial_motorpos
         scaninfo.append(st)
         scaninfo.append(fe)
         scaninfo.append(tm)
@@ -1076,8 +1118,9 @@ class tweakmotors(QMainWindow):
             n = motornumber + 1
         
         try:
-            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+            p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
             tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
             step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
         except:
@@ -1179,8 +1222,9 @@ class tweakmotors(QMainWindow):
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
 
-        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
         expt = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
         step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
 
@@ -1277,8 +1321,9 @@ class tweakmotors(QMainWindow):
         pos = self.pts.get_pos(axis)
         self.isfly3 = False
         n = phimotor+1
-        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
         #tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
         step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
 
@@ -1323,6 +1368,7 @@ class tweakmotors(QMainWindow):
         # xmotor is for flying
         # ymotor is for stepping
         axis = self.motornames[ymotor]
+        print(f'{axis=}, which is {ymotor=}') #JD
         self.signalmotor2 = axis
         self.signalmotorunit2 = self.motorunits[ymotor]
 #        self.rpos2 = []
@@ -1330,8 +1376,9 @@ class tweakmotors(QMainWindow):
         pos = self.pts.get_pos(axis)
         self.isfly2 = False
         n = ymotor+1
-        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
         step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
 
         maxexposuretime = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%(xmotor+1)).text())
@@ -1427,8 +1474,9 @@ class tweakmotors(QMainWindow):
         if not self.ui.cb_keepprevscan.isChecked():
 #            print("Clear plot")
             self.clearplot()
-        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
         tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
         try:
             step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
@@ -1521,6 +1569,7 @@ class tweakmotors(QMainWindow):
                     istraj_running = False
                     timeout = 5
                     i = 0
+                    print("Hexapod is at the initial position.")
                     while not istraj_running:
                         try:
                             self.pts.hexapod.run_traj(axis)
@@ -1532,21 +1581,21 @@ class tweakmotors(QMainWindow):
                         if i>timeout:
                             print("traj scan command is resent for 5 times to the hexapod without success.")
                             break
-#                print("Run_traj is sent command in rungui.")
+                print("Run_traj is sent command in rungui.")
                 isattarget = False
                 while not isattarget:
                     try:
                         isattarget = self.pts.hexapod.isattarget(axis)
                     except:
                         isattarget = False
-                    #print("Waiting to be done...")
+#                    print("Waiting to be done...")
                     time.sleep(0.1)
                 if self.isStruckCountNeeded:
                     struck.strk.stop()
                 else:
                     epics.caput('12idc:scaler1.CNT', 0)
                 pos = self.pts.get_pos(axis)
-#                print(f"pos is {pos} after the traj run done.")
+                print(f"pos is {pos} after the traj run done.")
 
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD):
 #            if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD) or (axis != "X"):
@@ -1604,6 +1653,7 @@ class tweakmotors(QMainWindow):
             return False
         else:
             return True
+        
     def print_fly_settings(self, motornumber):
         print('')
         print("Currently, the flyscan only works for X axis of the hexapod.")
@@ -1615,8 +1665,9 @@ class tweakmotors(QMainWindow):
         
         self.isfly = True
         n = motornumber+1
-        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
         tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
         try:
             step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
@@ -1996,6 +2047,8 @@ class tweakmotors(QMainWindow):
             for axis, pos in data.items():
                 #self.set_mv(self, axis, float(pos))
                 motornumber = self.motornames.index(axis)
+                n = motornumber+1
+                self.ui.findChild(QLineEdit, "ed_%i"%n).setText(pos)
                 self.mv(motornumber=motornumber, val=float(pos))
         elif cmd == 'mvr':
             for axis, pos in data.items():
@@ -2003,6 +2056,7 @@ class tweakmotors(QMainWindow):
                 self.mvr(motornumber=motornumber, val=float(pos))
         elif cmd == 'run2d':
             self.fly2d(xmotor=xmotor,ymotor=ymotor,scanname=scanname)
+            
         elif cmd == 'run3d':
             self.fly3d(xmotor=xmotor,ymotor=ymotor,phimotor=phimotor,scanname=scanname)
         elif cmd == 'none':
