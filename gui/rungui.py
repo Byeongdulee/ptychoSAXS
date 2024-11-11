@@ -853,9 +853,10 @@ class tweakmotors(QMainWindow):
             dt2 = np.column_stack((td, dt[0][i], dt[1][i], dt[2][i]))
             np.savetxt(os.path.join(foldername, scanname), dt2, fmt="%1.8e %1.8e %1.8e %1.8e")
 
-    def flydone(self, value=0):
-        for key in self.motor_p0:
-            self.mv(key, self.motor_p0[key])
+    def flydone(self, return_motor=True):
+        if return_motor:
+            for key in self.motor_p0:
+                self.mv(key, self.motor_p0[key])
 
         print("fly done.......")
 #        pos = self.pts.get_pos('X')
@@ -1063,7 +1064,11 @@ class tweakmotors(QMainWindow):
         scaninfo.append(n)    
         initial_motorpos = {}    
         try:
-            p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+            p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+            if len(p0)==0:
+                p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+                self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+            p0 = float(p0)
             initial_motorpos[motornumber] = p0
             st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
             fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
@@ -1118,7 +1123,11 @@ class tweakmotors(QMainWindow):
             n = motornumber + 1
         
         try:
-            p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+            p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+            if len(p0)==0:
+                p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+                self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+            p0 = float(p0)
             st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
             fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
             tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
@@ -1222,7 +1231,11 @@ class tweakmotors(QMainWindow):
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
 
-        p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        if len(p0)==0:
+            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        p0 = float(p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
         expt = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
@@ -1321,7 +1334,11 @@ class tweakmotors(QMainWindow):
         pos = self.pts.get_pos(axis)
         self.isfly3 = False
         n = phimotor+1
-        p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        if len(p0)==0:
+            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        p0 = float(p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
         #tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
@@ -1376,7 +1393,11 @@ class tweakmotors(QMainWindow):
         pos = self.pts.get_pos(axis)
         self.isfly2 = False
         n = ymotor+1
-        p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        if len(p0)==0:
+            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        p0 = float(p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
         step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
@@ -1426,7 +1447,7 @@ class tweakmotors(QMainWindow):
             # fly here
             self.fly0(xmotor)
 #            print("CCCC")
-            self.flydone()
+            self.flydone(return_motor=False)
             # try:
             #epics.caput('12idc:scaler1.CNT', 0)
             # except:
@@ -1474,7 +1495,11 @@ class tweakmotors(QMainWindow):
         if not self.ui.cb_keepprevscan.isChecked():
 #            print("Clear plot")
             self.clearplot()
-        p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        if len(p0)==0:
+            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        p0 = float(p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
         tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
@@ -1666,7 +1691,11 @@ class tweakmotors(QMainWindow):
         
         self.isfly = True
         n = motornumber+1
-        p0 = float(self.ui.findChild(QLineEdit, "ed_%i"%n).text())
+        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        if len(p0)==0:
+            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        p0 = float(p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
         tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
