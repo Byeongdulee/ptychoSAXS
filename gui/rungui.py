@@ -1588,6 +1588,7 @@ class tweakmotors(QMainWindow):
                         isattarget = self.pts.hexapod.isattarget(axis)
                     except:
                         isattarget = False
+                    self.updatepos()
 #                    print("Waiting to be done...")
                     time.sleep(0.1)
                 if self.isStruckCountNeeded:
