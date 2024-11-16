@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1423</width>
+    <width>1068</width>
     <height>801</height>
    </rect>
   </property>
@@ -27,71 +27,6 @@
     </size>
    </property>
    <layout class="QGridLayout" name="gridLayout">
-    <item row="0" column="0">
-     <layout class="QGridLayout" name="gridLayout_10">
-      <item row="0" column="1">
-       <widget class="QLineEdit" name="ed_workingfolder">
-        <property name="minimumSize">
-         <size>
-          <width>500</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>2000</width>
-          <height>20</height>
-         </size>
-        </property>
-        <property name="toolTip">
-         <string>Experiment log file and softglue data will be saved in this folder.</string>
-        </property>
-        <property name="maxLength">
-         <number>500</number>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="QLineEdit" name="ed_scanname">
-        <property name="maximumSize">
-         <size>
-          <width>500</width>
-          <height>20</height>
-         </size>
-        </property>
-        <property name="toolTip">
-         <string>Filename for 2D detector data</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="label_10">
-        <property name="text">
-         <string>Scan Name:</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_6">
-        <property name="maximumSize">
-         <size>
-          <width>100</width>
-          <height>16777215</height>
-         </size>
-        </property>
-        <property name="text">
-         <string>Working folder:</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
     <item row="1" column="0">
      <widget class="QFrame" name="frame">
       <property name="sizePolicy">
@@ -2436,6 +2371,108 @@
       </widget>
      </widget>
     </item>
+    <item row="0" column="0">
+     <layout class="QGridLayout" name="gridLayout_10">
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="ed_scanname">
+        <property name="maximumSize">
+         <size>
+          <width>500</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Filename for 2D detector data</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_10">
+        <property name="text">
+         <string>Scan Base Name:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_6">
+        <property name="maximumSize">
+         <size>
+          <width>100</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>Working folder:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="4">
+       <widget class="QLabel" name="label_13">
+        <property name="text">
+         <string>Scan Name:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QLabel" name="label_12">
+        <property name="text">
+         <string>Next Scan Number</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QLineEdit" name="le_scannumber">
+        <property name="maximumSize">
+         <size>
+          <width>100</width>
+          <height>16777215</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="5">
+       <widget class="QLabel" name="lb_scanname">
+        <property name="minimumSize">
+         <size>
+          <width>250</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1" colspan="5">
+       <widget class="QLineEdit" name="ed_workingfolder">
+        <property name="minimumSize">
+         <size>
+          <width>500</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>2000</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Experiment log file and softglue data will be saved in this folder.</string>
+        </property>
+        <property name="maxLength">
+         <number>500</number>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -2443,7 +2480,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1423</width>
+     <width>1068</width>
      <height>21</height>
     </rect>
    </property>
@@ -2508,6 +2545,7 @@
     <addaction name="actionTestFly"/>
     <addaction name="actionMonitor_Beamline_Status"/>
     <addaction name="separator"/>
+    <addaction name="actionRatio_of_exptime_period_for_Flyscan"/>
     <addaction name="actionSet_waittime_between_scans"/>
     <addaction name="action2D_scan"/>
     <addaction name="action3D_scan"/>
@@ -2524,6 +2562,7 @@
      </property>
      <addaction name="actionTrigout"/>
      <addaction name="actionDetout"/>
+     <addaction name="actionevery_10_millie_seconds"/>
     </widget>
     <addaction name="actionMemory_clear_before_scan"/>
     <addaction name="actionckTime_reset_before_scan"/>
@@ -2541,6 +2580,7 @@
     <addaction name="actionStruck"/>
     <addaction name="separator"/>
     <addaction name="actionReset_to_Fly_mode"/>
+    <addaction name="actionUse_hdf_plugin"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuHexapod"/>
@@ -2815,6 +2855,30 @@
   <action name="actionSet_Log_Filename">
    <property name="text">
     <string>Set Log Filename</string>
+   </property>
+  </action>
+  <action name="actionUse_hdf_plugin">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Use hdf plugin</string>
+   </property>
+  </action>
+  <action name="actionevery_10_millie_seconds">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>every 10 millie-seconds</string>
+   </property>
+  </action>
+  <action name="actionRatio_of_exptime_period_for_Flyscan">
+   <property name="text">
+    <string>Ratio of exptime/period for Flyscan</string>
    </property>
   </action>
  </widget>

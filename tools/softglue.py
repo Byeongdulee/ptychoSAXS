@@ -1,6 +1,7 @@
 import time
 from epics import Device, PV
 import numpy as np
+from tqdm import tqdm
 
 class sgz_pty(Device):
     basePV = "12IFMZ:"
@@ -174,7 +175,7 @@ class sgz_pty(Device):
             data = self.get_array(p)
             arr.append(data[self.VALI])
         return arr
-        
+    
     def get_arrays(self, pos = ['B', 'C', 'D']):
         # returns time and position arrays
         t, ind = self.get_timearray()

@@ -10,7 +10,8 @@ PILATUSMODE = 2
 class AD_Pilatus(Device):
     camattrs = ('NumImages', 'NumTriggers', 
                 'ImageMode', 'TriggerMode',
-                'AutoIncrement', 'FileNumber', 'FilePath',
+                'AutoIncrement', 'FileNumber', 'FileNumber_RBV', 'FilePath',
+                'FileName', 'FileName_RBV', 'FullFileName_RBV', 
                 'Acquire', 'Acquire_RBV', 'AcquireTime', 'AcquirePeriod',
                 'Armed', 'ArrayCounter', 'ArrayCounter_RBV')
 

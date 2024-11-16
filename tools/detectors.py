@@ -43,21 +43,25 @@ class pilatus(AD_Pilatus):
 		self.filePut('AutoSave', 1)
 		self.filePut('FileWriteMode', 1)
 
-	def fly_ready(self, expt, x_points, y_points=1, wait=False, period=0, isTest=False):
+	def fly_ready(self, expt, x_points, y_points=1, wait=False, period=0, isTest=False, capture=True):
 		Npoints = x_points*y_points
 		self.SetExposureTime(expt)
 		if period>0:
 			self.SetExposurePeriod(period)
 		self.setArrayCounter(0)
-		self.setFileTemplate('%s%s_data_%5.5d.h5')
+		self.setFileTemplate('%s%s_%5.5d.h5')
 		self.SetMultiFrames(Npoints, x_points)
+		self.setFileNumber(1)
 		if not isTest:
-			try:
-				self.StartCapture()
-				if wait:
-					self.wait_capturedone()
-			except TimeoutError:
-				raise TimeoutError
+			if capture:
+				try:
+					self.StartCapture()
+					if wait:
+						self.wait_capturedone()
+				except TimeoutError:
+					raise TimeoutError
+			else:
+				self.Arm()
 			
 	def set_scanNumberAsfilename(self):
 		fw_dir = caget(f"{beamlinePV}data:userDir")
