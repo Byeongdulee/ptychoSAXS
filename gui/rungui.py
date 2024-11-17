@@ -361,7 +361,7 @@ class tweakmotors(QMainWindow):
         self.ui.actionSet_waittime_between_scans.triggered.connect(self.set_waittime_between_scans)
         self.ui.actionMonitor_Beamline_Status.triggered.connect(self.set_monitor_beamline_status)
         self.ui.actionUse_hdf_plugin.triggered.connect(self.set_hdf_plugin_use)
-        self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)))
+        self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)+1))
         self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_exp_period_ratio)
 #        self.ui.ed_scanname.returnPressed.connect(self.update_scannumber)
         self.use_hdf_plugin = True
