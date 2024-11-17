@@ -808,9 +808,7 @@ class tweakmotors(QMainWindow):
             scaninfo = []
             scaninfo.append('#D')
             scaninfo.append(time.ctime())
-        self.parameters.scan_number = self.parameters.scan_number + 1
-        self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)))
-        self.parameters.writeini()
+        self.run_stop_issued()
 
     def select_detectors(self, N):
         if N==1:
@@ -1335,9 +1333,7 @@ class tweakmotors(QMainWindow):
         w.signal.finished.connect(self.flydone)
 
         self.threadpool.start(w)
-        self.parameters.scan_number = self.parameters.scan_number + 1
-        self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)))
-        self.parameters.writeini()        
+        self.run_stop_issued()
 
     def write_scaninfo_to_logfile(self, strlist):
         if len(self.parameters.logfilename) == 0:
@@ -1471,7 +1467,12 @@ class tweakmotors(QMainWindow):
         else:
             r = [r[0]/1000, r[1]/1000, r[2]/1000]
         return r
-    
+
+    def run_stop_issued(self):
+        self.parameters.scan_number = self.parameters.scan_number + 1
+        self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)))
+        self.parameters.writeini()        
+
     def stepscan0(self, motornumber):
         axis = self.motornames[motornumber]
         self.signalmotor = axis
@@ -1553,7 +1554,7 @@ class tweakmotors(QMainWindow):
 #        print(pos)
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
-                return
+                break
             self.pts.mv(axis, value)
             #print(value)
             if len(self.detector)>0:
@@ -1626,7 +1627,7 @@ class tweakmotors(QMainWindow):
             scanname=f"{scanname}{axis}"        
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
-                return
+                break
             
             # loging phi angle information
             print(f"phi position : {value}")
@@ -1693,7 +1694,7 @@ class tweakmotors(QMainWindow):
         
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
-                return
+                break
             # try:
             # except:
             #     print("error epics")
@@ -1730,9 +1731,7 @@ class tweakmotors(QMainWindow):
             #    time.sleep(0.02)
 #            filename = "%s%0.3d"%(scanname, i)
 #            self.save_qds(filename=filename)
-        self.parameters.scan_number = self.parameters.scan_number + 1
-        self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)))
-        self.parameters.writeini()
+        self.run_stop_issued()
 
     def fly0(self, motornumber):
         axis = self.motornames[motornumber]
