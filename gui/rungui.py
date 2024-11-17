@@ -1880,7 +1880,7 @@ class tweakmotors(QMainWindow):
                         isattarget = self.pts.hexapod.isattarget(axis)
                     except:
                         isattarget = False
-                    self.updatepos()
+                    #self.updatepos()
 #                    print("Waiting to be done...")
                     time.sleep(0.5)
                 if self.isStruckCountNeeded:
@@ -2187,10 +2187,10 @@ class tweakmotors(QMainWindow):
         #self.rpos = []
         #self.mpos = []
         if self.isscan:
+            self.updatepos()
             if self.isfly:
                 self.rpos.append([r[0], r[1], r[2]])
                 self.mpos.append(self.get_motorpos(self.signalmotor))
-            self.updatepos()
             self.plot()
         else:
             self.updatepos()
