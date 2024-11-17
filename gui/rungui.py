@@ -792,10 +792,14 @@ class tweakmotors(QMainWindow):
             scaninfo.append('#I detector_filename')
             for det in self.detector:
                 if det is not None:
-                    fnum = det.fileGet('FileNumber_RBV')
-                    fn = det.fileGet('FullFileName_RBV', as_string=True)
-                    if str(fnum-1) not in fn:
+                    if self.use_hdf_plugin:
+                        fnum = det.fileGet('FileNumber_RBV')
                         fn = det.fileGet('FullFileName_RBV', as_string=True)
+                        if str(fnum-1) not in fn:
+                            fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    else:
+                        fnum = det.FileNumber_RBV
+                        fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
                     filename = os.path.basename(fn)
                     scaninfo.append(filename)
             if len(scaninfo)>1:
@@ -877,10 +881,12 @@ class tweakmotors(QMainWindow):
         filename = ""
         for det in self.detector:
             if det is not None:
-#                fnum = det.fileGet('FileNumber_RBV')
-#                fn = det.fileGet('FullFileName_RBV', as_string=True)
-                fnum = det.FileNumber_RBV
-                fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+                if self.use_hdf_plugin:
+                    fnum = det.fileGet('FileNumber_RBV')
+                    fn = det.fileGet('FullFileName_RBV', as_string=True)
+                else:
+                    fnum = det.FileNumber_RBV
+                    fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
 #                print(f'{fn=}')
                 #if str(fnum-1) not in fn:
                 #    fn = det.fileGet('FullFileName_RBV', as_string=True)
@@ -931,9 +937,12 @@ class tweakmotors(QMainWindow):
         filename = ""
         for det in self.detector:
             if det is not None:
-                fnum = det.fileGet('FileNumber_RBV')
-#                print(f'{fnum=}')
-                fn = det.fileGet('FullFileName_RBV', as_string=True)
+                if self.use_hdf_plugin:
+                    fnum = det.fileGet('FileNumber_RBV')
+                    fn = det.fileGet('FullFileName_RBV', as_string=True)
+                else:
+                    fnum = det.FileNumber_RBV
+                    fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
 #                print(f'{fn=}')
                 #if str(fnum-1) not in fn:
                 #    fn = det.fileGet('FullFileName_RBV', as_string=True)
@@ -962,7 +971,7 @@ class tweakmotors(QMainWindow):
                 self.mv(key, self.motor_p0[key])
 
         print("fly done.......")
-        ct0 = time.time()
+#        ct0 = time.time()
 #        pos = self.pts.get_pos('X')
 #        print(f'X position is at {pos} in flydone.')
         isTestRun = self.ui.actionTestFly.isChecked()
@@ -981,22 +990,33 @@ class tweakmotors(QMainWindow):
         self.isfly = False
         if len(self.parameters.logfilename)>0:
             if self.isStruckCountNeeded:
+                # save struck data.
                 r = struck.read_mcs([0, 1, 2])
                 pos = np.arange(len(r[0]))
                 self.mpos = pos
                 print("Number of MCS channels : ", len(r))
             else:
+                # save qds data.
                 pos = np.asarray(self.mpos)
                 r = np.asarray(self.rpos)
-            self.save_nparray(self.parameters.logfilename, pos,r,[0,1,2],"a")
+            try:
+                self.save_nparray(self.parameters.logfilename, pos,r,[0,1,2],"a")
+            except:
+                self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
             scaninfo = []
             scaninfo.append('#I detector_filename')
             for det in self.detector:
                 if det is not None:
-                    fnum = det.fileGet('FileNumber_RBV')
-                    fn = det.fileGet('FullFileName_RBV', as_string=True)
-                    if str(fnum-1) not in fn:
+                    if self.use_hdf_plugin:
+                        fnum = det.fileGet('FileNumber_RBV')
                         fn = det.fileGet('FullFileName_RBV', as_string=True)
+                        if str(fnum-1) not in fn:
+                            fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    else:
+                        fnum = det.FileNumber_RBV
+                        fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+                        #fnum = det.fileGet('FileNumber_RBV')
+                        #fn = det.fileGet('FullFileName_RBV', as_string=True)
                     filename = os.path.basename(fn)
                     scaninfo.append(filename)
                     # if no cpature, comment the two line out.
@@ -1010,12 +1030,45 @@ class tweakmotors(QMainWindow):
             self.write_scaninfo_to_logfile(scaninfo)
 #        print(f"elapsed time since done = {time.time()-ct0}")
         success=False
-        while success is False:
+        timeout = 5
+        cnt = 0
+        while success == False:
             try:
                 self.save_softglue()
                 success = True
             except:
-                pass
+                print("error on softglue, it will be flushed again.")
+                s12softglue.flush()
+                cnt = cnt + 1
+                if cnt>timeout:
+                    break
+        # if read softglue failed...
+        if success == False:
+            foldername = self.ui.ed_workingfolder.text()
+            if len(foldername) == 0:
+                return
+            filename = ""
+            for det in self.detector:
+                if det is not None:
+                    if self.use_hdf_plugin:
+                        fnum = det.fileGet('FileNumber_RBV')
+                        fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    else:
+                        fnum = det.FileNumber_RBV
+                        fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+                    filename = os.path.basename(fn)
+                    filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
+            if len(filename) ==0:
+                print("****** Error: detector ioc does not response.")
+                filename = "temp%i"%int(time.time())
+            filename = f"{filename}.dat"
+            print(f"\nSoftglue epics erorr.....Data read from usb will be saved in {filename}\n")
+            try:
+                self.save_nparray(filename, pos,r,[0,1,2],"a")
+            except:
+                self.save_list(filename, pos,r,[0,1,2],"a")
+        self.rpos = []
+        self.mpos = []
         #t = []
         #while len(t) == 0:
         #    try:
@@ -1599,7 +1652,7 @@ class tweakmotors(QMainWindow):
             while (time.time()-t1 < self.parameters._waittime_between_scans):
                 time.sleep(0.01)
             timeelapsed = time.time()-t0
-            print(f"Remaining time for the current 2D scan is {np.round(timeelapsed*(len(pos)-i-1),2)}s")
+            print(f"Remaining time for the current 2D scan is {np.round(timeelapsed*(len(pos)-i-1),2)}s\n")
 #            self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
             #await save_softglue(self.pts.hexapod.pulse_number, self.softglue_channels,
             #                    self.parameters.working_folder, filename)
@@ -1616,8 +1669,8 @@ class tweakmotors(QMainWindow):
         axis = self.motornames[motornumber]
         self.signalmotor = axis
         self.signalmotorunit = self.motorunits[motornumber]
-        self.rpos = []
-        self.mpos = []
+        #self.rpos = []
+        #self.mpos = []
         self.plotlabels = []
         if self.ui.actionckTime_reset_before_scan.isChecked():
             s12softglue.ckTime_reset()
@@ -1733,7 +1786,7 @@ class tweakmotors(QMainWindow):
                                           isTest = isTestRun, capture=self.use_hdf_plugin)
 #                            print("det is ready.")
                         except TimeoutError:
-                            msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
+                            msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
                             print(msg)
                             self.ui.statusbar.showMessage(msg)
                             #showerror("Detector timeout.")
@@ -1758,8 +1811,11 @@ class tweakmotors(QMainWindow):
                             self.pts.hexapod.run_traj(axis)
                         except:
                             pass
-                        time.sleep(0.25)
-                        istraj_running = self.is_traj_running()
+                        time.sleep(0.5)
+                        pos_tmp = self.pts.get_pos(axis)
+                        if pos_tmp != pos:
+                            istraj_running = True
+                        #istraj_running = self.is_traj_running()
                         i = i+1
                         if i>timeout:
                             print("traj scan command is resent for 5 times to the hexapod without success.")
@@ -1773,7 +1829,7 @@ class tweakmotors(QMainWindow):
                         isattarget = False
                     self.updatepos()
 #                    print("Waiting to be done...")
-                    time.sleep(0.1)
+                    time.sleep(0.5)
                 if self.isStruckCountNeeded:
                     struck.strk.stop()
                 else:
@@ -2062,8 +2118,8 @@ class tweakmotors(QMainWindow):
         self.updatepos(axis)
     
     def update_qds(self):
-        if self.isfly:
-            return
+        #if self.isfly:
+        #    return
         try:
             r = self.get_qds_pos()
         except:
@@ -2177,7 +2233,7 @@ class tweakmotors(QMainWindow):
                     yl3 = 'Z position (um)'                
                 self.plotlabels = [yl, yl2, yl3]
             self.ax.set_ylabel(self.plotlabels[0])
-            print("dimension of r = ", r.ndim)
+#            print("dimension of r = ", r.ndim)
             if r.ndim == 2:
                 self.ax2.plot(pos, r[:,1], 'b')
                 self.ax2.set_xlabel(xl)
