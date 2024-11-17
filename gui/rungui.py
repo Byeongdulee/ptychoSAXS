@@ -1167,12 +1167,12 @@ class tweakmotors(QMainWindow):
                     self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
                 p0 = float(p0)
                 initial_motorpos[m] = p0
-                st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-                fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
+                st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+                fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
                 tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
                 step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-                scaninfo.append(st)
-                scaninfo.append(fe)
+                scaninfo.append(st+p0)
+                scaninfo.append(fe+p0)
                 scaninfo.append(tm)      
                 scaninfo.append(step)      
             except:
@@ -1225,12 +1225,12 @@ class tweakmotors(QMainWindow):
                     p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
                     self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
                 p0 = float(p0)
-                st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-                fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
+                st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+                fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
                 tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
                 step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-                scaninfo.append(st)
-                scaninfo.append(fe)
+                scaninfo.append(st+p0)
+                scaninfo.append(fe+p0)
                 scaninfo.append(tm)
                 scaninfo.append(step)
             except:
@@ -1311,8 +1311,8 @@ class tweakmotors(QMainWindow):
                 self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
             p0 = float(p0)
             initial_motorpos[motornumber] = p0
-            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
+            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
             tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
             step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
         except:
@@ -1324,8 +1324,8 @@ class tweakmotors(QMainWindow):
         self.fly1d_fe = fe
         self.fly1d_tm = tm
         self.fly1d_step = step
-        scaninfo.append(st)
-        scaninfo.append(fe)
+        scaninfo.append(st+p0)
+        scaninfo.append(fe+p0)
         scaninfo.append(tm)
         scaninfo.append(step)
         self.write_scaninfo_to_logfile(scaninfo)
@@ -1380,8 +1380,8 @@ class tweakmotors(QMainWindow):
                 p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
                 self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
             p0 = float(p0)
-            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
+            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
             tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
             step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
         except:
@@ -1394,8 +1394,8 @@ class tweakmotors(QMainWindow):
         scaninfo.append(self.parameters.scan_number)
         scaninfo.append('step_scan')
         scaninfo.append(self.motornames[motornumber])
-        scaninfo.append(st)
-        scaninfo.append(fe)
+        scaninfo.append(st+p0)
+        scaninfo.append(fe+p0)
         scaninfo.append(tm)
         scaninfo.append(step)
         self.write_scaninfo_to_logfile(scaninfo)
@@ -1485,16 +1485,20 @@ class tweakmotors(QMainWindow):
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
 
-        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-        if len(p0)==0:
-            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
-        p0 = float(p0)
-        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
-        expt = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
-        step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        # p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        # if len(p0)==0:
+        #     p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+        #     self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        # p0 = float(p0)
+        # st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+        # fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        # expt = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        # step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
 
+        st = self.stepscan_st + self.stepscan_p0
+        fe = self.stepscan_fe + self.stepscan_p0
+        expt = self.stepscan_expt
+        step = self.stepscan_step
         # disable fit menu
         self.ui.actionFit_QDS_phi.setEnabled(False)
         # enable fit menu
@@ -1960,9 +1964,11 @@ class tweakmotors(QMainWindow):
             p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
             self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
         p0 = float(p0)
-        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
         tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        st = st + p0
+        fe = fe + p0
         try:
             step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
         except:
