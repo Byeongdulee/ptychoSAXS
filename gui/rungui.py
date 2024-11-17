@@ -61,6 +61,7 @@ from typing import List
 HEXAPOD_FLYMODE_WAVELET = 0
 HEXAPOD_FLYMODE_STANDARD = 1
 FRACTION_EXPOSURE_PERIOD = 0.2
+DETECTOR_READOUTTIME = 0.02
 QDS_UNIT_NM = 0
 QDS_UNIT_UM = 1
 QDS_UNIT_MM = 2
@@ -1156,7 +1157,7 @@ class tweakmotors(QMainWindow):
         scaninfo.append(self.parameters.scan_number)
         scaninfo.append('fly2d')
         initial_motorpos = {}
-        for m in motor:
+        for i, m in enumerate(motor):
             n = m+1
             try:
                 scaninfo.append(n)
@@ -1177,6 +1178,19 @@ class tweakmotors(QMainWindow):
             except:
                 showerror("Check scan paramters.")
                 return 0
+            if i == 0:
+                self.fly1d_p0 = p0
+                self.fly1d_st = st
+                self.fly1d_fe = fe
+                self.fly1d_tm = tm
+                self.fly1d_step = step
+            if i == 1:
+                self.fly2d_p0 = p0
+                self.fly2d_st = st
+                self.fly2d_fe = fe
+                self.fly2d_tm = tm
+                self.fly2d_step = step
+
         self.motor_p0 = initial_motorpos
         self.write_scaninfo_to_logfile(scaninfo)
         scaninfo = []
@@ -1201,7 +1215,7 @@ class tweakmotors(QMainWindow):
         scaninfo.append(self.parameters.scan_number)
         scaninfo.append('fly3d')
         initial_motorpos = {}
-        for m in motor:
+        for i, m in enumerate(motor):
             n = m+1
             try:
                 scaninfo.append(n)
@@ -1222,6 +1236,25 @@ class tweakmotors(QMainWindow):
             except:
                 showerror("Check scan paramters.")
                 return 0
+            if i == 0:
+                self.fly1d_p0 = p0
+                self.fly1d_st = st
+                self.fly1d_fe = fe
+                self.fly1d_tm = tm
+                self.fly1d_step = step
+            if i==1:
+                self.fly2d_p0 = p0
+                self.fly2d_st = st
+                self.fly2d_fe = fe
+                self.fly2d_tm = tm
+                self.fly2d_step = step
+            if i==2:
+                self.fly3d_p0 = p0
+                self.fly3d_st = st
+                self.fly3d_fe = fe
+                self.fly3d_tm = tm
+                self.fly3d_step = step
+            
         self.motor_p0 = initial_motorpos
         self.write_scaninfo_to_logfile(scaninfo)
         scaninfo = []
@@ -1251,6 +1284,26 @@ class tweakmotors(QMainWindow):
         scaninfo.append('fly')
         scaninfo.append(n)    
         initial_motorpos = {}    
+
+        # n = motornumber+1
+        # p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        # if len(p0)==0:
+        #     p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+        #     self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        # p0 = float(p0)
+        # st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+        # fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
+        # tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        # try:
+        #     step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        # except:
+        #     step = 0.1
+        #     self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText("%0.3f"%step)
+        # if abs(tm) <= 0.033:
+        #     print(f"Note that Max speed of Pilatus2M is 30Hz.")
+        #     print("******* Cannot run.")
+        #     return
+
         try:
             p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
             if len(p0)==0:
@@ -1266,6 +1319,11 @@ class tweakmotors(QMainWindow):
             showerror("Check scan paramters.")
             return 0
         self.motor_p0 = initial_motorpos
+        self.fly1d_p0 = p0
+        self.fly1d_st = st
+        self.fly1d_fe = fe
+        self.fly1d_tm = tm
+        self.fly1d_step = step
         scaninfo.append(st)
         scaninfo.append(fe)
         scaninfo.append(tm)
@@ -1529,16 +1587,20 @@ class tweakmotors(QMainWindow):
 #        self.mpos3 = []
         pos = self.pts.get_pos(axis)
         self.isfly3 = False
-        n = phimotor+1
-        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-        if len(p0)==0:
-            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
-        p0 = float(p0)
-        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
-        #tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
-        step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        # n = phimotor+1
+        # p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        # if len(p0)==0:
+        #     p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+        #     self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        # p0 = float(p0)
+        # st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+        # fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
+        # #tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        # step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        
+        st = self.fly3d_st + self.fly3d_motor_p0
+        fe = self.fly3d_fe + self.fly3d_motor_p0
+        step = self.fly3d_step
 
         if st>fe:
             step = -1*abs(step)
@@ -1590,15 +1652,19 @@ class tweakmotors(QMainWindow):
 #        self.mpos2 = []
         pos = self.pts.get_pos(axis)
         self.isfly2 = False
-        n = ymotor+1
-        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-        if len(p0)==0:
-            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
-        p0 = float(p0)
-        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
-        step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        # n = ymotor+1
+        # p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        # if len(p0)==0:
+        #     p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+        #     self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        # p0 = float(p0)
+        # st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
+        # fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
+        # step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        p0 = self.fly2d_p0
+        st = self.fly2d_st + p0
+        fe = self.fly2d_fe + p0
+        step = self.fly2d_step
 
         maxexposuretime = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%(xmotor+1)).text())
         #epics.caput('12idc:scaler1.TP', maxexposuretime+5)
@@ -1665,7 +1731,6 @@ class tweakmotors(QMainWindow):
         self.parameters.writeini()
 
     def fly0(self, motornumber):
-        DETECTOR_READOUTTIME = 0.02
         axis = self.motornames[motornumber]
         self.signalmotor = axis
         self.signalmotorunit = self.motorunits[motornumber]
@@ -1689,29 +1754,9 @@ class tweakmotors(QMainWindow):
         # disable fit menu
         self.ui.actionFit_QDS_phi.setEnabled(False)
 
-        n = motornumber+1
-
-
         if not self.ui.cb_keepprevscan.isChecked():
 #            print("Clear plot")
             self.clearplot()
-        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-        if len(p0)==0:
-            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
-        p0 = float(p0)
-        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
-        tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
-        try:
-            step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-        except:
-            step = 0.1
-            self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText("%0.3f"%step)
-        if abs(tm) <= 0.033:
-            print(f"Note that Max speed of Pilatus2M is 30Hz.")
-            print("******* Cannot run.")
-            return
         
         # logging datatype
         scaninfo = []
@@ -1727,6 +1772,11 @@ class tweakmotors(QMainWindow):
             scaninfo.append('QDS2')
             scaninfo.append('QDS3')
         self.write_scaninfo_to_logfile(scaninfo)  
+
+        st = self.fly1d_st + self.fly1d_p0
+        fe = self.fly1d_fe + self.fly1d_p0
+        step = self.fly1d_step
+        tm = self.fly1d_tm
 
         pos = self.pts.get_pos(axis)
         if axis in self.pts.hexapod.axes:
