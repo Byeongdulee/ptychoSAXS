@@ -729,7 +729,11 @@ class tweakmotors(QMainWindow):
         self.canvas.draw()
 
     def get_motorpos(self, axis):
-        return self.pts.get_pos(axis)
+        # get motor position from the label
+        # i.e. axis = 'X'
+        i = self.motornames.index(axis)
+        return float(self.ui.findChild(QLabel, "lb_%i"%(i+1)).text())
+        
         
     def updatepos(self, axis = "", val=None):
         if len(axis)==0:
@@ -2190,6 +2194,7 @@ class tweakmotors(QMainWindow):
             self.updatepos()
             if self.isfly:
                 self.rpos.append([r[0], r[1], r[2]])
+                #self.mpos.append(self.pts.get_pos(self.signalmotor))
                 self.mpos.append(self.get_motorpos(self.signalmotor))
             self.plot()
         else:
