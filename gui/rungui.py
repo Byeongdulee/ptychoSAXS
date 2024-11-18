@@ -1655,6 +1655,10 @@ class tweakmotors(QMainWindow):
 
     def fly2d0(self, xmotor = 0, ymotor=1, scanname = ""):
         self.update_scanname()
+        for det in self.detector: #JD
+            if det is not None:  #JD
+                det.filePut('FileNumber', 1)  #JD
+                det.FileNumber = 1
 
         # xmotor is for flying
         # ymotor is for stepping
@@ -1723,10 +1727,6 @@ class tweakmotors(QMainWindow):
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 break
-            for det in self.detector: #JD
-                if det is not None:  #JD
-                    det.filePut('FileNumber', 1)  #JD
-                    det.FileNumber = 1
             # try:
             # except:
             #     print("error epics")
