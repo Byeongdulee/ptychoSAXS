@@ -1140,10 +1140,10 @@ class tweakmotors(QMainWindow):
         
     def fly2d(self, xmotor=0, ymotor=1, scanname = ""):
         self.isStopScanIssued = False
-        for det in self.detector: #JD
-            if det is not None:  #JD
-                det.filePut('FileNumber', 1)  #JD
-                det.FileNumber = 1
+        # for det in self.detector: #JD
+        #     if det is not None:  #JD
+        #         det.filePut('FileNumber', 1)  #JD
+        #         det.FileNumber = 1
 
         if self.ui.actionckTime_reset_before_scan.isChecked():
             s12softglue.ckTime_reset()
@@ -1619,12 +1619,13 @@ class tweakmotors(QMainWindow):
             step = -1*abs(step)
         if st<fe:
             step = abs(step)
-        if self.ui.cb_reversescandir.isChecked():
-            if abs(st-pos)>abs(fe-pos):
-                t = fe
-                fe = st
-                st = t 
-                step = -step
+        # revsere scan disabled: always scan from start to final regardless of the initial position.
+        # if self.ui.cb_reversescandir.isChecked():
+        #     if abs(st-pos)>abs(fe-pos):
+        #         t = fe
+        #         fe = st
+        #         st = t 
+        #         step = -step
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step/2, step)
 
@@ -1665,18 +1666,36 @@ class tweakmotors(QMainWindow):
 #        self.mpos2 = []
         pos = self.pts.get_pos(axis)
         self.isfly2 = False
-        # n = ymotor+1
-        # p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-        # if len(p0)==0:
-        #     p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-        #     self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
-        # p0 = float(p0)
-        # st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-        # fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
-        # step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-        p0 = self.fly2d_p0
-        st = self.fly2d_st + p0
-        fe = self.fly2d_fe + p0
+
+    # Just in case when the user update edit box (during 3d scan) 
+    # Will need to update the positions.
+        n = ymotor+1
+        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+#        if len(p0)==0:
+#            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+#            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        p0 = float(p0)
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        self.fly2d_p0 = p0
+        self.fly2d_st = st
+        self.fly2d_fe = fe
+
+        n = xmotor+1
+        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+#        if len(p0)==0:
+#            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+#            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        p0 = float(p0)
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        self.fly1d_p0 = p0
+        self.fly1d_st = st
+        self.fly1d_fe = fe
+
+        # get relative scan range and convert it to absolute...
+        st = self.fly2d_st + self.fly2d_p0
+        fe = self.fly2d_fe + self.fly2d_p0
         step = self.fly2d_step
 
         maxexposuretime = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%(xmotor+1)).text())
@@ -1686,12 +1705,13 @@ class tweakmotors(QMainWindow):
             step = -1*abs(step)
         if st<fe:
             step = abs(step)
-        if self.ui.cb_reversescandir.isChecked():
-            if abs(st-pos)>abs(fe-pos):
-                t = fe
-                fe = st
-                st = t 
-                step = -step
+        # Reverse disabled... Scan will be done from start to end regardless of the initial position.
+        # if self.ui.cb_reversescandir.isChecked():
+        #     if abs(st-pos)>abs(fe-pos):
+        #         t = fe
+        #         fe = st
+        #         st = t 
+        #         step = -step
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step/2, step)
 #        print(pos)
@@ -1703,6 +1723,10 @@ class tweakmotors(QMainWindow):
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 break
+            for det in self.detector: #JD
+                if det is not None:  #JD
+                    det.filePut('FileNumber', 1)  #JD
+                    det.FileNumber = 1
             # try:
             # except:
             #     print("error epics")
