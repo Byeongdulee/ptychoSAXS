@@ -2453,9 +2453,10 @@ class ptyco_main_control(QMainWindow):
         self.mv(motornumber=motornumber, val=pos)
 
 
+import ptychosaxs.tw_galil as gl
 class motor_control(QMainWindow):
 #    resized = QtCore.pyqtSignal()
-
+    MOTOR_PREC = "%i"
     def __init__(self):
         super(motor_control, self).__init__()
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
@@ -2467,15 +2468,17 @@ class motor_control(QMainWindow):
         motornames = ['OSAh', 'OSAv', 'Camerah', 'Camerav', 'ZFh', 'ZFv', 'Beamstoph', 'Beamstopv']
         motorunits = ['mm', 'mm', 'mm', 'mm', 'mm', 'mm', 'mm', 'mm']
 
-        # append newport_piezo
-        motornames.append('newport_piezo1')
-        motornames.append('newport_piezo2')
-        motornames.append('newport_piezo3')
-        motorunits.append('mm')
-        motorunits.append('mm')
-        motorunits.append('mm')
+        # # append newport_piezo
+        # motornames.append('newport_piezo1')
+        # motornames.append('newport_piezo2')
+        # motornames.append('newport_piezo3')
+        # motorunits.append('mm')
+        # motorunits.append('mm')
+        # motorunits.append('mm')
 
-        enable = False
+        self.threadpool = QThreadPool.globalInstance()
+        self.control = gl
+        enable = True
         for i, name in enumerate(motornames):
             n = i+1
             self.ui.findChild(QLabel, "lb%i"%n).setEnabled(enable)
@@ -2489,6 +2492,7 @@ class motor_control(QMainWindow):
             self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setEnabled(enable)               
             self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setEnabled(enable)               
             self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setEnabled(enable)  
+            self.ui.findChild(QLineEdit, "ed_reset_%i"%n).setEnabled(enable)  
         # checking only the connected motors.. 
         # if not done, later it will try to update the position of disconnected motors    
         self.motornames = []
@@ -2504,20 +2508,19 @@ class motor_control(QMainWindow):
             except:
                 print(f"{name} is not connected.")
                 pass
-#        print(motornames, " line 252")
-        xm=DEFAULTS['xmotor']  #JD
-        ym=DEFAULTS['ymotor']  #JD
 
         # update GUI
         for i, name in enumerate(self.motornames):
             n = i+1
+            axisname = self.control.motornames[i]
             self.ui.findChild(QLabel, "lb%i"%n).setText(name)
+            self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%self.control.get_pos(axisname))
             self.ui.findChild(QPushButton, "pb_tweak%iL"%n).clicked.connect(lambda: self.mvr(-1, -1))
             self.ui.findChild(QPushButton, "pb_tweak%iR"%n).clicked.connect(lambda: self.mvr(-1, 1))
-            self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stepscan(-1))
-            self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).clicked.connect(lambda: self.fly(-1))
+            # self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stepscan(-1))
+            # self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).clicked.connect(lambda: self.fly(-1))
             self.ui.findChild(QLineEdit, "ed_%i"%n).returnPressed.connect(lambda: self.mv(-1, None))
-#            print(name, " This is in tweakmtors .....")
+            self.ui.findChild(QLineEdit, "ed_reset_%i"%n).returnPressed.connect(lambda: self.reset(-1))
             self.ui.findChild(QLabel, "lb%i"%n).setEnabled(enable)
             self.ui.findChild(QPushButton, "pb_tweak%iL"%n).setEnabled(enable)
             self.ui.findChild(QPushButton, "pb_tweak%iR"%n).setEnabled(enable)
@@ -2537,6 +2540,91 @@ class motor_control(QMainWindow):
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
 
+    def reset(self, motornumber=-1):
+        if motornumber<0:
+            pb = self.sender()
+            objname = pb.objectName()
+            val_text = pb.text()
+            n = int(re.findall(r'\d+', objname)[0])
+            #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
+            motornumber = n-1
+        axis = self.control.motornames[motornumber]
+        val = int(val_text)
+        self.control.set_pos(axis, val)
+        time.sleep(0.1)
+        val = self.control.get_pos(axis)
+        i = self.control.motornames.index(axis)
+        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
+
+    def mv(self, motornumber=-1, val=None):
+        if motornumber<0:
+            pb = self.sender()
+            objname = pb.objectName()
+            val_text = pb.text()
+            n = int(re.findall(r'\d+', objname)[0])
+            #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
+            motornumber = n-1
+
+        #print("motor number is ", motornumber)
+        axis = self.control.motornames[motornumber]
+        self.signalmotor = axis
+        self.signalmotorunit = self.control.motorunits[motornumber]
+        if type(val)==type(None):
+            try:
+                val = float(val_text)
+            except:
+                showerror('Text box is empty.')
+                return
+        self.control.mv(axis, val)
+        val = self.control.get_pos(axis)
+        i = self.control.motornames.index(axis)
+        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
+
+    def mvr(self, motornumber=-1, sign=1, val=0):
+        if motornumber ==-1:
+            pb = self.sender()
+            objname = pb.objectName()
+            n = int(re.findall(r'\d+', objname)[0])
+            #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
+            motornumber = n-1
+        #print("motornumber is ", motornumber)
+        axis = self.control.motornames[motornumber]
+        self.signalmotor = axis
+        #print("axis is ", axis)
+        #print("sign is ", sign)
+        self.signalmotorunit = self.control.motorunits[motornumber]
+        if val==0:
+            val = float(self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).text())
+        #print(f"Move {axis} by {sign*val}")
+
+        self.control.mvr(axis, sign*val)
+        val = self.control.get_pos(axis)
+        i = self.control.motornames.index(axis)
+        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
+
+    def updatepos(self, axis = "", val=None):
+        done = False
+        timeout = 10
+        ct0 = time.time()
+        while not done:
+            if len(axis)==0:
+                for i, name in enumerate(self.control.motornames):
+                    if val is None:
+                        val = self.control.get_pos(name)
+                    self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
+                    val = None
+            else:
+                if val is None:
+                    val = self.control.get_pos(axis)
+                i = self.control.motornames.index(axis)
+                self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText("%0.6f"%val)
+            try:
+                done = self.control.wait_move()
+            except:
+                pass
+            time.sleep(0.1)
+            if time.time()-ct0>timeout:
+                break
 
 def main():
 #    run gui with server option

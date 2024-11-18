@@ -12,3 +12,4 @@ ptychosaxs/motions.py
 ptychosaxs/ptychosaxs.py
 ptychosaxs/ptychosaxs_obsolete.py
 ptychosaxs/smaract_gonio.py
+ptychosaxs/tw_galil.py
