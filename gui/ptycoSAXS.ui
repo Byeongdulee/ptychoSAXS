@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1068</width>
-    <height>535</height>
+    <height>801</height>
    </rect>
   </property>
   <property name="maximumSize">
@@ -17,7 +17,7 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>Pty-co-SAXS Control Panel</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <property name="maximumSize">
@@ -27,7 +27,7 @@
     </size>
    </property>
    <layout class="QGridLayout" name="gridLayout">
-    <item row="0" column="0">
+    <item row="1" column="0">
      <widget class="QFrame" name="frame">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -94,6 +94,16 @@
            <widget class="QPushButton" name="pb_tweak11L">
             <property name="text">
              <string>&lt;&lt;</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="10" colspan="2">
+           <widget class="QCheckBox" name="cb_keepprevscan">
+            <property name="text">
+             <string>Keep the previous scan</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
             </property>
            </widget>
           </item>
@@ -1305,6 +1315,16 @@
             </property>
            </widget>
           </item>
+          <item row="0" column="12" colspan="3">
+           <widget class="QCheckBox" name="cb_reversescandir">
+            <property name="text">
+             <string>Reverse scan allowed</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
           <item row="10" column="5">
            <widget class="QLineEdit" name="ed_9_tweak">
             <property name="maximumSize">
@@ -1851,6 +1871,490 @@
          </layout>
         </item>
         <item>
+         <layout class="QVBoxLayout" name="verticalLayout">
+          <item>
+           <layout class="QGridLayout" name="gridLayout_3">
+            <item row="0" column="0">
+             <layout class="QGridLayout" name="gridLayout_6">
+              <item row="0" column="0">
+               <widget class="QLCDNumber" name="lcd_X">
+                <property name="minimumSize">
+                 <size>
+                  <width>150</width>
+                  <height>40</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>300</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="font">
+                 <font>
+                  <pointsize>15</pointsize>
+                  <weight>75</weight>
+                  <bold>true</bold>
+                 </font>
+                </property>
+                <property name="smallDecimalPoint">
+                 <bool>true</bool>
+                </property>
+                <property name="digitCount">
+                 <number>5</number>
+                </property>
+                <property name="value" stdset="0">
+                 <double>25.000000000000000</double>
+                </property>
+                <property name="intValue" stdset="0">
+                 <number>25</number>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLabel" name="label">
+                <property name="maximumSize">
+                 <size>
+                  <width>50</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="font">
+                 <font>
+                  <pointsize>12</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>um</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0" colspan="2">
+               <widget class="QPushButton" name="pb_resetx">
+                <property name="maximumSize">
+                 <size>
+                  <width>300</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Reset</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item row="0" column="3">
+             <layout class="QGridLayout" name="gridLayout_4">
+              <item row="0" column="0">
+               <widget class="QPushButton" name="pb_recordz1">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Record</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLabel" name="z1">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>TextLabel</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QPushButton" name="pb_recordz2">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Record</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QLabel" name="z2">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>TextLabel</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QPushButton" name="pb_recordz3">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Record</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QLabel" name="z3">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>TextLabel</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item row="0" column="2">
+             <layout class="QGridLayout" name="gridLayout_5">
+              <item row="0" column="1">
+               <widget class="QLCDNumber" name="lcd_Z">
+                <property name="minimumSize">
+                 <size>
+                  <width>150</width>
+                  <height>40</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>300</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="font">
+                 <font>
+                  <pointsize>15</pointsize>
+                  <weight>75</weight>
+                  <bold>true</bold>
+                 </font>
+                </property>
+                <property name="smallDecimalPoint">
+                 <bool>true</bool>
+                </property>
+                <property name="digitCount">
+                 <number>5</number>
+                </property>
+                <property name="value" stdset="0">
+                 <double>25.000000000000000</double>
+                </property>
+                <property name="intValue" stdset="0">
+                 <number>25</number>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QLabel" name="label_2">
+                <property name="maximumSize">
+                 <size>
+                  <width>50</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="font">
+                 <font>
+                  <pointsize>12</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>um</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1" colspan="2">
+               <widget class="QPushButton" name="pb_resetz">
+                <property name="maximumSize">
+                 <size>
+                  <width>300</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Reset</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item row="0" column="1">
+             <layout class="QGridLayout" name="gridLayout_7">
+              <item row="0" column="0">
+               <widget class="QPushButton" name="pb_recordx1">
+                <property name="maximumSize">
+                 <size>
+                  <width>150</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Record</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QPushButton" name="pb_recordx3">
+                <property name="maximumSize">
+                 <size>
+                  <width>150</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Record</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QPushButton" name="pb_recordx2">
+                <property name="maximumSize">
+                 <size>
+                  <width>150</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Record</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLabel" name="x1">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>TextLabel</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QLabel" name="x2">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>TextLabel</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QLabel" name="x3">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>TextLabel</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item row="0" column="6">
+             <spacer name="horizontalSpacer_2">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item row="0" column="4">
+             <layout class="QGridLayout" name="gridLayout_8">
+              <item row="0" column="1">
+               <widget class="QLCDNumber" name="lcd_Z_2">
+                <property name="minimumSize">
+                 <size>
+                  <width>150</width>
+                  <height>40</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>300</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="font">
+                 <font>
+                  <pointsize>15</pointsize>
+                  <weight>75</weight>
+                  <bold>true</bold>
+                 </font>
+                </property>
+                <property name="smallDecimalPoint">
+                 <bool>true</bool>
+                </property>
+                <property name="digitCount">
+                 <number>5</number>
+                </property>
+                <property name="value" stdset="0">
+                 <double>25.000000000000000</double>
+                </property>
+                <property name="intValue" stdset="0">
+                 <number>25</number>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QLabel" name="label_5">
+                <property name="maximumSize">
+                 <size>
+                  <width>50</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="font">
+                 <font>
+                  <pointsize>12</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>um</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1" colspan="2">
+               <widget class="QPushButton" name="pb_resetz_2">
+                <property name="maximumSize">
+                 <size>
+                  <width>300</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Reset</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item row="0" column="5">
+             <layout class="QGridLayout" name="gridLayout_9">
+              <item row="0" column="0">
+               <widget class="QPushButton" name="pb_recordz1_2">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Record</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLabel" name="z1_2">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>TextLabel</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QPushButton" name="pb_recordz2_2">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Record</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QLabel" name="z2_2">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>TextLabel</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QPushButton" name="pb_recordz3_2">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Record</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QLabel" name="z3_2">
+                <property name="maximumSize">
+                 <size>
+                  <width>200</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>TextLabel</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QProgressBar" name="progressBar">
+          <property name="value">
+           <number>24</number>
+          </property>
+         </widget>
+        </item>
+        <item>
          <spacer name="verticalSpacer">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
@@ -1867,6 +2371,108 @@
       </widget>
      </widget>
     </item>
+    <item row="0" column="0">
+     <layout class="QGridLayout" name="gridLayout_10">
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="ed_scanname">
+        <property name="maximumSize">
+         <size>
+          <width>500</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Filename for 2D detector data</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_10">
+        <property name="text">
+         <string>Scan Base Name:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_6">
+        <property name="maximumSize">
+         <size>
+          <width>100</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>Working folder:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="4">
+       <widget class="QLabel" name="label_13">
+        <property name="text">
+         <string>Scan Name:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QLabel" name="label_12">
+        <property name="text">
+         <string>Next Scan Number</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="3">
+       <widget class="QLineEdit" name="le_scannumber">
+        <property name="maximumSize">
+         <size>
+          <width>100</width>
+          <height>16777215</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="5">
+       <widget class="QLabel" name="lb_scanname">
+        <property name="minimumSize">
+         <size>
+          <width>250</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1" colspan="5">
+       <widget class="QLineEdit" name="ed_workingfolder">
+        <property name="minimumSize">
+         <size>
+          <width>500</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>2000</width>
+          <height>20</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Experiment log file and softglue data will be saved in this folder.</string>
+        </property>
+        <property name="maxLength">
+         <number>500</number>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -1878,6 +2484,112 @@
      <height>21</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menuHexapod">
+    <property name="title">
+     <string>Hexapod</string>
+    </property>
+    <addaction name="actionEnable_fly_with_controller"/>
+    <addaction name="actionSave_flyscan_result"/>
+    <addaction name="separator"/>
+    <addaction name="actionSet_the_default_vel_acc"/>
+    <addaction name="actionPrint_flyscan_settings"/>
+   </widget>
+   <widget class="QMenu" name="menuACS">
+    <property name="title">
+     <string>ACS</string>
+    </property>
+    <addaction name="actionSet_default_speed"/>
+   </widget>
+   <widget class="QMenu" name="menuQDS">
+    <property name="title">
+     <string>QDS</string>
+    </property>
+    <addaction name="actionSelect_units"/>
+    <addaction name="actionSelect_QDS_for_X"/>
+    <addaction name="actionSelect_QDS_for_Y"/>
+    <addaction name="actionSet_Interferometer_Param"/>
+    <addaction name="separator"/>
+    <addaction name="actionSelect_time_intervals"/>
+    <addaction name="actionRun"/>
+    <addaction name="actionStop"/>
+    <addaction name="actionClear"/>
+    <addaction name="actionSave"/>
+    <addaction name="separator"/>
+    <addaction name="actionFit_QDS_phi"/>
+   </widget>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionLoad_eccentricity_data"/>
+    <addaction name="actionLoad_wobble_data"/>
+    <addaction name="actionLoad_scan"/>
+    <addaction name="separator"/>
+    <addaction name="actionSet_Log_Filename"/>
+    <addaction name="separator"/>
+    <addaction name="actionSave_scan"/>
+   </widget>
+   <widget class="QMenu" name="menuSmarAct">
+    <property name="title">
+     <string>SmarAct</string>
+    </property>
+    <addaction name="actionCalibrate"/>
+    <addaction name="actionFindReference"/>
+    <addaction name="separator"/>
+    <addaction name="actionSet_gonio_default_vel_acc"/>
+   </widget>
+   <widget class="QMenu" name="menuScan">
+    <property name="title">
+     <string>Scan</string>
+    </property>
+    <addaction name="actionTestFly"/>
+    <addaction name="actionMonitor_Beamline_Status"/>
+    <addaction name="separator"/>
+    <addaction name="actionRatio_of_exptime_period_for_Flyscan"/>
+    <addaction name="actionSet_waittime_between_scans"/>
+    <addaction name="action2D_scan"/>
+    <addaction name="action3D_scan"/>
+    <addaction name="separator"/>
+    <addaction name="actionScanStop"/>
+   </widget>
+   <widget class="QMenu" name="menuSoftglue">
+    <property name="title">
+     <string>Softglue</string>
+    </property>
+    <widget class="QMenu" name="menuSet_Input">
+     <property name="title">
+      <string>Collection Speed</string>
+     </property>
+     <addaction name="actionTrigout"/>
+     <addaction name="actionDetout"/>
+     <addaction name="actionevery_10_millie_seconds"/>
+    </widget>
+    <addaction name="actionMemory_clear_before_scan"/>
+    <addaction name="actionckTime_reset_before_scan"/>
+    <addaction name="menuSet_Input"/>
+    <addaction name="actionChannels_to_record"/>
+    <addaction name="actionSave_current_results"/>
+    <addaction name="actionReset"/>
+   </widget>
+   <widget class="QMenu" name="menuDetectors">
+    <property name="title">
+     <string>Detectors</string>
+    </property>
+    <addaction name="actionSAXS"/>
+    <addaction name="actionWAXS"/>
+    <addaction name="actionStruck"/>
+    <addaction name="separator"/>
+    <addaction name="actionReset_to_Fly_mode"/>
+    <addaction name="actionUse_hdf_plugin"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuHexapod"/>
+   <addaction name="menuACS"/>
+   <addaction name="menuSmarAct"/>
+   <addaction name="menuQDS"/>
+   <addaction name="menuSoftglue"/>
+   <addaction name="menuDetectors"/>
+   <addaction name="menuScan"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionSet_default_speed">
@@ -2241,6 +2953,19 @@
   <tabstop>ed_lup_7_t</tabstop>
   <tabstop>pb_lup_7</tabstop>
   <tabstop>pb_SAXSscan_7</tabstop>
+  <tabstop>cb_keepprevscan</tabstop>
+  <tabstop>pb_resetx</tabstop>
+  <tabstop>pb_recordx1</tabstop>
+  <tabstop>pb_recordx2</tabstop>
+  <tabstop>pb_recordx3</tabstop>
+  <tabstop>pb_resetz</tabstop>
+  <tabstop>pb_recordz1</tabstop>
+  <tabstop>pb_recordz2</tabstop>
+  <tabstop>pb_recordz3</tabstop>
+  <tabstop>pb_resetz_2</tabstop>
+  <tabstop>pb_recordz1_2</tabstop>
+  <tabstop>pb_recordz2_2</tabstop>
+  <tabstop>pb_recordz3_2</tabstop>
  </tabstops>
  <resources/>
  <connections/>

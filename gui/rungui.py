@@ -187,13 +187,13 @@ class beamstatus(QObject):
     def close_shutter(self):
         self.shutter.put(0)
 
-class tweakmotors(QMainWindow):
+class ptyco_main_control(QMainWindow):
 #    resized = QtCore.pyqtSignal()
 
     def __init__(self):
-        super(tweakmotors, self).__init__()
+        super(ptyco_main_control, self).__init__()
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
-        guiName = "motorGUI.ui"
+        guiName = "ptycoSAXS.ui"
         self.pts = pts
         self.ui = uic.loadUi(guiName)
         
@@ -1173,8 +1173,9 @@ class tweakmotors(QMainWindow):
                 fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
                 tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
                 step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-                scaninfo.append(st+p0)
-                scaninfo.append(fe+p0)
+                scaninfo.append(p0)
+                scaninfo.append(st)
+                scaninfo.append(fe)
                 scaninfo.append(tm)      
                 scaninfo.append(step)      
             except:
@@ -1211,7 +1212,7 @@ class tweakmotors(QMainWindow):
         if self.ui.actionckTime_reset_before_scan.isChecked():
             s12softglue.ckTime_reset()
         motor = [xmotor, ymotor, phimotor]
-        print(motor)
+#        print(motor)
         # logging
         scaninfo = []
         scaninfo.append('\n#S')
@@ -1225,18 +1226,16 @@ class tweakmotors(QMainWindow):
                 #p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
                 #if len(p0)==0:
                 p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-                print(p0)
                 self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
-                print(p0)
                 p0 = float(p0)
-                print(p0)
                 initial_motorpos[m] = p0
                 st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
                 fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
                 tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
                 step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-                scaninfo.append(st+p0)
-                scaninfo.append(fe+p0)
+                scaninfo.append(p0)
+                scaninfo.append(st)
+                scaninfo.append(fe)
                 scaninfo.append(tm)
                 scaninfo.append(step)
             except:
@@ -1330,8 +1329,9 @@ class tweakmotors(QMainWindow):
         self.fly1d_fe = fe
         self.fly1d_tm = tm
         self.fly1d_step = step
-        scaninfo.append(st+p0)
-        scaninfo.append(fe+p0)
+        scaninfo.append(p0)
+        scaninfo.append(st)
+        scaninfo.append(fe)
         scaninfo.append(tm)
         scaninfo.append(step)
         self.write_scaninfo_to_logfile(scaninfo)
@@ -1379,10 +1379,12 @@ class tweakmotors(QMainWindow):
             n = motornumber + 1
         
         try:
-            p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-            if len(p0)==0:
-                p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-                self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+#            p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+#            if len(p0)==0:
+#                p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+#                self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
             p0 = float(p0)
             st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
             fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
@@ -1990,10 +1992,12 @@ class tweakmotors(QMainWindow):
         
         self.isfly = True
         n = motornumber+1
-        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-        if len(p0)==0:
-            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+        p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+        self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+#        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+#        if len(p0)==0:
+#            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+#            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
         p0 = float(p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
@@ -2449,12 +2453,98 @@ class tweakmotors(QMainWindow):
         self.mv(motornumber=motornumber, val=pos)
 
 
+class motor_control(QMainWindow):
+#    resized = QtCore.pyqtSignal()
+
+    def __init__(self):
+        super(motor_control, self).__init__()
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        guiName = "motorGUI.ui"
+        self.ui = uic.loadUi(guiName)
+        
+        # list all possible motors
+        # this should came from the pts.
+        motornames = ['OSAh', 'OSAv', 'Camerah', 'Camerav', 'ZFh', 'ZFv', 'Beamstoph', 'Beamstopv']
+        motorunits = ['mm', 'mm', 'mm', 'mm', 'mm', 'mm', 'mm', 'mm']
+
+        # append newport_piezo
+        motornames.append('newport_piezo1')
+        motornames.append('newport_piezo2')
+        motornames.append('newport_piezo3')
+        motorunits.append('mm')
+        motorunits.append('mm')
+        motorunits.append('mm')
+
+        enable = False
+        for i, name in enumerate(motornames):
+            n = i+1
+            self.ui.findChild(QLabel, "lb%i"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_tweak%iL"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_tweak%iR"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_lup_%i"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).setEnabled(enable)
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setEnabled(enable)   
+            self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setEnabled(enable)  
+        # checking only the connected motors.. 
+        # if not done, later it will try to update the position of disconnected motors    
+        self.motornames = []
+        self.motorunits = []
+#        print(motornames, " line 241")
+        for i, name in enumerate(motornames):
+            try:
+                self.motornames.append(name)
+                self.motorunits.append(motorunits[i])
+                # if self.pts.isconnected(name):
+                #     self.motornames.append(name)
+                #     self.motorunits.append(motorunits[i])
+            except:
+                print(f"{name} is not connected.")
+                pass
+#        print(motornames, " line 252")
+        xm=DEFAULTS['xmotor']  #JD
+        ym=DEFAULTS['ymotor']  #JD
+
+        # update GUI
+        for i, name in enumerate(self.motornames):
+            n = i+1
+            self.ui.findChild(QLabel, "lb%i"%n).setText(name)
+            self.ui.findChild(QPushButton, "pb_tweak%iL"%n).clicked.connect(lambda: self.mvr(-1, -1))
+            self.ui.findChild(QPushButton, "pb_tweak%iR"%n).clicked.connect(lambda: self.mvr(-1, 1))
+            self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stepscan(-1))
+            self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).clicked.connect(lambda: self.fly(-1))
+            self.ui.findChild(QLineEdit, "ed_%i"%n).returnPressed.connect(lambda: self.mv(-1, None))
+#            print(name, " This is in tweakmtors .....")
+            self.ui.findChild(QLabel, "lb%i"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_tweak%iL"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_tweak%iR"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_lup_%i"%n).setEnabled(enable)
+            self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).setEnabled(enable)
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setEnabled(enable)               
+            self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setEnabled(enable)               
+        
+        # if os.name == 'nt':
+        #     self.timer = QTimer()
+        #     self.timer.timeout.connect(self.update_qds)
+        #     self.timer.start(100)        
+        self.ui.show()
+        #self.resized.connect(self.resizeFunction)
+
+
 def main():
 #    run gui with server option
     app = QApplication(sys.argv)
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
-    a = tweakmotors()
+    a = ptyco_main_control()
+    b = motor_control()
 
     with loop:
         _, protocol = loop.run_until_complete(create_server(loop))
@@ -2467,7 +2557,7 @@ def main():
 def main_no_server():
     # non-server option
     app = QApplication(sys.argv)
-    a = tweakmotors()
+    a = ptyco_main_control()
     sys.exit(app.exec_())
 
 if __name__ == "__main__":
