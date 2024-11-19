@@ -9,6 +9,7 @@ ptychosaxs/__init__ copy.py
 ptychosaxs/__init__.py
 ptychosaxs/interferometers.py
 ptychosaxs/motions.py
+ptychosaxs/newport_piezo.py
 ptychosaxs/ptychosaxs.py
 ptychosaxs/ptychosaxs_obsolete.py
 ptychosaxs/smaract_gonio.py

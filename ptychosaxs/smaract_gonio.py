@@ -6,7 +6,8 @@ smaract = None
 
 # These codes are based on SmarAct MCS2 programming examples
 # Some codes are used without modification
-
+motornames = ["trans1","trans2","tilt1","tilt2"]
+motorunits = ["mm","mm","deg","deg"]
 def assert_lib_compatibility():
     """
     Checks that the major version numbers of the Python API and the
@@ -100,14 +101,21 @@ def findReference(channel):
         else:
             break
 def mv(ax, target, wait=True):
+    if type(ax) == str:
+        ax = motornames.index(ax)
     #ax = channels[chname]
     move(ax, target=target, absolute=True, wait=wait)
     
 def mvr(ax, target, wait=True):
+    if type(ax) == str:
+        ax = motornames.index(ax)
     #ax = channels[chname]
     move(ax, target=target, absolute=False, wait=wait)
 
 def set_speed(channel, vel=5, acc=10):
+    if type(channel) == str:
+        channel = motornames.index(channel)
+
     # input vel and acc should be in mm/s and mm/s^2
     vel = int(vel*1E9)
     acc = int(acc*1E9)
@@ -117,6 +125,8 @@ def set_speed(channel, vel=5, acc=10):
     ctl.SetProperty_i64(smaract, channel, ctl.Property.MOVE_ACCELERATION, acc)
 
 def get_speed(channel):
+    if type(channel) == str:
+        channel = motornames.index(channel)
     vel = ctl.GetProperty_i64(smaract, channel, ctl.Property.MOVE_VELOCITY)
     acc = ctl.GetProperty_i64(smaract, channel, ctl.Property.MOVE_ACCELERATION)
     return (vel/1E9, acc/1E9)
@@ -166,6 +176,8 @@ def move(channel, target=0.001, absolute=True, wait=True):
 # The first "stop" command sent while moving triggers the positioner to come to a halt by decelerating to zero.
 # A second "stop" command triggers a hard stop ("emergency stop").
 def stop(channel):
+    if type(channel) == str:
+        channel = motornames.index(channel)
     print("MCS2 stop channel: {}.".format(channel))
     ctl.Stop(smaract, channel)
 
@@ -307,6 +319,8 @@ def isconnected(ax=-1):
 
 def get_pos(ax):
     # return position in deg or mm
+    if type(ax) == str:
+        ax = motornames.index(ax)
     try:
         r_id1 = ctl.RequestReadProperty(smaract, ax, ctl.Property.POSITION, 0)
         position = ctl.ReadProperty_i64(smaract, r_id1)
@@ -327,7 +341,11 @@ def get_pos(ax):
         print("Unexpected error: {}, {} in line: {}".format(ex, type(ex), (sys.exc_info()[-1].tb_lineno)))
         raise
 
-def set_pos(ax, pos=-100000000):
+def set_pos(ax, position=0):
+    if type(ax) == str:
+        ax = motornames.index(ax)
+
+    pos=position*1E9
     # For the sake of completeness, finally we use the asynchronous (non-blocking) write function to
     # set the position to -0.1 mm respectively -100 degree.
 #    position = -100000000
@@ -339,6 +357,7 @@ def set_pos(ax, pos=-100000000):
 
     # Wait for the result to arrive.
     ctl.WaitForWrite(smaract, r_id)
+    return get_pos(ax)
 
     # Alternatively, the "call-and-forget" mechanism for asynchronous (non-blocking) write functions
     # may be used:
