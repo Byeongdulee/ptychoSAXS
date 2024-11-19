@@ -240,13 +240,13 @@ class ptyco_main_control(QMainWindow):
             if len(unit)>0:
                 motorunits.append(unit)
 
-        # append newport_piezo
-        motornames.append('newport_piezo1')
-        motornames.append('newport_piezo2')
-        motornames.append('newport_piezo3')
-        motorunits.append('mm')
-        motorunits.append('mm')
-        motorunits.append('mm')
+        # # append newport_piezo
+        # motornames.append('newport_piezo1')
+        # motornames.append('newport_piezo2')
+        # motornames.append('newport_piezo3')
+        # motorunits.append('mm')
+        # motorunits.append('mm')
+        # motorunits.append('mm')
 
         enable = False
         for i, name in enumerate(motornames):
@@ -2478,14 +2478,6 @@ class motor_control(QMainWindow):
         self.motorunits = ['step', 'step', 'step', 'step', 'step', 'step', 'step', 'step',
                       'mm','mm','deg','deg',
                       'mm','mm','mm']
-
-        # # append newport_piezo
-        # motornames.append('newport_piezo1')
-        # motornames.append('newport_piezo2')
-        # motornames.append('newport_piezo3')
-        # motorunits.append('mm')
-        # motorunits.append('mm')
-        # motorunits.append('mm')
 
         self.threadpool = QThreadPool.globalInstance()
         self.control = {}
