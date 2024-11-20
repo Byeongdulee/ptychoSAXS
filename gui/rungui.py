@@ -1788,6 +1788,7 @@ class ptyco_main_control(QMainWindow):
         if isTestRun:
             print("**** Test Run:")
         self.isfly = True
+        self.isscan = True
 
         # disable fit menu
         self.ui.actionFit_QDS_phi.setEnabled(False)
@@ -2223,17 +2224,16 @@ class ptyco_main_control(QMainWindow):
         self.ui.lcd_Z_2.display("%0.3f" % (r[2]))
         #self.rpos = []
         #self.mpos = []
-        print("0000000000000000000000")
         if self.isscan:
             self.updatepos()
-            print("AAA")
             if self.isfly:
                 self.rpos.append([r[0], r[1], r[2]])
                 #self.mpos.append(self.pts.get_pos(self.signalmotor))
                 self.mpos.append(self.get_motorpos(self.signalmotor))
-                print("BBB")
-            self.plot()
-            print("CCC")
+            try:
+                self.plot()
+            except:
+                pass
         else:
             self.updatepos()
 
