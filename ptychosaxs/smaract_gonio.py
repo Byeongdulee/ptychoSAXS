@@ -1,6 +1,10 @@
 import smaract.ctl as ctl
 import sys
 import time
+# installation: 
+# 1. download SDK
+# 2. Look for python setup.py (C:\SmarAct\MCS2\SDK\Python\packages\smaract.ctl-1.3.36\smaract.ctl-1.3.36)
+# 3. python setup.py install
 
 smaract = None
 
