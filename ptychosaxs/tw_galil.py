@@ -13,6 +13,9 @@ def wait_move(channel='A'):
     g.GMotionComplete(channel)
     return True
 
+def stop(channel="A"):
+    pass
+
 def get_pos(channel=''):
     pos = {}
     with lock:

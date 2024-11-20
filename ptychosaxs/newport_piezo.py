@@ -17,6 +17,13 @@ class newport(object):
         self.motorunits = ["mm","mm","deg","deg"]
         self.signals = motorSignals()
 
+    def stop(self, axis):
+        if type(axis)==str:
+            n = self.motornames.index(axis)
+        if type(axis)==int:
+            n = axis-1
+        self.newport_piezo[n].put('SPMG', 1)
+
     def ismoving(self, axis):
         if type(axis)==str:
             n = self.motornames.index(axis)

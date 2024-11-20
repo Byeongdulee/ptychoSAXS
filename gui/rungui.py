@@ -2502,17 +2502,9 @@ class motor_control(QMainWindow):
             # self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).clicked.connect(lambda: self.fly(-1))
             self.ui.findChild(QLineEdit, "ed_%i"%n).returnPressed.connect(lambda: self.mv(-1, None))
             self.ui.findChild(QLineEdit, "ed_reset_%i"%n).returnPressed.connect(lambda: self.reset(-1))
-            self.ui.findChild(QLabel, "lb%i"%n).setEnabled(enable)
-            self.ui.findChild(QPushButton, "pb_tweak%iL"%n).setEnabled(enable)
-            self.ui.findChild(QPushButton, "pb_tweak%iR"%n).setEnabled(enable)
-            self.ui.findChild(QPushButton, "pb_lup_%i"%n).setEnabled(enable)
-            self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).setEnabled(enable)
-            self.ui.findChild(QLineEdit, "ed_%i"%n).setEnabled(enable)               
-            self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).setEnabled(enable)               
-            self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).setEnabled(enable)               
-            self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setEnabled(enable)               
-            self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setEnabled(enable)               
-            self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setEnabled(enable)               
+            self.ui.findChild(QPushButton, "pb_lup_%i"%n).setText("Stop")
+            self.ui.findChild(QPushButton, "pb_lup_%i"%n).returnPressed.connect(lambda: self.stop(-1))
+                         
         
         # menu
         self.ui.actionSmarAct_3.triggered.connect(self.enable_smarAct)
@@ -2532,7 +2524,6 @@ class motor_control(QMainWindow):
         self.ui.findChild(QPushButton, "pb_tweak%iL"%n).setEnabled(enable)
         self.ui.findChild(QPushButton, "pb_tweak%iR"%n).setEnabled(enable)
         self.ui.findChild(QPushButton, "pb_lup_%i"%n).setEnabled(enable)
-        self.ui.findChild(QPushButton, "pb_lup_%i"%n).setText("Stop")
         self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).setEnabled(False)
         self.ui.findChild(QLineEdit, "ed_%i"%n).setEnabled(enable)   
         self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).setEnabled(enable)               
@@ -2571,6 +2562,18 @@ class motor_control(QMainWindow):
         for i, con in enumerate(self.controller):
             if con == "newport":
                 self.enable_motors(i+1, enable)
+    def stop(self, motornumber=-1):
+        if motornumber<0:
+            pb = self.sender()
+            objname = pb.objectName()
+            val_text = pb.text()
+            n = int(re.findall(r'\d+', objname)[0])
+            #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
+            motornumber = n-1
+        
+        controller = self.control[self.controller[motornumber]]
+        axis = controller.motornames[self.motorindices[motornumber]]
+        controller.stop(axis)
 
     def reset(self, motornumber=-1):
         if motornumber<0:
