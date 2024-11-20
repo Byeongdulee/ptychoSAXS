@@ -2505,7 +2505,7 @@ class motor_control(QMainWindow):
             self.ui.findChild(QLineEdit, "ed_%i"%n).returnPressed.connect(lambda: self.mv(-1, None))
             self.ui.findChild(QLineEdit, "ed_reset_%i"%n).returnPressed.connect(lambda: self.reset(-1))
             self.ui.findChild(QPushButton, "pb_lup_%i"%n).setText("Stop")
-            self.ui.findChild(QPushButton, "pb_lup_%i"%n).returnPressed.connect(lambda: self.stop(-1))
+            self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stop(-1))
                          
         
         # menu
