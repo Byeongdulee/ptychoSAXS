@@ -58,6 +58,8 @@ import py12inifunc
 
 from typing import List
 
+from threading import Lock
+
 HEXAPOD_FLYMODE_WAVELET = 0
 HEXAPOD_FLYMODE_STANDARD = 1
 FRACTION_EXPOSURE_PERIOD = 0.2
@@ -2478,7 +2480,7 @@ class motor_control(QMainWindow):
         self.motorunits = ['step', 'step', 'step', 'step', 'step', 'step', 'step', 'step',
                       'mm','mm','deg','deg',
                       'mm','mm','mm']
-
+        self.lock = Lock()
         self.threadpool = QThreadPool.globalInstance()
         self.control = {}
         self.control["galil"]= gl
@@ -2538,9 +2540,7 @@ class motor_control(QMainWindow):
             enable = True
         else:
             enable = False
-        print(enable)
         for i, con in enumerate(self.controller):
-            print(con)
             if con == "smarAct":
                 print(i+1)
                 self.enable_motors(i+1, enable)
@@ -2562,6 +2562,7 @@ class motor_control(QMainWindow):
         for i, con in enumerate(self.controller):
             if con == "newport":
                 self.enable_motors(i+1, enable)
+
     def stop(self, motornumber=-1):
         if motornumber<0:
             pb = self.sender()
@@ -2587,11 +2588,12 @@ class motor_control(QMainWindow):
         controller = self.control[self.controller[motornumber]]
         axis = controller.motornames[self.motorindices[motornumber]]
         val = int(val_text)
-        controller.set_pos(axis, val)
-        time.sleep(0.1)
-        val = controller.get_pos(axis)
-        i = motornumber
-        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
+        with self.lock:
+            controller.set_pos(axis, val)
+#        time.sleep(0.1)
+#        val = controller.get_pos(axis)
+#        i = motornumber
+#        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
 
     def mv(self, motornumber=-1, val=None):
         if motornumber<0:
@@ -2613,11 +2615,12 @@ class motor_control(QMainWindow):
             except:
                 showerror('Text box is empty.')
                 return
-        controller.mv(axis, val)
-        val = controller.get_pos(axis)
-        i = motornumber
-        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
-        self.updatepos(self.motornames[motornumber])
+        with self.lock:
+            controller.mv(axis, val, wait=False)
+#        val = controller.get_pos(axis)
+#        i = motornumber
+#        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
+#        self.updatepos(self.motornames[motornumber])
 
     def mvr(self, motornumber=-1, sign=1, val=0):
         if motornumber ==-1:
@@ -2637,11 +2640,11 @@ class motor_control(QMainWindow):
             val = float(self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).text())
         #print(f"Move {axis} by {sign*val}")
 
-        controller.mvr(axis, sign*val)
-        val = controller.get_pos(axis)
-        i = motornumber
-        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
-        self.updatepos(self.motornames[motornumber])
+        controller.mvr(axis, sign*val, wait=False)
+#        val = controller.get_pos(axis)
+#        i = motornumber
+#        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
+#        self.updatepos(self.motornames[motornumber])
 
     def updatepos(self, axis = "", val=None):
         # done = False
@@ -2652,7 +2655,8 @@ class motor_control(QMainWindow):
                 controller = self.control[self.controller[i]]
                 axis = controller.motornames[self.motorindices[i]]
                 if val is None:
-                    val = controller.get_pos(axis)
+                    with self.lock:
+                        val = controller.get_pos(axis)
                 self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
                 val = None
         else:
@@ -2660,7 +2664,8 @@ class motor_control(QMainWindow):
             controller = self.control[self.controller[motornumber]]
             axis = controller.motornames[self.motorindices[motornumber]]
             if val is None:
-                val = controller.get_pos(axis)
+                with self.lock:
+                    val = controller.get_pos(axis)
             i = motornumber
             self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText("%0.6f"%val)
             # try:
