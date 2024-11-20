@@ -46,6 +46,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 from epics import Motor
 
+
+def generate_raster_scan_positions(size):
+    x_positions = []
+    y_positions = []
+    
+    for i in range(size):
+        if i % 2 == 0:  # Even rows
+            for j in range(size):
+                x_positions.append(j)
+                y_positions.append(i)
+        else:  # Odd rows
+            for j in range(size-1, -1, -1):  # Reverse iteration for odd rows
+                x_positions.append(j)
+                y_positions.append(i)
+    return np.array(x_positions), np.array(y_positions)
+
 class motors(object):
     def __init__(self):
         self.hexapod = hexapod
