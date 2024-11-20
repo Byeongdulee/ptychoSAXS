@@ -2456,7 +2456,7 @@ import ptychosaxs.smaract_gonio as smaract
 import ptychosaxs.newport_piezo as np_piezo
 class motor_control(QMainWindow):
 #    resized = QtCore.pyqtSignal()
-    MOTOR_PREC = "%i"
+    MOTOR_PREC = "%0.3f"
     def __init__(self):
         super(motor_control, self).__init__()
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
@@ -2518,6 +2518,11 @@ class motor_control(QMainWindow):
         self.ui.actionSmarAct_3.triggered.connect(self.enable_smarAct)
         self.ui.actionNewport.triggered.connect(self.enable_galil)
         self.ui.actionNewport_Piezo.triggered.connect(self.enable_newport)
+
+        if os.name == 'nt':
+            self.timer = QTimer()
+            self.timer.timeout.connect(self.updatepos)
+            self.timer.start(100)        
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
 
@@ -2576,12 +2581,12 @@ class motor_control(QMainWindow):
             motornumber = n-1
         
         controller = self.control[self.controller[motornumber]]
-        axis = self.control.motornames[self.motorindices[motornumber]]
+        axis = controller.motornames[self.motorindices[motornumber]]
         val = int(val_text)
         controller.set_pos(axis, val)
         time.sleep(0.1)
         val = controller.get_pos(axis)
-        i = controller.motornames.index(axis)
+        i = motornumber
         self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
 
     def mv(self, motornumber=-1, val=None):
@@ -2595,9 +2600,9 @@ class motor_control(QMainWindow):
 
         #print("motor number is ", motornumber)
         controller = self.control[self.controller[motornumber]]
-        axis = self.control.motornames[self.motorindices[motornumber]]
+        axis = controller.motornames[self.motorindices[motornumber]]
         self.signalmotor = axis
-        self.signalmotorunit = controller.motorunits[motornumber]
+        self.signalmotorunit = controller.motorunits[self.motorindices[motornumber]]
         if type(val)==type(None):
             try:
                 val = float(val_text)
@@ -2606,8 +2611,9 @@ class motor_control(QMainWindow):
                 return
         controller.mv(axis, val)
         val = controller.get_pos(axis)
-        i = controller.motornames.index(axis)
+        i = motornumber
         self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
+        self.updatepos(self.motornames[motornumber])
 
     def mvr(self, motornumber=-1, sign=1, val=0):
         if motornumber ==-1:
@@ -2618,19 +2624,20 @@ class motor_control(QMainWindow):
             motornumber = n-1
         #print("motornumber is ", motornumber)
         controller = self.control[self.controller[motornumber]]
-        axis = self.control.motornames[self.motorindices[motornumber]]
+        axis = controller.motornames[self.motorindices[motornumber]]
         self.signalmotor = axis
         #print("axis is ", axis)
         #print("sign is ", sign)
-        self.signalmotorunit = controller.motorunits[motornumber]
+        self.signalmotorunit = controller.motorunits[self.motorindices[motornumber]]
         if val==0:
             val = float(self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).text())
         #print(f"Move {axis} by {sign*val}")
 
         controller.mvr(axis, sign*val)
         val = controller.get_pos(axis)
-        i = controller.motornames.index(axis)
+        i = motornumber
         self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
+        self.updatepos(self.motornames[motornumber])
 
     def updatepos(self, axis = "", val=None):
         # done = False
@@ -2650,7 +2657,7 @@ class motor_control(QMainWindow):
             axis = controller.motornames[self.motorindices[motornumber]]
             if val is None:
                 val = controller.get_pos(axis)
-            i = controller.motornames.index(axis)
+            i = motornumber
             self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText("%0.6f"%val)
             # try:
             #     done = controller.wait_move()
