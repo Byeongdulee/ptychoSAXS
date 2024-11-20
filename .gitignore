@@ -403,3 +403,6 @@ FodyWeavers.xsd
 *.sln.iml
 build/lib/ptychosaxs/__init__.py
 dist/ptychoSAXS-0.1.1-py3.8.egg
+ptychoSAXS.egg-info/dependency_links.txt
+/ptychoSAXS.egg-info
+/ptychoSAXS.egg-info
