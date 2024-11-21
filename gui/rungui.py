@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import QLabel, QLineEdit, QMessageBox, QInputDialog, QDialo
 from PyQt5.QtCore import QTimer, QObject, pyqtSlot, pyqtSignal, QRunnable, QThreadPool, QSize
 
 import time
+#import QThread
 
 sys.path.append('..')
 
@@ -112,6 +113,7 @@ class InputDialog(QDialog):
 class workerSignals(QObject):
     finished = pyqtSignal(bool)
     progress = pyqtSignal(int)
+    statusmessage = pyqtSignal(str)
 
 # Step 1: Create a worker class
 class Worker(QRunnable):
@@ -1073,6 +1075,8 @@ class ptyco_main_control(QMainWindow):
                 self.save_list(filename, pos,r,[0,1,2],"a")
         self.rpos = []
         self.mpos = []
+        if len(self.motor_p0.keys()) ==1: # 1d fly
+            self.updateprogressbar(100)
         #t = []
         #while len(t) == 0:
         #    try:
@@ -1101,6 +1105,7 @@ class ptyco_main_control(QMainWindow):
         except:
             print("save_scaninfo is empty yet. This will save phi angles......")
         self.isfly = False
+        self.updateprogressbar(100)
 
     def flydone3d(self, value=0):
         for key in self.motor_p0:
@@ -1112,6 +1117,7 @@ class ptyco_main_control(QMainWindow):
         self.isscan = False
         self.updatepos()
         self.isfly = False
+        self.updateprogressbar(100)
     
     def timescanstop(self):
         self.isscan = False
@@ -1194,19 +1200,32 @@ class ptyco_main_control(QMainWindow):
                 self.fly2d_fe = fe
                 self.fly2d_tm = tm
                 self.fly2d_step = step
-
+        self.fly3d_p0 = None
+        self.fly3d_st = None
+        self.fly3d_fe = None
+        self.fly3d_tm = None
+        self.fly3d_step = None
+        self.progress_3d = None
         self.motor_p0 = initial_motorpos
         self.write_scaninfo_to_logfile(scaninfo)
         scaninfo = []
         scaninfo.append('#D')
         scaninfo.append(time.ctime())
         self.isscan = True
-        w = Worker(self.fly2d0, xmotor, ymotor, scanname=scanname)
+        w = Worker(self.fly2d0, xmotor, ymotor, scanname=scanname, 
+                   update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone2d)
+        w.signal.progress.connect(self.updateprogressbar)
+        w.signal.statusmessage.connect(self.update_status_bar)
+        w.kwargs['update_progress'] = w.signal.progress.emit
+        w.kwargs['update_status'] = w.signal.statusmessage.emit
         self.threadpool.start(w)
 
     def updateprogressbar(self, value):
         self.ui.progressBar.setValue(value)
+    
+    def update_status_bar(self, message):
+        self.ui.statusbar.showMessage(message)
 
     def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname=""):
         self.isStopScanIssued = False
@@ -1268,8 +1287,10 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append(time.ctime())
 
         self.isscan = True
-        w = Worker(self.fly3d0, xmotor, ymotor, phimotor, scanname=scanname)
+        w = Worker(self.fly3d0, xmotor, ymotor, phimotor, scanname=scanname, update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone3d)
+        w.signal.progress.connect(self.updateprogressbar)
+        w.kwargs['update_progress'] = w.signal.progress.emit
         self.threadpool.start(w)
 
     def fly(self, motornumber=-1):
@@ -1338,9 +1359,10 @@ class ptyco_main_control(QMainWindow):
         self.write_scaninfo_to_logfile(scaninfo)
 
         self.isscan = True
-        w = Worker(self.fly0, motornumber)
+        w = Worker(self.fly0, motornumber, update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone)
-
+        w.signal.progress.connect(self.updateprogressbar)
+        w.kwargs['update_progress'] = w.signal.progress.emit
         self.threadpool.start(w)
         self.run_stop_issued()
 
@@ -1395,6 +1417,12 @@ class ptyco_main_control(QMainWindow):
             showerror("Check scan parameters.")
             return 0
         
+        self.stepscan_p0 = p0
+        self.stepscan_st = st
+        self.stepscan_fe = fe
+        self.stepscan_expt = tm
+        self.stepscan_step = step
+        
         # logging
         scaninfo = []
         scaninfo.append('\n#S')
@@ -1427,8 +1455,10 @@ class ptyco_main_control(QMainWindow):
         # start the scan
         self.isscan = True
         
-        w = Worker(self.stepscan0, motornumber)
+        w = Worker(self.stepscan0, motornumber, update_progress=None, update_status=None)
         w.signal.finished.connect(self.scandone)
+        w.signal.progress.connect(self.updateprogressbar)
+        w.kwargs['update_progress'] = w.signal.progress.emit
         self.threadpool.start(w)
 
 
@@ -1484,7 +1514,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)))
         self.parameters.writeini()        
 
-    def stepscan0(self, motornumber):
+    def stepscan0(self, motornumber=-1, update_progress=None, update_status=None):
         axis = self.motornames[motornumber]
         self.signalmotor = axis
         self.signalmotorunit = self.motorunits[motornumber]
@@ -1532,7 +1562,7 @@ class ptyco_main_control(QMainWindow):
         pos = np.arange(st, fe+step/2, step)
         if len(pos)==1:
             pos = np.array([st, fe])
-        self.ui.progressBar.setValue(0)
+        #self.ui.progressBar.setValue(0)
 
         # prepare to collect Detector images
         # set the delay generator
@@ -1590,9 +1620,9 @@ class ptyco_main_control(QMainWindow):
                 # self.log_data(data)
             #pos = self.get_motorpos(self.signalmotor)
             self.mpos.append(value)
-            self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
+            #self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
 
-    def fly3d0(self, xmotor=0, ymotor=1, phimotor=6, scanname = ""):
+    def fly3d0(self, xmotor=0, ymotor=1, phimotor=6, scanname = "", update_progress=None, update_status=None):
         # xmotor is for flying
         # ymotor is for stepping
         # phimotor is for rotation
@@ -1651,12 +1681,14 @@ class ptyco_main_control(QMainWindow):
             self.pts.mv(axis, value)
             # fly here
             scan="%s%0.3d"%(scanname, i)
-            self.fly2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan)
+            self.progress_3d = (i, len(pos))
+            self.fly2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan, update_progress=update_progress)
+            
 #            r = self.get_qds_pos()
 #            self.rpos3.append([r[0], r[1], r[2]])
 #            self.mpos3.append(value)        
 
-    def fly2d0(self, xmotor = 0, ymotor=1, scanname = ""):
+    def fly2d0(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
         self.update_scanname()
         for det in self.detector: #JD
             if det is not None:  #JD
@@ -1758,7 +1790,15 @@ class ptyco_main_control(QMainWindow):
             while (time.time()-t1 < self.parameters._waittime_between_scans):
                 time.sleep(0.01)
             timeelapsed = time.time()-t0
-            print(f"Remaining time for the current 2D scan is {np.round(timeelapsed*(len(pos)-i-1),2)}s\n")
+            msg = f"Remaining time for the current 2D scan is {np.round(timeelapsed*(len(pos)-i-1),2)}s\n"
+            if update_progress:
+                if self.fly3d_p0: # 3d scan
+                    c3d, all3d = self.progress_3d
+                    update_progress(int(len(pos)*c3d+(i+1)/(len(pos)*all3d)*100))
+                else:
+                    update_progress(int((i+1)/len(pos)*100))
+            if update_status:
+                update_status(msg)
 #            self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
             #await save_softglue(self.pts.hexapod.pulse_number, self.softglue_channels,
             #                    self.parameters.working_folder, filename)
@@ -1768,7 +1808,7 @@ class ptyco_main_control(QMainWindow):
 #            self.save_qds(filename=filename)
         self.run_stop_issued()
 
-    def fly0(self, motornumber):
+    def fly0(self, motornumber=-1, update_progress=None, update_status=None):
         axis = self.motornames[motornumber]
         self.signalmotor = axis
         self.signalmotorunit = self.motorunits[motornumber]
