@@ -181,7 +181,6 @@ class TIFFileHandler:
         self.dest_dir = dest_dir
         self.h5_path = h5_path
         self.max_workers = max_workers #or os.cpu_count()  # Use all available CPU threads
-
         self.hdf5_appender = HDF5Appender(h5_path)
 
         # Ensure destination directory exists
@@ -415,10 +414,10 @@ class HDF5Appender:
     """
     Handles appending datasets to an HDF5 file in a thread-safe manner.
     """
-    def __init__(self, h5_path, max_workers=None):
+    def __init__(self, h5_path, max_workers=4):
         self.h5_path = h5_path
         self.lock = threading.Lock()
-        self.executor = ThreadPoolExecutor(max_workers=max_workers or os.cpu_count())
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)# or os.cpu_count())
 
     def append(self, local_file):
         """
@@ -466,9 +465,9 @@ if __name__ == "__main__":
     src_host = "remote.server.com"
     src_user = "user"
     src_pass = "password"
-    src_dir = "/ramdisk/"
-    dest_dir = "C:/Users/s12idc/Documents/GitHub/ptychoSAXS/test_ptychosaxs_process/"
-    h5_path = "C:/Users/s12idc/Documents/GitHub/ptychoSAXS/test_ptychosaxs_process/output_file.h5"
+    src_dir = "/ramdisk/ptychosaxs_processor_test/"
+    dest_dir = "C:/Users/s12idc/Documents/GitHub/ptychoSAXS/ptychosaxs_process_test/"
+    h5_path = "C:/Users/s12idc/Documents/GitHub/ptychoSAXS/ptychosaxs_process_test/output_file.h5"
     #h5_path = os.path.join(h5foldername,'output.h5')
 
     logging.basicConfig(level=logging.INFO)

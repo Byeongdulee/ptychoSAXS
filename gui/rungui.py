@@ -37,7 +37,7 @@ import datetime
 #import matplotlib.animation as animation
 #import random
 
-
+import pathlib
 import numpy as np
 
 #from tools.panda import get_pandadata
@@ -317,6 +317,8 @@ class ptyco_main_control(QMainWindow):
             self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setEnabled(enable)               
             self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setEnabled(enable)               
         
+        self.read_motor_scan_range()
+
         self.ui.actionSet_Log_Filename.triggered.connect(self.set_logfilename)
         self.ui.actionRun.triggered.connect(self.timescan)
         self.ui.actionStop.triggered.connect(self.timescanstop)
@@ -449,6 +451,39 @@ class ptyco_main_control(QMainWindow):
             self.timer.start(100)        
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
+
+    def write_motor_scan_range(self):
+        numbers = np.random.rand(len(self.motornames), 5)
+        for i, name in enumerate(self.motornames):
+            n = i + 1
+            line_edit_suffixes = ["tweak", "L", "R", "N", "t"]
+            arr = []
+            
+            for suffix in line_edit_suffixes:
+                line_edit_name = f"ed_lup_{n}_{suffix}" if suffix != "tweak" else f"ed_{n}_{suffix}"
+                try:
+                    value = float(self.ui.findChild(QLineEdit, line_edit_name).text())
+                except ValueError:  # More specific exception for parsing errors
+                    value = -999999
+                arr.append(value)
+            
+            numbers[i] = arr
+
+            # Save the array to a file
+        np.save('_numbers.npy', numbers)
+
+    def read_motor_scan_range(self):
+        # Load the array from the file
+        numbers = np.load('_numbers.npy')
+
+        for i, name in enumerate(self.motornames):
+            n = i + 1
+            line_edit_suffixes = ["tweak", "L", "R", "N", "t"]
+            
+            for j, suffix in enumerate(line_edit_suffixes):
+                value = '' if numbers[i, j] == -999999 else str(numbers[i, j])
+                line_edit_name = f"ed_lup_{n}_{suffix}" if suffix != "tweak" else f"ed_{n}_{suffix}"
+                self.ui.findChild(QLineEdit, line_edit_name).setText(value)
 
     def set_hdf_plugin_use(self):
         if self.ui.actionUse_hdf_plugin.isChecked():
@@ -852,66 +887,66 @@ class ptyco_main_control(QMainWindow):
             self.hexapod_flymode = HEXAPOD_FLYMODE_STANDARD
             self.ui.actionEnable_fly_with_controller.setChecked(False)
     
-    def read_softglue(self):
-        # read softglue data
-        foldername = self.ui.ed_workingfolder.text()
-        if len(foldername) == 0:
-            return
-            #foldername = os.getcwd()
-        N_cnt = 0
-        if hasattr(self.pts.hexapod, "pulse_number"):
-            N_cnt = self.pts.hexapod.pulse_number
-        t = []
-        #time.sleep(0.5)
-        #timeout = 5
-        # ct0 = time.time()
-        # while s12softglue.VALI<N_cnt*self.parameters.countsperexposure:
-        #     if (time.time()-ct0 > timeout):
-        #         print("timeout")
-        #         break
-        #     time.sleep(0.1)
-        ct0 = time.time()
-#        count = 0
-        s12softglue.PROC=1
-        while len(t)<N_cnt:
-            t, dt = s12softglue.get_arrays(self.parameters.softglue_channels)
-#            print(f"count = {count}")
-#            count += 1
-        print(f"time to read softglue data = {time.time()-ct0}")
-        return t,dt
+#     def read_softglue(self):
+#         # read softglue data
+#         foldername = self.ui.ed_workingfolder.text()
+#         if len(foldername) == 0:
+#             return
+#             #foldername = os.getcwd()
+#         N_cnt = 0
+#         if hasattr(self.pts.hexapod, "pulse_number"):
+#             N_cnt = self.pts.hexapod.pulse_number
+#         t = []
+#         #time.sleep(0.5)
+#         #timeout = 5
+#         # ct0 = time.time()
+#         # while s12softglue.VALI<N_cnt*self.parameters.countsperexposure:
+#         #     if (time.time()-ct0 > timeout):
+#         #         print("timeout")
+#         #         break
+#         #     time.sleep(0.1)
+#         ct0 = time.time()
+# #        count = 0
+#         s12softglue.PROC=1
+#         while len(t)<N_cnt:
+#             t, dt = s12softglue.get_arrays(self.parameters.softglue_channels)
+# #            print(f"count = {count}")
+# #            count += 1
+#         print(f"time to read softglue data = {time.time()-ct0}")
+#         return t,dt
 
-    def save_softglue_new(self,t,dt):
-        foldername = self.ui.ed_workingfolder.text()
-        if len(foldername) == 0:
-            return
-        filename = ""
-        for det in self.detector:
-            if det is not None:
-                if self.use_hdf_plugin:
-                    fnum = det.fileGet('FileNumber_RBV')
-                    fn = det.fileGet('FullFileName_RBV', as_string=True)
-                else:
-                    fnum = det.FileNumber_RBV
-                    fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-#                print(f'{fn=}')
-                #if str(fnum-1) not in fn:
-                #    fn = det.fileGet('FullFileName_RBV', as_string=True)
-                filename = os.path.basename(fn)
-#                print(filename)
-#                print(rstrip_from_char(filename, "_"))
-                filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
-#                print(filename)
-                #filename = filename.rstrip('.h5')
-        if len(filename) ==0:
-            print("****** Error: detector ioc does not response.")
-            filename = "temp%i"%int(time.time())
+#     def save_softglue_new(self,t,dt):
+#         foldername = self.ui.ed_workingfolder.text()
+#         if len(foldername) == 0:
+#             return
+#         filename = ""
+#         for det in self.detector:
+#             if det is not None:
+#                 if self.use_hdf_plugin:
+#                     fnum = det.fileGet('FileNumber_RBV')
+#                     fn = det.fileGet('FullFileName_RBV', as_string=True)
+#                 else:
+#                     fnum = det.FileNumber_RBV
+#                     fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+# #                print(f'{fn=}')
+#                 #if str(fnum-1) not in fn:
+#                 #    fn = det.fileGet('FullFileName_RBV', as_string=True)
+#                 filename = os.path.basename(fn)
+# #                print(filename)
+# #                print(rstrip_from_char(filename, "_"))
+#                 filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
+# #                print(filename)
+#                 #filename = filename.rstrip('.h5')
+#         if len(filename) ==0:
+#             print("****** Error: detector ioc does not response.")
+#             filename = "temp%i"%int(time.time())
 
-        print(f"Total {len(t)} data will be saved under {foldername} with names of {filename}.")
+#         print(f"Total {len(t)} data will be saved under {foldername} with names of {filename}.")
 
-        for i, td in enumerate(t):
-            scanname = '%s_%i.dat' % (filename, i)
-            dt2 = np.column_stack((td, dt[0][i], dt[1][i], dt[2][i]))
-            np.savetxt(os.path.join(foldername, scanname), dt2, fmt="%1.8e %1.8e %1.8e %1.8e")
+#         for i, td in enumerate(t):
+#             scanname = '%s_%i.dat' % (filename, i)
+#             dt2 = np.column_stack((td, dt[0][i], dt[1][i], dt[2][i]))
+#             np.savetxt(os.path.join(foldername, scanname), dt2, fmt="%1.8e %1.8e %1.8e %1.8e")
 
 
     def save_softglue(self):
@@ -962,7 +997,10 @@ class ptyco_main_control(QMainWindow):
             print("****** Error: detector ioc does not response.")
             filename = "temp%i"%int(time.time())
 
-        print(f"Total {len(t)} data will be saved under {foldername} with names of {filename}.")
+        foldername = os.path.join(foldername, 'positions')
+        p = pathlib.Path(foldername)
+        p.mkdir(parents=True, exist_ok=True)
+        print(f"Total {len(t)} data will be saved as {foldername}/{filename}.")
 
         for i, td in enumerate(t):
             if i>=N_cnt:
@@ -1146,6 +1184,7 @@ class ptyco_main_control(QMainWindow):
         self.threadpool.start(w)
         
     def fly2d(self, xmotor=0, ymotor=1, scanname = ""):
+        self.write_motor_scan_range()
         self.isStopScanIssued = False
         # for det in self.detector: #JD
         #     if det is not None:  #JD
@@ -1228,6 +1267,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.statusbar.showMessage(message)
 
     def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname=""):
+        self.write_motor_scan_range()
         self.isStopScanIssued = False
         if self.ui.actionckTime_reset_before_scan.isChecked():
             s12softglue.ckTime_reset()
@@ -1285,16 +1325,19 @@ class ptyco_main_control(QMainWindow):
         scaninfo = []
         scaninfo.append('#D')
         scaninfo.append(time.ctime())
-
+        self.time_scanstart = time.time()
         self.isscan = True
-        w = Worker(self.fly3d0, xmotor, ymotor, phimotor, scanname=scanname, update_progress=None, update_status=None)
+        w = Worker(self.fly3d0, xmotor, ymotor, phimotor, scanname=scanname, 
+            update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone3d)
         w.signal.progress.connect(self.updateprogressbar)
         w.kwargs['update_progress'] = w.signal.progress.emit
+        w.kwargs['update_status'] = w.signal.statusmessage.emit
         self.threadpool.start(w)
 
     def fly(self, motornumber=-1):
         self.update_scanname()
+        self.write_motor_scan_range()
         self.isStopScanIssued = False
         if motornumber<0:
             pb = self.sender()
@@ -1391,7 +1434,7 @@ class ptyco_main_control(QMainWindow):
 
     def stepscan(self, motornumber=-1):
         self.update_scanname()
-
+        self.write_motor_scan_range()
         self.isStopScanIssued = False
         if motornumber<0:
             pb = self.sender()
@@ -1682,8 +1725,11 @@ class ptyco_main_control(QMainWindow):
             # fly here
             scan="%s%0.3d"%(scanname, i)
             self.progress_3d = (i, len(pos))
-            self.fly2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan, update_progress=update_progress)
-            
+            self.fly2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
+                update_progress=update_progress, update_status=update_status)
+            if update_status:
+                msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {i/len(pos)*100}% run.'
+                update_status(msg)
 #            r = self.get_qds_pos()
 #            self.rpos3.append([r[0], r[1], r[2]])
 #            self.mpos3.append(value)        
@@ -1922,7 +1968,7 @@ class ptyco_main_control(QMainWindow):
                             return
 #                print("Ready for traj")
                 pos = self.pts.get_pos(axis)
-                print(f"pos is {pos} before traj run start.")
+                #print(f"pos is {pos} before traj run start.")
                 if not isTestRun:
                     if self.isStruckCountNeeded:
                         struck.mcs_init()
@@ -1930,7 +1976,8 @@ class ptyco_main_control(QMainWindow):
                         print(self.pts.hexapod.pulse_number, " MCS Ncouts updated.")
                         struck.arm_mcs()
                     else:
-                        epics.caput('12idc:scaler1.CNT', 1)
+                        pass
+#                        epics.caput('12idc:scaler1.CNT', 1)
                     istraj_running = False
                     timeout = 5
                     i = 0
@@ -1949,7 +1996,7 @@ class ptyco_main_control(QMainWindow):
                         if i>timeout:
                             print("traj scan command is resent for 5 times to the hexapod without success.")
                             break
-                print("Run_traj is sent command in rungui.")
+                #print("Run_traj is sent command in rungui.")
                 isattarget = False
                 while not isattarget:
                     try:
@@ -1962,7 +2009,8 @@ class ptyco_main_control(QMainWindow):
                 if self.isStruckCountNeeded:
                     struck.strk.stop()
                 else:
-                    epics.caput('12idc:scaler1.CNT', 0)
+                    pass
+#                    epics.caput('12idc:scaler1.CNT', 0)
                 pos = self.pts.get_pos(axis)
                 print(f"pos is {pos} after the traj run done.")
 

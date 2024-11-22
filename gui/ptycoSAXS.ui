@@ -2122,7 +2122,7 @@
          </size>
         </property>
         <property name="toolTip">
-         <string>Experiment log file and softglue data will be saved in this folder.</string>
+         <string>Experiment log file will be saved in this folder.  QDS softglue data will be saved under /positions.</string>
         </property>
         <property name="maxLength">
          <number>500</number>
@@ -2139,7 +2139,7 @@
      <x>0</x>
      <y>0</y>
      <width>1068</width>
-     <height>22</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
