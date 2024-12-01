@@ -22,7 +22,7 @@ class newport(object):
             n = self.motornames.index(axis)
         if type(axis)==int:
             n = axis-1
-        self.newport_piezo[n].put('SPMG', 1)
+        self.newport_piezo[n].stop()
 
     def ismoving(self, axis):
         if type(axis)==str:
@@ -41,7 +41,7 @@ class newport(object):
             n = self.motornames.index(axis)
         if type(axis)==int:
             n = axis-1
-        pos = self.newport_piezo[n].get('VAL')
+        pos = self.newport_piezo[n].get_position()
         return pos
 
     def set_pos(self, axis, pos):
@@ -49,7 +49,7 @@ class newport(object):
             n = self.motornames.index(axis)
         if type(axis)==int:
             n = axis-1
-        self.newport_piezo[n].put('VAL', pos)
+        self.newport_piezo[n].set_position(pos)
         pos = self.get_pos(axis)
         return pos
         
