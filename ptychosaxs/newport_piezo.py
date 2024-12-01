@@ -44,12 +44,12 @@ class newport(object):
         pos = self.newport_piezo[n].get('VAL')
         return pos
 
-    def set_pos(self, axis):
+    def set_pos(self, axis, pos):
         if type(axis)==str:
             n = self.motornames.index(axis)
         if type(axis)==int:
             n = axis-1
-        self.newport_piezo[n].set('VAL')
+        self.newport_piezo[n].put('VAL', pos)
         pos = self.get_pos(axis)
         return pos
         
