@@ -9,6 +9,9 @@ c('LD 3,3,3,3,3,3,3,3')
 motornames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 motorunits = ['step', 'step', 'step', 'step', 'step', 'step', 'step', 'step']
 
+def turn_on():
+    c('SHABCDEFGH;')
+
 def wait_move(channel='A'):
     g.GMotionComplete(channel)
     return True

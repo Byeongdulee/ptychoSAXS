@@ -2576,6 +2576,7 @@ class motor_control(QMainWindow):
         self.threadpool = QThreadPool.globalInstance()
         self.control = {}
         self.control["galil"]= gl
+        self.control["galil"].turn_on()
         self.control["smarAct"]= smaract
         self.control["newport"]= np_piezo.newport()
         enable = True
