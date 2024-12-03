@@ -89,6 +89,7 @@ class AD_Pilatus(Device):
         time.sleep(0.25)
 
     def StartCapture(self):
+        print("start capture is called.")
         self.ShutterMode = 0
         self.filePut('AutoSave', 1)
         self.filePut('FileWriteMode', 1)  # capture

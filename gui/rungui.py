@@ -978,19 +978,26 @@ class ptyco_main_control(QMainWindow):
         filename = ""
         for det in self.detector:
             if det is not None:
-                if self.use_hdf_plugin:
-                    fnum = det.fileGet('FileNumber_RBV')
-                    fn = det.fileGet('FullFileName_RBV', as_string=True)
-                else:
-                    fnum = det.FileNumber_RBV
-                    fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+                fnum = det.FileNumber_RBV
+                fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+                filename = os.path.basename(fn)
+                filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
+                # if self.use_hdf_plugin:
+                #     filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
+                #     #fnum = det.fileGet('FileNumber_RBV')
+                #     #fn = det.fileGet('FullFileName_RBV', as_string=True)
+                # else:
+                #     filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
+                    #fnum = det.FileNumber_RBV
+                    #fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+#                fnum = det.FileNumber_RBV
+#                fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
 #                print(f'{fn=}')
                 #if str(fnum-1) not in fn:
                 #    fn = det.fileGet('FullFileName_RBV', as_string=True)
-                filename = os.path.basename(fn)
 #                print(filename)
 #                print(rstrip_from_char(filename, "_"))
-                filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
+                #filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
 #                print(filename)
                 #filename = filename.rstrip('.h5')
         if len(filename) ==0:
@@ -1825,6 +1832,10 @@ class ptyco_main_control(QMainWindow):
                 ismoving = self.pts.ismoving(axis)
             print("All motors are ready for fly scan.")
             # fly here
+            for det in self.detector: #JD
+                if det is not None:  #JD            
+                    det.filePut('FileNumber', i+1) 
+
             self.fly0(xmotor)
 #            print("CCCC")
             self.flydone(return_motor=False)
@@ -1959,7 +1970,7 @@ class ptyco_main_control(QMainWindow):
                         try:
                             det.fly_ready(expt, self.pts.hexapod.pulse_number, period=period, 
                                           isTest = isTestRun, capture=self.use_hdf_plugin)
-#                            print("det is ready.")
+                            print(self.use_hdf_plugin, "dpluging.")
                         except TimeoutError:
                             msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
                             print(msg)

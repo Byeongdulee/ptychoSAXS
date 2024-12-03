@@ -35,7 +35,7 @@ class pilatus(AD_Pilatus):
 		self.CCD_waitFileWriting()
 
 	def set_fly_configuration(self):
-		self.AutoIncrement = 0
+		self.AutoIncrement = 1
 		self.FileNumber = 1
 		self.FilePath = '/ramdisk/'
 		self.filePut('FilePath', '/ramdisk/')
@@ -51,7 +51,7 @@ class pilatus(AD_Pilatus):
 		self.setArrayCounter(0)
 		self.setFileTemplate('%s%s_%5.5d.h5')
 		self.SetMultiFrames(Npoints, x_points)
-		self.setFileNumber(1)
+		#self.setFileNumber(1)
 		if not isTest:
 			if capture:
 				try:
