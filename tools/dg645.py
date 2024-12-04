@@ -282,7 +282,7 @@ class dg645_12ID(SRSDG645):
         self.set_pilatus(DGexpt, *kwd)
         self.trigger()
         
-    def set_pilatus(self, DGexpt, trigger_source=5,DGNimage=1,Cycperiod=0):
+    def set_pilatus(self, DGexpt, trigger_source=TSRC_SINGLE_SHOT,DGNimage=1,Cycperiod=0):
         delaytime = 0
         if (delaytime >= UBZ_SHUTTER_DEADTIME):
             delaytime = delaytime - UBZ_SHUTTER_DEADTIME
@@ -322,7 +322,7 @@ class dg645_12ID(SRSDG645):
         else:
             self.burst_enable = 0
     
-    def set_pilatus2(self, DGexpt, DGNimage=1, Cycperiod=0, negativedelay=0, triggerDelay=0, trigger_source=5):
+    def set_pilatus2(self, DGexpt, DGNimage=1, Cycperiod=0, negativedelay=0, triggerDelay=0, trigger_source=TSRC_SINGLE_SHOT):
         delaytime = 0
         if (delaytime >= UBZ_SHUTTER_DEADTIME):
             delaytime = delaytime - UBZ_SHUTTER_DEADTIME
@@ -410,7 +410,7 @@ class dg645_12ID(SRSDG645):
         DGNimage = 1
         Cycperiod = DGexpt + 1 # no meaning.        
         if len(kwd)==0:
-            self.trigger_source = 5
+            self.trigger_source = TSRC_SINGLE_SHOT
         elif (len(kwd)==1):
             self.trigger_source = kwd
         elif (len(kwd)>2):
