@@ -1657,6 +1657,7 @@ class ptyco_main_control(QMainWindow):
 
         # prepare to collect Detector images
         # set the delay generator
+        dg645_12ID.set_pilatus(expt, trigger_source=5,DGNimage=1)
         if expt != dg645_12ID._exposuretime:
             try:
                 dg645_12ID.set_pilatus_fly(expt)
@@ -1666,20 +1667,6 @@ class ptyco_main_control(QMainWindow):
         if self.isStruckCountNeeded:
             struck.mcs_counter_init()
 
-        if len(self.detector)>0:
-            for det in self.detector:
-                if det is not None:
-                    print(f"Exposure time set to %0.3f seconds for {det._prefix}."% expt)
-                    try:
-                        det.fly_ready(expt, len(pos))
-    #                            print("det is ready.")
-                    except TimeoutError:
-                        self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
-                        print(self.recent_error_msg)
-                        self.ui.statusbar.showMessage(self.recent_error_msg)
-                        #showerror("Detector timeout.")
-                        return
-
         self.plotlabels = []
         
         ## make a plot if needed.
@@ -1688,7 +1675,23 @@ class ptyco_main_control(QMainWindow):
             if self.isStopScanIssued:
                 break
             self.pts.mv(axis, value)
+            if len(self.detector)>0:
+                for det in self.detector:
+                    if det is not None:
+                        print(f"Exposure time set to %0.3f seconds for {det._prefix}."% expt)
+                        try:
+                            #det.fly_ready(expt, len(pos))
+                            det.step_ready(expt)
+        #                            print("det is ready.")
+                        except TimeoutError:
+                            self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
+                            print(self.recent_error_msg)
+                            self.ui.statusbar.showMessage(self.recent_error_msg)
+                            #showerror("Detector timeout.")
+                            return
+
             #print(value)
+            dg645_12ID.trigger()
             if len(self.detector)>0:
                 struck.arm_mcs_counter()
                 struck.mcs_counter_waitstarted()
@@ -1710,6 +1713,7 @@ class ptyco_main_control(QMainWindow):
                 # data = [value, [r[0], r[1], r[2]]]
                 # self.log_data(data)
             #pos = self.get_motorpos(self.signalmotor)
+            time.sleep(expt+1)
             self.mpos.append(value)
             #self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
 
