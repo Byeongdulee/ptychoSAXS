@@ -371,6 +371,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_exp_period_ratio)
 #        self.ui.ed_scanname.returnPressed.connect(self.update_scannumber)
         self.use_hdf_plugin = True
+        self.hdf_plugin_savemode = 0 # single frame mode, 1 for capture, 2 for streaming
 
         if os.name != 'nt':
             self.ui.menuQDS.setDisabled(True)
@@ -835,9 +836,10 @@ class ptyco_main_control(QMainWindow):
             scaninfo.append('#I detector_filename')
             for det in self.detector:
                 if det is not None:
-                    if self.use_hdf_plugin:
+                    if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
+                        while det.fileGet('FileWrite_RBV'):
+                            time.sleep(0.1)
                         fnum = det.fileGet('FileNumber_RBV')
-                        fn = det.fileGet('FullFileName_RBV', as_string=True)
                         if str(fnum-1) not in fn:
                             fn = det.fileGet('FullFileName_RBV', as_string=True)
                     else:
@@ -978,10 +980,25 @@ class ptyco_main_control(QMainWindow):
         filename = ""
         for det in self.detector:
             if det is not None:
-                fnum = det.FileNumber_RBV
-                fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-                filename = os.path.basename(fn)
-                filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
+                if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
+                    while det.fileGet('FileWrite_RBV'):
+                        time.sleep(0.1)
+                    fnum = det.fileGet('FileNumber_RBV')
+                    if str(fnum-1) not in fn:
+                        fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    filename = os.path.basename(fn)
+                    filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)                
+                else:
+                    fnum = det.FileNumber_RBV
+                    fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+                    filename = os.path.basename(fn)
+                    filename = "%s" % rstrip_from_char(filename, "_")
+                
+                # HDF plugin sometime update the filename too late.
+
+                # therefore, do not take filename from the hdf plugin...
+
+
                 # if self.use_hdf_plugin:
                 #     filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
                 #     #fnum = det.fileGet('FileNumber_RBV')
@@ -1058,16 +1075,17 @@ class ptyco_main_control(QMainWindow):
             scaninfo.append('#I detector_filename')
             for det in self.detector:
                 if det is not None:
-                    if self.use_hdf_plugin:
+                    fn = ""
+                    if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
+                        while det.fileGet('FileWrite_RBV'):
+                            time.sleep(0.1)
                         fnum = det.fileGet('FileNumber_RBV')
-                        fn = det.fileGet('FullFileName_RBV', as_string=True)
                         if str(fnum-1) not in fn:
                             fn = det.fileGet('FullFileName_RBV', as_string=True)
                     else:
                         fnum = det.FileNumber_RBV
                         fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-                        #fnum = det.fileGet('FileNumber_RBV')
-                        #fn = det.fileGet('FullFileName_RBV', as_string=True)
+
                     filename = os.path.basename(fn)
                     scaninfo.append(filename)
                     # if no cpature, comment the two line out.
@@ -1101,9 +1119,12 @@ class ptyco_main_control(QMainWindow):
             filename = ""
             for det in self.detector:
                 if det is not None:
-                    if self.use_hdf_plugin:
+                    if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
+                        while det.fileGet('FileWrite_RBV'):
+                            time.sleep(0.1)
                         fnum = det.fileGet('FileNumber_RBV')
-                        fn = det.fileGet('FullFileName_RBV', as_string=True)
+                        if str(fnum-1) not in fn:
+                            fn = det.fileGet('FullFileName_RBV', as_string=True)
                     else:
                         fnum = det.FileNumber_RBV
                         fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
@@ -1832,9 +1853,10 @@ class ptyco_main_control(QMainWindow):
                 ismoving = self.pts.ismoving(axis)
             print("All motors are ready for fly scan.")
             # fly here
-            for det in self.detector: #JD
-                if det is not None:  #JD            
-                    det.filePut('FileNumber', i+1) 
+            if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):
+                for det in self.detector: #JD
+                    if det is not None:  #JD            
+                        det.filePut('FileNumber', i+1) 
 
             self.fly0(xmotor)
 #            print("CCCC")
@@ -1969,8 +1991,8 @@ class ptyco_main_control(QMainWindow):
                     if det is not None:
                         try:
                             det.fly_ready(expt, self.pts.hexapod.pulse_number, period=period, 
-                                          isTest = isTestRun, capture=self.use_hdf_plugin)
-                            print(self.use_hdf_plugin, "dpluging.")
+                                          isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
+#                            print(self.use_hdf_plugin, "dpluging.")
                         except TimeoutError:
                             msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
                             print(msg)

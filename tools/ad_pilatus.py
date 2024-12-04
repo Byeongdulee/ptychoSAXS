@@ -86,17 +86,31 @@ class AD_Pilatus(Device):
         self.filePut('NumCapture',    n_cap)
         self.filePut('EnableCallbacks', 1)
         #self.filePut('FileNumber',    1)
-        time.sleep(0.25)
+        time.sleep(0.1)
 
     def StartCapture(self):
-        print("start capture is called.")
         self.ShutterMode = 0
         self.filePut('AutoSave', 1)
-        self.filePut('FileWriteMode', 1)  # capture
+        self.filePut('FileWriteMode', 1)  # Stream..... BL 12/2/2024. This was 1 for capture.
         time.sleep(0.05)
         self.filePut('Capture', 1)  # start capture
         self.Arm()
-        time.sleep(0.25)
+        time.sleep(0.1)
+
+    def StartSingleFrame(self):
+        self.ShutterMode = 0
+        fn = bytes(self.FileName_RBV).decode().strip('\x00')
+        self.setFileName("%s_%5.5d"%(fn, self.FileNumber_RBV))
+        self.AutoIncrement = 1
+        self.filePut('AutoIncrement', 1)
+        self.filePut('FileNumber',1)
+        self.filePut('AutoSave', 1)
+        self.filePut('NumCapture',    1)
+        self.filePut('FileWriteMode', 0)  # single frame
+        time.sleep(0.05)
+        #self.filePut('Capture', 1)  # start capture
+        self.Arm()
+        #time.sleep(0.25)
 
     def ForceStop(self, timeouttime = 2):
         t0 = time.time()

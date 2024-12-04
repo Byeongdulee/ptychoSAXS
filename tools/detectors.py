@@ -43,7 +43,7 @@ class pilatus(AD_Pilatus):
 		self.filePut('AutoSave', 1)
 		self.filePut('FileWriteMode', 1)
 
-	def fly_ready(self, expt, x_points, y_points=1, wait=False, period=0, isTest=False, capture=True):
+	def fly_ready(self, expt, x_points, y_points=1, wait=False, period=0, isTest=False, capture=(True, 1)):
 		Npoints = x_points*y_points
 		self.SetExposureTime(expt)
 		if period>0:
@@ -53,11 +53,14 @@ class pilatus(AD_Pilatus):
 		self.SetMultiFrames(Npoints, x_points)
 		#self.setFileNumber(1)
 		if not isTest:
-			if capture:
+			if capture[0]:
 				try:
-					self.StartCapture()
-					if wait:
-						self.wait_capturedone()
+					if capture[1]==0:
+						self.StartSingleFrame()
+					if capture[1]==1:
+						self.StartCapture()
+						if wait:
+							self.wait_capturedone()
 				except TimeoutError:
 					raise TimeoutError
 			else:
