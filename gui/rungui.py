@@ -970,10 +970,19 @@ class ptyco_main_control(QMainWindow):
         #         break
         #     time.sleep(0.1)
         ct0 = time.time()
-#        count = 0
+        count = 0
+        len_t = 0
         s12softglue.PROC=1
-        while len(t)<N_cnt:
+        while len_t<N_cnt:
             t, dt = s12softglue.get_arrays(self.parameters.softglue_channels)
+            # if softglue data does not get updated on time, flush.
+            if len_t == len(t):
+                s12softglue.flush()
+            len_t = len(t)
+            count = count+1
+            if count>10:
+                print("Timeout error in softglue data reading.........")
+                break
 #            print(f"count = {count}")
 #            count += 1
         print(f"time to read softglue data = {time.time()-ct0}")
@@ -1359,6 +1368,7 @@ class ptyco_main_control(QMainWindow):
             update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone3d)
         w.signal.progress.connect(self.updateprogressbar)
+        w.signal.statusmessage.connect(self.update_status_bar)
         w.kwargs['update_progress'] = w.signal.progress.emit
         w.kwargs['update_status'] = w.signal.statusmessage.emit
         self.threadpool.start(w)
@@ -1529,7 +1539,9 @@ class ptyco_main_control(QMainWindow):
         w = Worker(self.stepscan0, motornumber, update_progress=None, update_status=None)
         w.signal.finished.connect(self.scandone)
         w.signal.progress.connect(self.updateprogressbar)
+        w.signal.statusmessage.connect(self.update_status_bar)
         w.kwargs['update_progress'] = w.signal.progress.emit
+        w.kwargs['update_status'] = w.signal.statusmessage.emit
         self.threadpool.start(w)
 
 
