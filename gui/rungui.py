@@ -1656,13 +1656,28 @@ class ptyco_main_control(QMainWindow):
         #self.ui.progressBar.setValue(0)
 
         # prepare to collect Detector images
-        # set the delay generator
-        dg645_12ID.set_pilatus(expt, trigger_source=5,DGNimage=1)
-        if expt != dg645_12ID._exposuretime:
-            try:
-                dg645_12ID.set_pilatus_fly(expt)
-            except:
-                print("EEEEE")
+        if len(self.detector)>0:
+            for det in self.detector:
+                if det is not None:
+                    print(f"Exposure time set to %0.3f seconds for {det._prefix}."% expt)
+                    try:
+                        #det.fly_ready(expt, len(pos))
+                        det.fly_ready(expt, len(pos))  # Arm detector for multiple data.
+    #                            print("det is ready.")
+                    except TimeoutError:
+                        self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
+                        print(self.recent_error_msg)
+                        self.ui.statusbar.showMessage(self.recent_error_msg)
+                        #showerror("Detector timeout.")
+                        return
+        # each time it will send a pulse
+        dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
+        
+        #if expt != dg645_12ID._exposuretime:
+        #    try:
+        #        dg645_12ID.set_pilatus_fly(expt)
+        #    except:
+        #        print("EEEEE")
 
         if self.isStruckCountNeeded:
             struck.mcs_counter_init()
@@ -1675,29 +1690,15 @@ class ptyco_main_control(QMainWindow):
             if self.isStopScanIssued:
                 break
             self.pts.mv(axis, value)
-            if len(self.detector)>0:
-                for det in self.detector:
-                    if det is not None:
-                        print(f"Exposure time set to %0.3f seconds for {det._prefix}."% expt)
-                        try:
-                            #det.fly_ready(expt, len(pos))
-                            det.step_ready(expt)
-        #                            print("det is ready.")
-                        except TimeoutError:
-                            self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
-                            print(self.recent_error_msg)
-                            self.ui.statusbar.showMessage(self.recent_error_msg)
-                            #showerror("Detector timeout.")
-                            return
 
-            #print(value)
-            dg645_12ID.trigger()
+            # trigger the detector.
             if len(self.detector)>0:
                 struck.arm_mcs_counter()
                 struck.mcs_counter_waitstarted()
                 dg645_12ID.trigger()
                 while struck.strk.scaler.CNT:
                     time.sleep(0.01)
+
             if self.isStruckCountNeeded:
                 if len(self.detector)==0:
                     struck.mcs_counter_count(expt)
@@ -1728,16 +1729,6 @@ class ptyco_main_control(QMainWindow):
 #        self.mpos3 = []
         pos = self.pts.get_pos(axis)
         self.isfly3 = False
-        # n = phimotor+1
-        # p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-        # if len(p0)==0:
-        #     p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-        #     self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
-        # p0 = float(p0)
-        # st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-        # fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
-        # #tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
-        # step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
         
         st = self.fly3d_st + self.fly3d_p0
         fe = self.fly3d_fe + self.fly3d_p0
@@ -1747,13 +1738,8 @@ class ptyco_main_control(QMainWindow):
             step = -1*abs(step)
         if st<fe:
             step = abs(step)
+
         # revsere scan disabled: always scan from start to final regardless of the initial position.
-        # if self.ui.cb_reversescandir.isChecked():
-        #     if abs(st-pos)>abs(fe-pos):
-        #         t = fe
-        #         fe = st
-        #         st = t 
-        #         step = -step
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step/2, step)
 
@@ -1822,9 +1808,7 @@ class ptyco_main_control(QMainWindow):
 
         n = xmotor+1
         p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-#        if len(p0)==0:
-#            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-#            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+
         p0 = float(p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
@@ -1844,13 +1828,7 @@ class ptyco_main_control(QMainWindow):
             step = -1*abs(step)
         if st<fe:
             step = abs(step)
-        # Reverse disabled... Scan will be done from start to end regardless of the initial position.
-        # if self.ui.cb_reversescandir.isChecked():
-        #     if abs(st-pos)>abs(fe-pos):
-        #         t = fe
-        #         fe = st
-        #         st = t 
-        #         step = -step
+
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step/2, step)
 #        print(pos)
@@ -1904,13 +1882,7 @@ class ptyco_main_control(QMainWindow):
                     update_progress(int((i+1)/len(pos)*100))
             if update_status:
                 update_status(msg)
-#            self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
-            #await save_softglue(self.pts.hexapod.pulse_number, self.softglue_channels,
-            #                    self.parameters.working_folder, filename)
-            #while self.isfly:
-            #    time.sleep(0.02)
-#            filename = "%s%0.3d"%(scanname, i)
-#            self.save_qds(filename=filename)
+
         self.run_stop_issued()
 
     def fly0(self, motornumber=-1, update_progress=None, update_status=None):
@@ -2274,14 +2246,7 @@ class ptyco_main_control(QMainWindow):
             l_data = [data]
         else:
             l_data = data
-        # try:
-        #     qds_data = s12softglue.get_pos_array()
-        # except:
-        #     showerror("PanDA is needed.")
-        #     return
-        # qds_data = qds_data/1000
-        #print(self.pts.hexapod.wave_start, " wave_start position")
-        #qds_data = qds_data[-1]-qds_data-self.pts.hexapod.wave_start*1000
+
         try:
             axis = self.signalmotor
         except:
@@ -2305,9 +2270,7 @@ class ptyco_main_control(QMainWindow):
                 except:
                     self.recent_error_msg = "Error in fly_result."
                     print(self.recent_error_msg)
-                    #print(target.shape, " encoded data")
-                    #print(encoded.shape, " encoded data")
-                    #print(qds_data.shape, " qds data")
+
                 print("Done...")
     def clearplot(self):
         #self.isscan = False
