@@ -978,6 +978,7 @@ class ptyco_main_control(QMainWindow):
             # if softglue data does not get updated on time, flush.
             if len_t == len(t):
                 s12softglue.flush()
+                time.sleep(0.1)
             len_t = len(t)
             count = count+1
             if count>10:
