@@ -8,6 +8,12 @@ except:
 	from ad_pilatus import AD_Pilatus, EIGERMODE, PILATUSMODE
 #pil = AD_Pilatus('12idcPIL:')
 
+class DET_MIN_READOUT_Error(Exception):
+    pass
+
+class DET_OVER_READOUT_SPEED_Error(Exception):
+    pass
+
 class pilatus(AD_Pilatus):
 	def __init__(self, basename="S12-PILATUS1:"):
 		super().__init__(basename)

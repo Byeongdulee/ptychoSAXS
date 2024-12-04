@@ -3,6 +3,9 @@ from epics import Device, PV
 import numpy as np
 from tqdm import tqdm
 
+class SOFTGLUE_Setup_Error(Exception):
+    pass
+
 class sgz_pty(Device):
     basePV = "12IFMZ:"
     dmaPV = '%s1acquireDma'%basePV

@@ -41,18 +41,19 @@ import pathlib
 import numpy as np
 
 #from tools.panda import get_pandadata
-from tools.softglue import sgz_pty
+from tools.softglue import sgz_pty, SOFTGLUE_Setup_Error
 s12softglue = sgz_pty()
 
 #Delay generator
 import tools.dg645 as dg645
+from tools.dg645 import DG645_Error
 dg645_12ID = dg645.dg645_12ID.open_from_uri(dg645.ADDRESS_12IDC)
 
 # struck
 from tools import struck
 
 # detectors
-from tools.detectors import pilatus
+from tools.detectors import pilatus, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
 import re
 import analysis.planeeqn as eqn
 import py12inifunc
@@ -199,7 +200,7 @@ class ptyco_main_control(QMainWindow):
         guiName = "ptycoSAXS.ui"
         self.pts = pts
         self.ui = uic.loadUi(guiName)
-        
+        self.recent_error_msg = ''
         # list all possible motors
         # this should came from the pts.
         motornames = ['X', 'Y', 'Z', 'U', 'V', 'W', 'phi']
@@ -982,11 +983,12 @@ class ptyco_main_control(QMainWindow):
             len_t = len(t)
             count = count+1
             if count>10:
-                print("Timeout error in softglue data reading.........")
+                self.recent_error_msg = "Timeout error in softglue data reading........."
+                print(self.recent_error_msg)
                 break
 #            print(f"count = {count}")
 #            count += 1
-        print(f"time to read softglue data = {time.time()-ct0}")
+#        print(f"time to read softglue data = {time.time()-ct0}")
         filename = ""
         for det in self.detector:
             if det is not None:
@@ -1028,7 +1030,8 @@ class ptyco_main_control(QMainWindow):
 #                print(filename)
                 #filename = filename.rstrip('.h5')
         if len(filename) ==0:
-            print("****** Error: detector ioc does not response.")
+            self.recent_error_msg = "****** Error: detector ioc does not response."
+            print(self.recent_error_msg)
             filename = "temp%i"%int(time.time())
 
         foldername = os.path.join(foldername, 'positions')
@@ -1061,7 +1064,8 @@ class ptyco_main_control(QMainWindow):
             self.updatepos()
             s12softglue.flush()
         except:
-            print("error here.....")
+            self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
+            print(self.recent_error_msg)
         #if self.signalmotor not in self.pts.hexapod.axes:        
         #    self.pts.set_speed(self.signalmotor, self._prev_vel, self._prev_acc)
 #        print(f"elapsed time since done = {time.time()-ct0}")
@@ -1116,7 +1120,8 @@ class ptyco_main_control(QMainWindow):
                 self.save_softglue()
                 success = True
             except:
-                print("error on softglue, it will be flushed again.")
+                self.recent_error_msg = "The softglue flush failed while save_softglue, it will be flushed again....."
+                print(self.recent_error_msg)
                 s12softglue.flush()
                 cnt = cnt + 1
                 if cnt>timeout:
@@ -1141,7 +1146,8 @@ class ptyco_main_control(QMainWindow):
                     filename = os.path.basename(fn)
                     filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
             if len(filename) ==0:
-                print("****** Error: detector ioc does not response.")
+                self.recent_error_msg = "****** Error: detector ioc does not response."
+                print(self.recent_error_msg)
                 filename = "temp%i"%int(time.time())
             filename = f"{filename}.dat"
             print(f"\nSoftglue epics erorr.....Data read from usb will be saved in {filename}\n")
@@ -1186,6 +1192,7 @@ class ptyco_main_control(QMainWindow):
     def flydone3d(self, value=0):
         for key in self.motor_p0:
             self.mv(key, self.motor_p0[key])        
+        print("")
         print("3D fly done.......")
         isTestRun = self.ui.actionTestFly.isChecked()
         if isTestRun:
@@ -1667,9 +1674,9 @@ class ptyco_main_control(QMainWindow):
                         det.fly_ready(expt, len(pos))
     #                            print("det is ready.")
                     except TimeoutError:
-                        msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
-                        print(msg)
-                        self.ui.statusbar.showMessage(msg)
+                        self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
+                        print(self.recent_error_msg)
+                        self.ui.statusbar.showMessage(self.recent_error_msg)
                         #showerror("Detector timeout.")
                         return
 
@@ -1756,7 +1763,9 @@ class ptyco_main_control(QMainWindow):
                 break
             
             # loging phi angle information
-            print(f"phi position : {value}")
+            print("")
+            print("*****")
+            print(f"phi position : {value:.3e}")
             scaninfo = []
             scaninfo.append('#I phi = ')
             scaninfo.append(value)
@@ -1864,7 +1873,7 @@ class ptyco_main_control(QMainWindow):
             ismoving = True
             while ismoving:
                 ismoving = self.pts.ismoving(axis)
-            print("All motors are ready for fly scan.")
+#            print("All motors are ready for fly scan.")
             # fly here
             if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):
                 for det in self.detector: #JD
@@ -1913,7 +1922,8 @@ class ptyco_main_control(QMainWindow):
             try:
                 s12softglue.memory_clear()
             except TimeoutError:
-                print("softglue memory_clear timeout")
+                self.recent_error_msg = "softglue memory_clear timeout"
+                print(self.recent_error_msg)
 
         print("")
         isTestRun = self.ui.actionTestFly.isChecked()
@@ -1972,28 +1982,31 @@ class ptyco_main_control(QMainWindow):
                     raise RuntimeError("expouretime is too short to readout DET images.")
 
                 if expt <= 0:
-                    print(f"Note that after subtracting the detector readout time {self.det_readout_time} s, the exposure time becomes equal or less than 0.")
-                    print("******* Cannot run.")
-                    return
+                    self.recent_error_msg = f"Note that after subtracting the detector readout time {self.det_readout_time:.3e} s, the exposure time becomes equal or less than 0."
+                    print(self.recent_error_msg)
+#                    print("******* Cannot run.")
+                    raise DET_MIN_READOUT_Error(self.recent_error_msg)
                 if abs(step) <= 0.033:
-                    print(f"Note that Max speed of Pilatus2M is 30Hz.")
-                    print("******* Cannot run.")
-                    return
+                    self.recent_error_msg = f"Note that Max speed of Pilatus2M is 30Hz."
+                    print(self.recent_error_msg)
+#                    print("******* Cannot run.")
+                    raise DET_OVER_READOUT_SPEED_Error(self.recent_error_msg)
                 # set the delay generator
                 if expt != dg645_12ID._exposuretime:
                     try:
 #                        print(f"Acutal exposure time: {expt}s.")
                         dg645_12ID.set_pilatus_fly(expt)
                     except:
-                        print("EEEEE")
-                print(f"Actual exposure time set to %0.3f seconds."% expt)
+                        raise DG645_Error
                 movestep = abs(fe-st)/self.pts.hexapod.pulse_number*1000*self.parameters._ratio_exp_period
-                print("During the exposure, the motor moves %0.3f um." % movestep)
+                print(f"Actual exposure time: {expt:0.3e} s. In distance: {movestep:.3e} um.")
+#                print("During the exposure, the motor moves %0.3f um." % movestep)
                 N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
                 self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
                 print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a shot.")
                 if N_counts>100000:
-                    print(f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed.")
+                    self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                    raise SOFTGLUE_Setup_Error(self.recent_error_msg)
 
                 if isTestRun:
                     return
@@ -2007,9 +2020,9 @@ class ptyco_main_control(QMainWindow):
                                           isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
 #                            print(self.use_hdf_plugin, "dpluging.")
                         except TimeoutError:
-                            msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
-                            print(msg)
-                            self.ui.statusbar.showMessage(msg)
+                            self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
+                            print(self.recent_error_msg)
+                            self.ui.statusbar.showMessage(self.recent_error_msg)
                             #showerror("Detector timeout.")
                             return
 #                print("Ready for traj")
@@ -2040,7 +2053,8 @@ class ptyco_main_control(QMainWindow):
                         #istraj_running = self.is_traj_running()
                         i = i+1
                         if i>timeout:
-                            print("traj scan command is resent for 5 times to the hexapod without success.")
+                            self.recent_error_msg = "traj scan command is resent for 5 times to the hexapod without success."
+                            print(self.recent_error_msg)
                             break
                 #print("Run_traj is sent command in rungui.")
                 isattarget = False
@@ -2058,7 +2072,7 @@ class ptyco_main_control(QMainWindow):
                     pass
 #                    epics.caput('12idc:scaler1.CNT', 0)
                 pos = self.pts.get_pos(axis)
-                print(f"pos is {pos} after the traj run done.")
+                print(f"pos is {pos:.3e} after the traj run done.")
 
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD):
 #            if (self.hexapod_flymode==HEXAPOD_FLYMODE_STANDARD) or (axis != "X"):
@@ -2285,7 +2299,8 @@ class ptyco_main_control(QMainWindow):
                     np.savetxt(filename, dt2, fmt="%1.8e %1.8e %i")
 #                    np.savetxt(filename, dt2, fmt="%1.8e %1.8e %1.8e")
                 except:
-                    print("Error in fly_result.")
+                    self.recent_error_msg = "Error in fly_result."
+                    print(self.recent_error_msg)
                     #print(target.shape, " encoded data")
                     #print(encoded.shape, " encoded data")
                     #print(qds_data.shape, " qds data")
@@ -2350,7 +2365,8 @@ class ptyco_main_control(QMainWindow):
         try:
             r = self.get_qds_pos()
         except:
-            print("QDS does not work.")
+            self.recent_error_msg = "QDS does not work."
+            print(self.recent_error_msg)
             return
 #        print(r)
         self.ui.lcd_X.display("%0.3f" % (r[0]))     
@@ -2573,6 +2589,8 @@ class ptyco_main_control(QMainWindow):
         elif cmd == "setfolder":
             self.parameters.working_folder = folder
             self.update_workingfolder(self.parameters.working_folder)
+        elif cmd == 'get_error_message':
+            return self.recent_error_msg
         else:
             print(f"Invalid command {cmd} is recieved.")
 
