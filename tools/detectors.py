@@ -71,7 +71,21 @@ class pilatus(AD_Pilatus):
 					raise TimeoutError
 			else:
 				self.Arm()
-			
+	
+	def step_ready(self, expt):
+		self.SetExposureTime(expt)
+		self.setArrayCounter(0)
+		self.ImageMode = 1  #  multiple images
+		self.TriggerMode = 3
+
+        # number of images for collection and capture
+		self.NumImages = 1
+
+        # set filesaver
+		self.filePut('NumCapture',   1)
+		self.filePut('FileNumber',    1)
+		self.StartSingleFrame()
+
 	def set_scanNumberAsfilename(self):
 		fw_dir = caget(f"{beamlinePV}data:userDir")
 		self.setFilePath(fw_dir)
