@@ -519,7 +519,7 @@ class ptyco_main_control(QMainWindow):
             time.sleep(10)
         
     def run_resume(self):
-        pass
+        self.isOK2run = True
 
     def set_interferometer_params(self):
         #dialog = InputDialog(labels=["R0 for the top sensor(mm)","th0 for the top sensor(mm)"])
