@@ -1284,6 +1284,7 @@ class ptyco_main_control(QMainWindow):
                 self.fly2d_fe = fe
                 self.fly2d_tm = tm
                 self.fly2d_step = step
+        dg645_12ID.set_pilatus_fly(0.001)
         self.fly3d_p0 = None
         self.fly3d_st = None
         self.fly3d_fe = None
@@ -1364,7 +1365,8 @@ class ptyco_main_control(QMainWindow):
                 self.fly3d_fe = fe
                 self.fly3d_tm = tm
                 self.fly3d_step = step
-            
+
+        dg645_12ID.set_pilatus_fly(0.001)
         self.motor_p0 = initial_motorpos
         self.write_scaninfo_to_logfile(scaninfo)
         scaninfo = []
@@ -1434,6 +1436,7 @@ class ptyco_main_control(QMainWindow):
         except:
             showerror("Check scan paramters.")
             return 0
+        dg645_12ID.set_pilatus_fly(0.001)
         self.motor_p0 = initial_motorpos
         self.fly1d_p0 = p0
         self.fly1d_st = st
