@@ -570,13 +570,22 @@ class ptyco_main_control(QMainWindow):
     def update_scanname(self, update_detector = True):
         txt = self.ui.ed_scanname.text()
         self.parameters.scan_number = int(self.ui.le_scannumber.text())
+        self.scannumberstring = '%0.3i'%self.parameters.scan_number
         txt = "%s%0.3i"%(txt,self.parameters.scan_number)
         self.ui.lb_scanname.setText(txt)
+        wf_temp = self.ui.ed_workingfolder.text().split(':')
+        workingfolder = wf_temp[1]
+        
         if update_detector:
             for det in self.detector:
                 if det is not None:
+                    ptycho_path = os.path.join(det.basepath, workingfolder, 'ptycho', self.scannumberstring).replace('\\', '/')
+                    det.FilePath = ptycho_path
+                    tif_path = os.path.join(det.basepath, workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
+                    det.FilePath = tif_path
+                    det.filePut('FilePath', ptycho_path)
                     det.filePut('FileName', txt)
-                    det.FileName = txt 
+                    det.FileName = txt
 
     def choose_softglue_channels(self):
         strv = ''
@@ -860,6 +869,7 @@ class ptyco_main_control(QMainWindow):
             if self.ui.actionSAXS.isChecked():
                 self.ui.actionSAXS.setChecked(True)
                 self.detector[0] = pilatus('S12-PILATUS1:')
+                self.detector[0].basepath = '/ramdisk'
             else:
                 self.ui.actionSAXS.setChecked(False)
                 self.detector[0] = None
@@ -867,6 +877,7 @@ class ptyco_main_control(QMainWindow):
             if self.ui.actionWAXS.isChecked():
                 self.ui.actionWAXS.setChecked(True)
                 self.detector[1] = pilatus('12idcPIL:')
+                self.detector[1].basepath = '/net/micdata/data2'
             else:
                 self.ui.actionWAXS.setChecked(False)
                 self.detector[1] = None
@@ -1034,7 +1045,7 @@ class ptyco_main_control(QMainWindow):
             print(self.recent_error_msg)
             filename = "temp%i"%int(time.time())
 
-        foldername = os.path.join(foldername, 'positions')
+        foldername = os.path.join(foldername, 'positions', self.scannumberstring)
         p = pathlib.Path(foldername)
         p.mkdir(parents=True, exist_ok=True)
         print(f"Total {len(t)} data will be saved as {foldername}/{filename}.")

@@ -23,19 +23,19 @@ class AD_Pilatus(Device):
                  'AutoSave', 'AutoIncrement', 'EnableCallbacks', 
                  'FileTemplate', 'FileTemplate_RBV', 'NDArrayPort')
 
-    _nonpvs  = ('_prefix', '_pvs', '_delim', 'filesaver',
+    _nonpvs  = ('_prefix', '_pvs', '_delim', 'filesaver','basepath',
                 'camattrs', 'pathattrs', '_nonpvs')
-
-    def __init__(self, prefix, filesaver='HDF1:'):
+    def __init__(self, prefix, filesaver='HDF1:', basepath = "/ramdisk"):
         camprefix = prefix + 'cam1:'
         Device.__init__(self, camprefix, delim='',
                         mutable=False,
                         attrs=self.camattrs)
         self.filesaver = "%s%s" % (prefix, filesaver)
+        self.basepath = basepath
         for p in self.pathattrs:
             pvname = '%s%s%s' % (prefix, filesaver, p)
             self.add_pv(pvname, attr='File_'+p)
-
+            
     def Arm(self, nimg = 0):
         self.ImageMode = 1
         self.Acquire = 0 # stop acquire
