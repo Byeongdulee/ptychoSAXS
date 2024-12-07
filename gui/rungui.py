@@ -771,7 +771,13 @@ class ptyco_main_control(QMainWindow):
         # i.e. axis = 'X'
         i = self.motornames.index(axis)
         return float(self.ui.findChild(QLabel, "lb_%i"%(i+1)).text())
-        
+    
+    def get_pos_all(self):
+        motors = {}
+        for name in self.motornames:
+            motors[name] = self.pts.get_pos(name)
+        return motors
+    
     def updatepos(self, axis = "", val=None):
         if len(axis)==0:
             for i, name in enumerate(self.motornames):
@@ -1228,6 +1234,15 @@ class ptyco_main_control(QMainWindow):
         self.fly3d_step = None
         self.progress_3d = None
         self.motor_p0 = initial_motorpos
+
+        scaninfo.append('\n#otor Information\n')
+        m = self.get_pos_all()
+        for name in self.motornames:
+            scaninfo.append(name)
+        scaninfo.append('\n')
+        for key in m:
+            scaninfo.append(m[key])
+
         self.write_scaninfo_to_logfile(scaninfo)
         scaninfo = []
         scaninfo.append('#D')
@@ -1304,6 +1319,15 @@ class ptyco_main_control(QMainWindow):
 
         dg645_12ID.set_pilatus_fly(0.001)
         self.motor_p0 = initial_motorpos
+
+        scaninfo.append('\n#otor Information\n')
+        m = self.get_pos_all()
+        for name in self.motornames:
+            scaninfo.append(name)
+        scaninfo.append('\n')
+        for key in m:
+            scaninfo.append(m[key])
+
         self.write_scaninfo_to_logfile(scaninfo)
         scaninfo = []
         scaninfo.append('#D')
@@ -1384,6 +1408,13 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append(fe)
         scaninfo.append(tm)
         scaninfo.append(step)
+        scaninfo.append('\n#otor Information\n')
+        m = self.get_pos_all()
+        for name in self.motornames:
+            scaninfo.append(name)
+        scaninfo.append('\n')
+        for key in m:
+            scaninfo.append(m[key])
         self.write_scaninfo_to_logfile(scaninfo)
 
         self.isscan = True
