@@ -245,14 +245,6 @@ class ptyco_main_control(QMainWindow):
             if len(unit)>0:
                 motorunits.append(unit)
 
-        # # append newport_piezo
-        # motornames.append('newport_piezo1')
-        # motornames.append('newport_piezo2')
-        # motornames.append('newport_piezo3')
-        # motorunits.append('mm')
-        # motorunits.append('mm')
-        # motorunits.append('mm')
-
         enable = False
         for i, name in enumerate(motornames):
             n = i+1
@@ -285,9 +277,6 @@ class ptyco_main_control(QMainWindow):
                 pass
 #        print(motornames, " line 252")
         # motors for 2d and 3d scans.....
-        #xm = self.motornames.index('X') #JD
-        #ym = self.motornames.index('Y') #JD
-        #Better get them from DEFAULTS instead of hard coded. 
         xm=DEFAULTS['xmotor']  #JD
         ym=DEFAULTS['ymotor']  #JD
 
@@ -783,7 +772,6 @@ class ptyco_main_control(QMainWindow):
         i = self.motornames.index(axis)
         return float(self.ui.findChild(QLabel, "lb_%i"%(i+1)).text())
         
-        
     def updatepos(self, axis = "", val=None):
         if len(axis)==0:
             for i, name in enumerate(self.motornames):
@@ -891,7 +879,6 @@ class ptyco_main_control(QMainWindow):
                 self.ui.actionStruck.setChecked(False)
                 self.isStruckCountNeeded = False
                 print("Struck is off")
-#                self.detector[1] = None
         
     def select_flymode(self):
         if self.ui.actionEnable_fly_with_controller.isChecked():  # when checked, this value is False
@@ -901,68 +888,6 @@ class ptyco_main_control(QMainWindow):
             self.hexapod_flymode = HEXAPOD_FLYMODE_STANDARD
             self.ui.actionEnable_fly_with_controller.setChecked(False)
     
-#     def read_softglue(self):
-#         # read softglue data
-#         foldername = self.ui.ed_workingfolder.text()
-#         if len(foldername) == 0:
-#             return
-#             #foldername = os.getcwd()
-#         N_cnt = 0
-#         if hasattr(self.pts.hexapod, "pulse_number"):
-#             N_cnt = self.pts.hexapod.pulse_number
-#         t = []
-#         #time.sleep(0.5)
-#         #timeout = 5
-#         # ct0 = time.time()
-#         # while s12softglue.VALI<N_cnt*self.parameters.countsperexposure:
-#         #     if (time.time()-ct0 > timeout):
-#         #         print("timeout")
-#         #         break
-#         #     time.sleep(0.1)
-#         ct0 = time.time()
-# #        count = 0
-#         s12softglue.PROC=1
-#         while len(t)<N_cnt:
-#             t, dt = s12softglue.get_arrays(self.parameters.softglue_channels)
-# #            print(f"count = {count}")
-# #            count += 1
-#         print(f"time to read softglue data = {time.time()-ct0}")
-#         return t,dt
-
-#     def save_softglue_new(self,t,dt):
-#         foldername = self.ui.ed_workingfolder.text()
-#         if len(foldername) == 0:
-#             return
-#         filename = ""
-#         for det in self.detector:
-#             if det is not None:
-#                 if self.use_hdf_plugin:
-#                     fnum = det.fileGet('FileNumber_RBV')
-#                     fn = det.fileGet('FullFileName_RBV', as_string=True)
-#                 else:
-#                     fnum = det.FileNumber_RBV
-#                     fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-# #                print(f'{fn=}')
-#                 #if str(fnum-1) not in fn:
-#                 #    fn = det.fileGet('FullFileName_RBV', as_string=True)
-#                 filename = os.path.basename(fn)
-# #                print(filename)
-# #                print(rstrip_from_char(filename, "_"))
-#                 filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
-# #                print(filename)
-#                 #filename = filename.rstrip('.h5')
-#         if len(filename) ==0:
-#             print("****** Error: detector ioc does not response.")
-#             filename = "temp%i"%int(time.time())
-
-#         print(f"Total {len(t)} data will be saved under {foldername} with names of {filename}.")
-
-#         for i, td in enumerate(t):
-#             scanname = '%s_%i.dat' % (filename, i)
-#             dt2 = np.column_stack((td, dt[0][i], dt[1][i], dt[2][i]))
-#             np.savetxt(os.path.join(foldername, scanname), dt2, fmt="%1.8e %1.8e %1.8e %1.8e")
-
-
     def save_softglue(self):
         # read softglue data
         foldername = self.ui.ed_workingfolder.text()
@@ -2673,33 +2598,32 @@ class motor_control(QMainWindow):
         self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setEnabled(False)  
         self.ui.findChild(QLineEdit, "ed_reset_%i"%n).setEnabled(enable) 
 
+    
+    def set_ui_enability(self, controller="smarAct", enable=True):
+        for i, con in enumerate(self.controller):
+            if con == controller:
+                self.enable_motors(i+1, enable)
+
     def enable_smarAct(self):
         if self.ui.actionSmarAct_3.isChecked():
             enable = True
         else:
             enable = False
-        for i, con in enumerate(self.controller):
-            if con == "smarAct":
-                print(i+1)
-                self.enable_motors(i+1, enable)
+        self.set_ui_enability('smarAct', enable=enable)
 
     def enable_galil(self):
         if self.ui.actionNewport.isChecked():
             enable = True
         else:
             enable = False
-        for i, con in enumerate(self.controller):
-            if con == "galil":
-                self.enable_motors(i+1, enable)
+        self.set_ui_enability('galil', enable=enable)
 
     def enable_newport(self):
         if self.ui.actionNewport_Piezo.isChecked():
             enable = True
         else:
             enable = False
-        for i, con in enumerate(self.controller):
-            if con == "newport":
-                self.enable_motors(i+1, enable)
+        self.set_ui_enability('newport', enable=enable)
 
     def stop(self, motornumber=-1):
         if motornumber<0:
@@ -2728,10 +2652,6 @@ class motor_control(QMainWindow):
         val = int(val_text)
         with self.lock:
             controller.set_pos(axis, val)
-#        time.sleep(0.1)
-#        val = controller.get_pos(axis)
-#        i = motornumber
-#        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
 
     def mv(self, motornumber=-1, val=None):
         if motornumber<0:
@@ -2739,14 +2659,13 @@ class motor_control(QMainWindow):
             objname = pb.objectName()
             val_text = pb.text()
             n = int(re.findall(r'\d+', objname)[0])
-            #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
             motornumber = n-1
 
-        #print("motor number is ", motornumber)
         controller = self.control[self.controller[motornumber]]
         axis = controller.motornames[self.motorindices[motornumber]]
         self.signalmotor = axis
         self.signalmotorunit = controller.motorunits[self.motorindices[motornumber]]
+        self.set_ui_enability(controller, False)
         if type(val)==type(None):
             try:
                 val = float(val_text)
@@ -2755,10 +2674,7 @@ class motor_control(QMainWindow):
                 return
         with self.lock:
             controller.mv(axis, val, wait=False)
-#        val = controller.get_pos(axis)
-#        i = motornumber
-#        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
-#        self.updatepos(self.motornames[motornumber])
+        self.set_ui_enability(controller, True)
 
     def mvr(self, motornumber=-1, sign=1, val=0):
         if motornumber ==-1:
@@ -2774,15 +2690,13 @@ class motor_control(QMainWindow):
         #print("axis is ", axis)
         #print("sign is ", sign)
         self.signalmotorunit = controller.motorunits[self.motorindices[motornumber]]
+        self.set_ui_enability(controller, False)
         if val==0:
             val = float(self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).text())
         #print(f"Move {axis} by {sign*val}")
 
         controller.mvr(axis, sign*val, wait=False)
-#        val = controller.get_pos(axis)
-#        i = motornumber
-#        self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
-#        self.updatepos(self.motornames[motornumber])
+        self.set_ui_enability(controller, True)
 
     def updatepos(self, axis = "", val=None):
         # done = False
@@ -2806,13 +2720,6 @@ class motor_control(QMainWindow):
                     val = controller.get_pos(axis)
             i = motornumber
             self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText("%0.6f"%val)
-            # try:
-            #     done = controller.wait_move()
-            # except:
-            #     pass
-            # time.sleep(0.1)
-            # if time.time()-ct0>timeout:
-            #     break
 
 app = QApplication(sys.argv)
 main_panel = ptyco_main_control()
