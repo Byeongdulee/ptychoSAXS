@@ -1781,7 +1781,7 @@ class ptyco_main_control(QMainWindow):
         # xmotor is for flying
         # ymotor is for stepping
         axis = self.motornames[ymotor]
-        print(f'{axis=}, which is {ymotor=}') #JD
+#        print(f'{axis=}, which is {ymotor=}') #JD
         self.signalmotor2 = axis
         self.signalmotorunit2 = self.motorunits[ymotor]
 #        self.rpos2 = []
@@ -1818,7 +1818,7 @@ class ptyco_main_control(QMainWindow):
         fe = self.fly2d_fe + self.fly2d_p0
         step = self.fly2d_step
 
-        maxexposuretime = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%(xmotor+1)).text())
+#        maxexposuretime = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%(xmotor+1)).text())
         #epics.caput('12idc:scaler1.TP', maxexposuretime+5)
 
         if st>fe:
