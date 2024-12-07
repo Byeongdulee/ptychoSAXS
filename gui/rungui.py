@@ -176,10 +176,10 @@ class beamstatus(QObject):
     onChange = QtCore.pyqtSignal()
     def __init__(self):
         # A station shutter..
-        self.shutter_val = epics.PV('PB:12ID:STA_A_FES_CLSD_PL', callback=self.checkshutter)
+        self.shutter_val = epics.PV('PB:12ID:STA_A_FES_CLSD_PL', callback=self.check_A_shutter)
         self.shutter = epics.PV('12ida2:rShtrA:Open')
 
-    def checkshutter(self, value, **kws):
+    def check_A_shutter(self, value, **kws):
         if value == 0:
             self.signal.onChange.emit(False)
         if value == 1:
@@ -199,8 +199,10 @@ class ptyco_main_control(QMainWindow):
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         guiName = "ptycoSAXS.ui"
         self.pts = pts
+        #self.beamstatus = beamstatus()
         self.ui = uic.loadUi(guiName)
         self.recent_error_msg = ''
+        self.isOK2run = True
         # list all possible motors
         # this should came from the pts.
         motornames = ['X', 'Y', 'Z', 'U', 'V', 'W', 'phi']
@@ -395,8 +397,8 @@ class ptyco_main_control(QMainWindow):
 
         ## shutter control
 #        self.shutter_status = epics.PV('12idc:scaler1.CNT', callback=self.checkshutter) # to test.
-        self.shutter_status = epics.PV('PB:12ID:STA_C_SCS_CLSD_PL.VAL', callback=self.checkshutter)
-
+        self.shutter_status = epics.PV('PA:12ID:STA_A_BEAMREADY_PL.VAL', callback=self.checkshutter)
+        self.shutter = epics.PV('12ida2:rShtrA:Open')
         # figure to plot
         # a figure instance to plot on
         self.figure = plt.figure()
@@ -487,28 +489,30 @@ class ptyco_main_control(QMainWindow):
     def set_monitor_beamline_status(self):
         if self.ui.actionMonitor_Beamline_Status.isChecked():
             self.ui.actionMonitor_Beamline_Status.setChecked(True)
+            self.monitor_beamline_status = True
         else:
             self.ui.actionMonitor_Beamline_Status.setChecked(False)
+            self.monitor_beamline_status = False
 
     def checkshutter(self, value, **kws):
         if not self.ui.actionMonitor_Beamline_Status.isChecked():
+            self.isOK2run = True
             return
-        shutter_events = {"time":time.time(), "state": value}
+        #shutter_events = {"time":time.time(), "state": value}
         #print(f"Value of the shutter is {value}")
         if value==0:
             self.isOK2run = False
-            self.run_hold(shutter_events)
         else:
             self.isOK2run = True
 
-    def run_hold(self, sevnt):
-        print("run hold executed. This will hold the scan.")
-        self.shutter_events = sevnt
-        while self.isOK2run==False:
-            time.sleep(10)
+    # def run_hold(self, sevnt):
+    #     print("run hold executed. This will hold the scan.")
+    #     self.shutter_events = sevnt
+    #     while self.isOK2run==False:
+    #         time.sleep(10)
         
-    def run_resume(self):
-        self.isOK2run = True
+    # def run_resume(self):
+    #     self.isOK2run = True
 
     def set_interferometer_params(self):
         #dialog = InputDialog(labels=["R0 for the top sensor(mm)","th0 for the top sensor(mm)"])
@@ -1717,8 +1721,11 @@ class ptyco_main_control(QMainWindow):
             scanname=axis
         else:
 #            print(scanname, axis)
-            scanname=f"{scanname}{axis}"        
-        for i, value in enumerate(pos):
+            scanname=f"{scanname}{axis}"
+        i=0
+        while i<len(pos):
+            value = pos[i]
+#        for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 break
             
@@ -1740,9 +1747,28 @@ class ptyco_main_control(QMainWindow):
             if update_status:
                 msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {i/len(pos)*100}% run.'
                 update_status(msg)
-#            r = self.get_qds_pos()
-#            self.rpos3.append([r[0], r[1], r[2]])
-#            self.mpos3.append(value)        
+            
+            # monitoring the station ready
+            if self.monitor_beamline_status:
+                if self.isOK2run is not True:
+                    ct0 = time.time()
+                    while self.isOK2run is not True:
+                        time.sleep(10)
+                        msg = f'Beam has been down for {int((time.time()-ct0)/60)} minutes.'
+                        update_status(msg)
+                    # Need some action after shutter back up
+                    self.shutter.put(1)
+                    msg = f'Beam just came back. A-shutter open command was sent and run will resume in 5mins.'
+                    update_status(msg)
+                    time.sleep(60)
+                    self.shutter.put(1)
+                    time.sleep(60*4)
+                    scaninfo = []
+                    scaninfo.append('\n')
+                    scaninfo.append('#Note: Shutter has been closed for %i mins'%int((time.time()-ct0)/60))
+                    scaninfo.append('#Note: angle %0.3f will be re-run'%value)
+                    i -= 1
+                    self.write_scaninfo_to_logfile(scaninfo) 
 
     def fly2d0(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
         self.update_scanname()
