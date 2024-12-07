@@ -1745,7 +1745,7 @@ class ptyco_main_control(QMainWindow):
             self.fly2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
                 update_progress=update_progress, update_status=update_status)
             if update_status:
-                msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {i/len(pos)*100}% run.'
+                msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {(i+1)/len(pos)*100}%.'
                 update_status(msg)
             
             # monitoring the station ready
@@ -1769,6 +1769,7 @@ class ptyco_main_control(QMainWindow):
                     scaninfo.append('#Note: angle %0.3f will be re-run'%value)
                     i -= 1
                     self.write_scaninfo_to_logfile(scaninfo) 
+            i=i+1
 
     def fly2d0(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
         self.update_scanname()
@@ -1832,7 +1833,7 @@ class ptyco_main_control(QMainWindow):
             scanname=axis
         else:
             scanname=f"{scanname}{axis}"
-        
+        Nline = len(pos)
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 break
@@ -1869,11 +1870,11 @@ class ptyco_main_control(QMainWindow):
             while (time.time()-t1 < self.parameters._waittime_between_scans):
                 time.sleep(0.01)
             timeelapsed = time.time()-t0
-            msg = f"Remaining time for the current 2D scan is {np.round(timeelapsed*(len(pos)-i-1),2)}s\n"
+            msg = f"Remaining time for the current 2D scan is {np.round(timeelapsed*(Nline-i-1),2)}s\n"
             if update_progress:
                 if self.fly3d_p0: # 3d scan
                     c3d, all3d = self.progress_3d
-                    update_progress(int(len(pos)*c3d+(i+1)/(len(pos)*all3d)*100))
+                    update_progress(int((Nline*c3d+(i+1))/(Nline*all3d)*100))
                 else:
                     update_progress(int((i+1)/len(pos)*100))
             if update_status:
