@@ -6,13 +6,13 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1068</width>
+    <width>1070</width>
     <height>801</height>
    </rect>
   </property>
   <property name="maximumSize">
    <size>
-    <width>1600</width>
+    <width>1070</width>
     <height>16777215</height>
    </size>
   </property>
@@ -2007,6 +2007,12 @@
         </item>
         <item>
          <widget class="QProgressBar" name="progressBar">
+          <property name="maximumSize">
+           <size>
+            <width>1050</width>
+            <height>16777215</height>
+           </size>
+          </property>
           <property name="value">
            <number>24</number>
           </property>
@@ -2117,7 +2123,7 @@
         </property>
         <property name="maximumSize">
          <size>
-          <width>2000</width>
+          <width>1000</width>
           <height>20</height>
          </size>
         </property>
@@ -2138,8 +2144,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1068</width>
-     <height>21</height>
+     <width>1070</width>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
