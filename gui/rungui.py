@@ -203,6 +203,7 @@ class ptyco_main_control(QMainWindow):
         self.ui = uic.loadUi(guiName)
         self.recent_error_msg = ''
         self.isOK2run = True
+        self.is_softglue_savingdone = True
         # list all possible motors
         # this should came from the pts.
         motornames = ['X', 'Y', 'Z', 'U', 'V', 'W', 'phi']
@@ -897,34 +898,10 @@ class ptyco_main_control(QMainWindow):
         else:
             self.hexapod_flymode = HEXAPOD_FLYMODE_STANDARD
             self.ui.actionEnable_fly_with_controller.setChecked(False)
-    
-    def save_softglue(self):
-        # read softglue data
-        foldername = self.ui.ed_workingfolder.text()
-        if len(foldername) == 0:
-            return
-            #foldername = os.getcwd()
-        N_cnt = 0
-        if hasattr(self.pts.hexapod, "pulse_number"):
-            N_cnt = self.pts.hexapod.pulse_number
-        t = []
-#        ct0 = time.time()
-        count = 0
-        len_t = 0
-        s12softglue.PROC=1
-        while len_t<N_cnt:
-            t, dt = s12softglue.get_arrays(self.parameters.softglue_channels)
-            # if softglue data does not get updated on time, flush.
-            if len_t == len(t):
-                s12softglue.flush()
-                time.sleep(0.1)
-            len_t = len(t)
-            count = count+1
-            if count>10:
-                self.recent_error_msg = "Timeout error in softglue data reading........."
-                print(self.recent_error_msg)
-                break
 
+    def get_softglue_filename(self):
+        foldername = self.ui.ed_workingfolder.text()
+        
         filename = ""
         for det in self.detector:
             if det is not None:
@@ -946,18 +923,73 @@ class ptyco_main_control(QMainWindow):
             self.recent_error_msg = "****** Error: detector ioc does not response."
             print(self.recent_error_msg)
             filename = "temp%i"%int(time.time())
+        return (foldername, filename)
+    
+    def softglue_savingdone(self):
+        self.is_softglue_savingdone = True
 
+    def save_softglue(self):
+        # read softglue data
+
+            #foldername = os.getcwd()
+        N_cnt = 0
+        if hasattr(self.pts.hexapod, "pulse_number"):
+            N_cnt = self.pts.hexapod.pulse_number
+        t = []
+#        ct0 = time.time()
+        count = 0
+        len_t = 0
+        self.softglue_data = []
+        s12softglue.PROC=1
+        while len_t<N_cnt:
+            t, dt = s12softglue.get_arrays(self.parameters.softglue_channels)
+            # if softglue data does not get updated on time, flush.
+            if len_t == len(t):
+                s12softglue.flush()
+                time.sleep(0.1)
+            len_t = len(t)
+            count = count+1
+            if count>10:
+                self.recent_error_msg = "Timeout error in softglue data reading........."
+                print(self.recent_error_msg)
+                break
+        self.softglue_data = (t, dt)
+        self.softglue_N_cnt = N_cnt
+        foldername, filename = self.get_softglue_filename()
+        if len(foldername) == 0:
+            return
         foldername = os.path.join(foldername, 'positions', self.scannumberstring)
+        self.softglue_folder = foldername
+        self.softglue_filename =filename
+
+        while self.is_softglue_savingdone is False:
+            print("Previous soft glue has not been done. Waiting for done.")
+            time.sleep(0.025)
+        self.is_softglue_savingdone = False
+        w = Worker(self.save2disk_softglue)
+        w.signal.finished.connect(self.softglue_savingdone)
+        self.threadpool.start(w)
+        #self.save2disk_softglue()
+    
+    def save2disk_softglue(self):
+        N_cnt = self.softglue_N_cnt
+        t, dt = self.softglue_data
+        foldername = self.softglue_folder
+        filename = self.softglue_filename
+
         p = pathlib.Path(foldername)
         p.mkdir(parents=True, exist_ok=True)
         print(f"Total {len(t)} data will be saved as {foldername}/{filename}.")
 
-        for i, td in enumerate(t):
-            if i>=N_cnt:
-                continue
-            scanname = '%s_%i.dat' % (filename, i)
-            dt2 = np.column_stack((td, dt[0][i], dt[1][i], dt[2][i]))
-            np.savetxt(os.path.join(foldername, scanname), dt2, fmt="%1.8e %1.8e %1.8e %1.8e")
+        try:
+            for i, td in enumerate(t):
+                if i>=N_cnt:
+                    continue
+                scanname = '%s_%i.dat' % (filename, i)
+                dt2 = np.column_stack((td, dt[0][i], dt[1][i], dt[2][i]))
+                np.savetxt(os.path.join(foldername, scanname), dt2, fmt="%1.8e %1.8e %1.8e %1.8e")
+        except:
+            print("error in save2disk_softglue")
 
     def flydone(self, return_motor=True):
         if return_motor:
