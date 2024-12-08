@@ -973,8 +973,8 @@ class ptyco_main_control(QMainWindow):
             return
         self.isscan = False
         try:
-            self.plot()
-            self.updatepos()
+            #self.plot()
+            #self.updatepos()
             s12softglue.flush()
         except:
             self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
@@ -1825,13 +1825,15 @@ class ptyco_main_control(QMainWindow):
             while (time.time()-t1 < self.parameters._waittime_between_scans):
                 time.sleep(0.01)
             timeelapsed = time.time()-t0
-            msg = f"Remaining time for the current 2D scan is {np.round(timeelapsed*(Nline-i-1),2)}s\n"
             if update_progress:
                 if self.fly3d_p0: # 3d scan
                     c3d, all3d = self.progress_3d
                     update_progress(int((Nline*c3d+(i+1))/(Nline*all3d)*100))
                 else:
                     update_progress(int((i+1)/len(pos)*100))
+            msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
+            msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(Nline-i-1),2)}s\n"
+            msg = "%s%s"%(msg1, msg2)
             if update_status:
                 update_status(msg)
 
