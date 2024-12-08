@@ -908,15 +908,7 @@ class ptyco_main_control(QMainWindow):
         if hasattr(self.pts.hexapod, "pulse_number"):
             N_cnt = self.pts.hexapod.pulse_number
         t = []
-        #time.sleep(0.5)
-        #timeout = 5
-        # ct0 = time.time()
-        # while s12softglue.VALI<N_cnt*self.parameters.countsperexposure:
-        #     if (time.time()-ct0 > timeout):
-        #         print("timeout")
-        #         break
-        #     time.sleep(0.1)
-        ct0 = time.time()
+#        ct0 = time.time()
         count = 0
         len_t = 0
         s12softglue.PROC=1
@@ -932,9 +924,7 @@ class ptyco_main_control(QMainWindow):
                 self.recent_error_msg = "Timeout error in softglue data reading........."
                 print(self.recent_error_msg)
                 break
-#            print(f"count = {count}")
-#            count += 1
-#        print(f"time to read softglue data = {time.time()-ct0}")
+
         filename = ""
         for det in self.detector:
             if det is not None:
@@ -952,29 +942,6 @@ class ptyco_main_control(QMainWindow):
                     filename = os.path.basename(fn)
                     filename = "%s" % rstrip_from_char(filename, "_")
                 
-                # HDF plugin sometime update the filename too late.
-
-                # therefore, do not take filename from the hdf plugin...
-
-
-                # if self.use_hdf_plugin:
-                #     filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
-                #     #fnum = det.fileGet('FileNumber_RBV')
-                #     #fn = det.fileGet('FullFileName_RBV', as_string=True)
-                # else:
-                #     filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
-                    #fnum = det.FileNumber_RBV
-                    #fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-#                fnum = det.FileNumber_RBV
-#                fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-#                print(f'{fn=}')
-                #if str(fnum-1) not in fn:
-                #    fn = det.fileGet('FullFileName_RBV', as_string=True)
-#                print(filename)
-#                print(rstrip_from_char(filename, "_"))
-                #filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
-#                print(filename)
-                #filename = filename.rstrip('.h5')
         if len(filename) ==0:
             self.recent_error_msg = "****** Error: detector ioc does not response."
             print(self.recent_error_msg)
@@ -998,7 +965,7 @@ class ptyco_main_control(QMainWindow):
                 self.mv(key, self.motor_p0[key])
 
         print("fly done.......")
-#        ct0 = time.time()
+        ct0 = time.time()
 #        pos = self.pts.get_pos('X')
 #        print(f'X position is at {pos} in flydone.')
         isTestRun = self.ui.actionTestFly.isChecked()
@@ -1057,7 +1024,6 @@ class ptyco_main_control(QMainWindow):
             scaninfo.append('#D')
             scaninfo.append(time.ctime())
             self.write_scaninfo_to_logfile(scaninfo)
-#        print(f"elapsed time since done = {time.time()-ct0}")
         success=False
         timeout = 5
         cnt = 0
@@ -1072,6 +1038,7 @@ class ptyco_main_control(QMainWindow):
                 cnt = cnt + 1
                 if cnt>timeout:
                     break
+        print(f"Elapsed time to save softglue data since flydone = {time.time()-ct0}")
         # if read softglue failed...
         if success == False:
             foldername = self.ui.ed_workingfolder.text()
@@ -1105,18 +1072,6 @@ class ptyco_main_control(QMainWindow):
         self.mpos = []
         if len(self.motor_p0.keys()) ==1: # 1d fly
             self.updateprogressbar(100)
-        #t = []
-        #while len(t) == 0:
-        #    try:
-        #        #self.save_softglue()
-        #        t,dt=self.read_softglue()
-        #        time.sleep(1.5)
-        #    except:
-        #        print("Error in softglue saving....")
-
-        #print(f"elapsed time since flydone = {time.time()-ct0}")
-        #w1 = Worker(self.save_softglue_new,t,dt)
-        #self.threadpool.start(w1)
 
     def flydone2d(self, value=0):
         for key in self.motor_p0:
@@ -1128,10 +1083,10 @@ class ptyco_main_control(QMainWindow):
             return
         self.isscan = False
         self.updatepos()
-        try:
-            self.save_scaninfo()
-        except:
-            print("save_scaninfo is empty yet. This will save phi angles......")
+#        try:
+#            self.save_scaninfo()
+#        except:
+#            print("save_scaninfo is empty yet. This will save phi angles......")
         self.isfly = False
         self.updateprogressbar(100)
 
