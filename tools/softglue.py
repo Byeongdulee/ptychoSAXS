@@ -1,5 +1,5 @@
 import time
-from epics import Device, PV
+from epics import Device, PV, caget_many
 import numpy as np
 from tqdm import tqdm
 
@@ -191,6 +191,13 @@ class sgz_pty(Device):
             arr.append(dt)
         return (t, arr)
     
+    def get_arrays(self, pos = ['B', 'C', 'D']):
+        pvlist = ["%s.VALA"%self.dmaPV]
+        for p in pos:
+            pvlist.append('%s.VAL%s'%(self.dmaPV, p))
+        arrs = caget_many(pvlist, as_numpy=True)
+        return arrs
+
     def get_array(self, pos='B'):
         fieldname = f'VAL{pos}'
         timeout = 10
