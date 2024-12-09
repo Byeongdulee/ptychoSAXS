@@ -204,6 +204,7 @@ class ptyco_main_control(QMainWindow):
         self.recent_error_msg = ''
         self.isOK2run = True
         self.is_softglue_savingdone = True
+        self.monitor_beamline_status = True
         # list all possible motors
         # this should came from the pts.
         motornames = ['X', 'Y', 'Z', 'U', 'V', 'W', 'phi']
@@ -930,8 +931,12 @@ class ptyco_main_control(QMainWindow):
 
     def save_softglue(self):
         # read softglue data
-
             #foldername = os.getcwd()
+        try:
+            s12softglue.flush()
+        except:
+            self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
+            print(self.recent_error_msg)            
         N_cnt = 0
         if hasattr(self.pts.hexapod, "pulse_number"):
             N_cnt = self.pts.hexapod.pulse_number
@@ -940,11 +945,18 @@ class ptyco_main_control(QMainWindow):
         count = 0
         len_t = 0
         self.softglue_data = []
-        s12softglue.PROC=1
+        #s12softglue.PROC=1
+        t0 = time.time()
+        #time.sleep(3)
+        #s12softglue.flush()
         while len_t<N_cnt:
             t, dt = s12softglue.get_arrays(self.parameters.softglue_channels)
+            print(f"Time required to get arrays is {time.time()-t0}")
             # if softglue data does not get updated on time, flush.
-            if len_t == len(t):
+            if len(t)==N_cnt:
+                break
+            if (len_t == len(t)) or (len(t)<N_cnt):
+                print("flushed")
                 s12softglue.flush()
                 time.sleep(0.1)
             len_t = len(t)
@@ -953,6 +965,7 @@ class ptyco_main_control(QMainWindow):
                 self.recent_error_msg = "Timeout error in softglue data reading........."
                 print(self.recent_error_msg)
                 break
+        print(f"Time required to read softglue is {time.time()-t0}")
         self.softglue_data = (t, dt)
         self.softglue_N_cnt = N_cnt
         foldername, filename = self.get_softglue_filename()
@@ -1004,13 +1017,6 @@ class ptyco_main_control(QMainWindow):
         if isTestRun:
             return
         self.isscan = False
-        try:
-            #self.plot()
-            #self.updatepos()
-            s12softglue.flush()
-        except:
-            self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
-            print(self.recent_error_msg)
         #if self.signalmotor not in self.pts.hexapod.axes:        
         #    self.pts.set_speed(self.signalmotor, self._prev_vel, self._prev_acc)
 #        print(f"elapsed time since done = {time.time()-ct0}")
@@ -1174,7 +1180,6 @@ class ptyco_main_control(QMainWindow):
 
         # reset the progress bar
         self.ui.progressBar.setValue(0)
-
         motor = [xmotor, ymotor]
         print(f'\n\nfly2d:{xmotor=}; {ymotor=}') #JD
                 # logging
@@ -1217,6 +1222,7 @@ class ptyco_main_control(QMainWindow):
                 self.fly2d_fe = fe
                 self.fly2d_tm = tm
                 self.fly2d_step = step
+        self.time_scanstart = time.time()
         dg645_12ID.set_pilatus_fly(0.001)
         self.fly3d_p0 = None
         self.fly3d_st = None

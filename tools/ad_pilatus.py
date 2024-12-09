@@ -37,11 +37,20 @@ class AD_Pilatus(Device):
             self.add_pv(pvname, attr='File_'+p)
             
     def Arm(self, nimg = 0):
+        if self.Acquire == 1:
+            t = time.time()
+            self.Acquire = 0 # stop acquire
+            while self.Acquire == 1:
+                self.Acquire = 0
+                time.sleep(0.1)
+                if abs(time.time()-t)>10:
+                    print("CCD still running timeout.")
+                    raise TimeoutError        
         self.ImageMode = 1
-        self.Acquire = 0 # stop acquire
         if nimg>0:
             self.NumImages = nimg
         self.Acquire = 1
+        time.sleep(0.05)
         try:
             self.CCD_waitstarted()
         except TimeoutError:
@@ -52,7 +61,7 @@ class AD_Pilatus(Device):
         TIMEOUT = 10
         while self.Armed == 0:
             self.Acquire = 1
-            time.sleep(0.025)
+            time.sleep(0.1)
             if abs(time.time()-t)>TIMEOUT:
                 print("CCD Arming timeout.")
                 raise TimeoutError
