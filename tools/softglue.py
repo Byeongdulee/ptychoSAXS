@@ -210,12 +210,24 @@ class sgz_pty(Device):
         val = self.get(fieldname, timeout=10)
         return val
 
+    def get_latest_scantime(self):
+        clock_in = 20_000_000 if self.div1clock == 'ck20' else 10_000_000
+        #div1 = self.div1 or 1000
+        div2 = self.div2 or 10
+        ckTime_unit = clock_in / div2
+        ta = self.get_timearray()
+        res = ta[ta != 0]
+        if len(res) ==0:
+            return 0
+        else:
+            return (res[-1]-np.min(res))/ckTime_unit
+
     def slice_timearray(self, timearray):
     # Determine clock unit time
-        clock_in = 200_000_000 if self.div1clock == 'ck20' else 100_000_000
+        clock_in = 20_000_000 if self.div1clock == 'ck20' else 10_000_000
         div1 = self.div1 or 1000
         div2 = self.div2 or 10
-        ckTime_unit = clock_in / (div1 / div2)
+        ckTime_unit = clock_in / div2
 
         d = np.diff(timearray)
         p0_candidates = np.where(d < -1 * (div1 / div2))[0]
