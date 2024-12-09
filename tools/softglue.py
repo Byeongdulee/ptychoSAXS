@@ -191,7 +191,7 @@ class sgz_pty(Device):
             arr.append(dt)
         return (t, arr)
     
-    def get_arrays(self, pos = ['B', 'C', 'D']):
+    def get_arrays_many(self, pos = ['B', 'C', 'D']):
         pvlist = ["%s.VALA"%self.dmaPV]
         for p in pos:
             pvlist.append('%s.VAL%s'%(self.dmaPV, p))
