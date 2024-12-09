@@ -179,33 +179,28 @@ class sgz_pty(Device):
             arr.append(data[self.VALI])
         return arr
     
-    def get_arrays(self, pos = ['B', 'C', 'D']):
-        # returns time and position arrays
-        t, ind = self.slice_timearray(self.get_timearray())
-        arr = []
-        for p in pos:
-            data = self.get_array(p)
-            dt = []
-            for i in range(len(ind)-1):
-                dt.append(data[(ind[i]+1):ind[i+1]])
-            arr.append(dt)
-        return (t, arr)
-    
-    def get_sliced_arrays(self, pos=['B', 'C', 'D']):
-        # Build PV list for caget_many
+    def get_arrays(self, pos = ['B', 'C', 'D']):  # returns time and position arrays
         pvlist = [f"{self.dmaPV}.VALA"] + [f"{self.dmaPV}.VAL{p}" for p in pos]
         arrs = caget_many(pvlist, as_numpy=True)
-        data, indices = self.slice_timearray(arrs[0])
-
-        # Fetch arrays for each position and slice them
+        return arrs
+    
+    def slice_arrays(self, indices, arrs): # when indices and arrs are given, slice arrs.
+       # Fetch arrays for each position and slice them
         arrays = []
-        for arr in arrs[1:]:  # Skip the first array (timearray)
+        for arr in arrs:  
             sliced_data = [
                 arr[(indices[i] + 1):indices[i + 1]]
                 for i in range(len(indices) - 1)
             ]
             arrays.append(sliced_data)
-
+        return arrays
+        
+    def get_sliced_arrays(self, pos=['B', 'C', 'D']):
+        # Build PV list for caget_many
+        arrs = self.get_arrays(pos)
+        data, indices = self.slice_timearray(arrs[0])
+        arrays = self.slice_arrays(indices, arrs[1:]) # Skip the first array (timearray)
+ 
         return data, arrays
 
     def get_array(self, pos='B'):
