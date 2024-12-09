@@ -196,7 +196,48 @@ class sgz_pty(Device):
         for p in pos:
             pvlist.append('%s.VAL%s'%(self.dmaPV, p))
         arrs = caget_many(pvlist, as_numpy=True)
-        return arrs
+
+        # returns (time in second, time bin indices)
+        if self.div1clock == 'ck10':
+            clock_in = 100000000 # 10MHz
+        elif self.div1clock == 'ck20':
+            clock_in = 200000000 # 20MHz
+        else:
+            clock_in = 100000000 # 10MHz
+        if self.div1 is None:
+            self.div1 = 1000
+        if self.div2 is None:
+            self.div2 = 10
+        ckTime_unit = clock_in/(self.div1/self.div2)
+        timearray = arrs[0]
+        d = np.diff(timearray)
+        p0 = np.where(d<-1*(self.div1/self.div2))
+        p0 = p0[0]
+        if type(p0) == np.ndarray:
+            p0 = p0[0]
+        p = np.where(d>self.div1/self.div2)
+        p = p[0]
+        data = []
+        if p0>p[0]:
+            p0 = p[0]
+            p = p[1:]
+        index = [p0]
+        for i in range(len(p)):
+            if i==0:
+                index_start = p0
+            else:
+                index_start = p[i-1]
+            index.append(p[i])
+            data.append(timearray[(index_start+1):p[i]]/ckTime_unit)
+        #return (data, index)
+        arr = []
+        for p in pos:
+            data = self.get_array(p)
+            dt = []
+            for i in range(len(index)-1):
+                dt.append(data[(index[i]+1):index[i+1]])
+            arr.append(dt)
+        return (data, arr)
 
     def get_array(self, pos='B'):
         fieldname = f'VAL{pos}'
