@@ -950,7 +950,7 @@ class ptyco_main_control(QMainWindow):
         #time.sleep(3)
         #s12softglue.flush()
         while len_t<N_cnt:
-            t, dt = s12softglue.get_arrays(self.parameters.softglue_channels)
+            t, dt = s12softglue.get_sliced_arrays(self.parameters.softglue_channels)
             print(f"Time required to get arrays is {time.time()-t0}")
             # if softglue data does not get updated on time, flush.
             if len(t)==N_cnt:

@@ -181,7 +181,7 @@ class sgz_pty(Device):
     
     def get_arrays(self, pos = ['B', 'C', 'D']):
         # returns time and position arrays
-        t, ind = self.get_timearray()
+        t, ind = self.slice_timearray(self.get_timearray())
         arr = []
         for p in pos:
             data = self.get_array(p)
@@ -191,53 +191,22 @@ class sgz_pty(Device):
             arr.append(dt)
         return (t, arr)
     
-    def get_arrays_many(self, pos = ['B', 'C', 'D']):
-        pvlist = ["%s.VALA"%self.dmaPV]
-        for p in pos:
-            pvlist.append('%s.VAL%s'%(self.dmaPV, p))
+    def get_sliced_arrays(self, pos=['B', 'C', 'D']):
+        # Build PV list for caget_many
+        pvlist = [f"{self.dmaPV}.VALA"] + [f"{self.dmaPV}.VAL{p}" for p in pos]
         arrs = caget_many(pvlist, as_numpy=True)
+        data, indices = self.slice_timearray(arrs[0])
 
-        # returns (time in second, time bin indices)
-        if self.div1clock == 'ck10':
-            clock_in = 100000000 # 10MHz
-        elif self.div1clock == 'ck20':
-            clock_in = 200000000 # 20MHz
-        else:
-            clock_in = 100000000 # 10MHz
-        if self.div1 is None:
-            self.div1 = 1000
-        if self.div2 is None:
-            self.div2 = 10
-        ckTime_unit = clock_in/(self.div1/self.div2)
-        timearray = arrs[0]
-        d = np.diff(timearray)
-        p0 = np.where(d<-1*(self.div1/self.div2))
-        p0 = p0[0]
-        if type(p0) == np.ndarray:
-            p0 = p0[0]
-        p = np.where(d>self.div1/self.div2)
-        p = p[0]
-        data = []
-        if p0>p[0]:
-            p0 = p[0]
-            p = p[1:]
-        index = [p0]
-        for i in range(len(p)):
-            if i==0:
-                index_start = p0
-            else:
-                index_start = p[i-1]
-            index.append(p[i])
-            data.append(timearray[(index_start+1):p[i]]/ckTime_unit)
-        #return (data, index)
-        arr = []
-        for p in pos:
-            data = self.get_array(p)
-            dt = []
-            for i in range(len(index)-1):
-                dt.append(data[(index[i]+1):index[i+1]])
-            arr.append(dt)
-        return (data, arr)
+        # Fetch arrays for each position and slice them
+        arrays = []
+        for arr in arrs[1:]:  # Skip the first array (timearray)
+            sliced_data = [
+                arr[(indices[i] + 1):indices[i + 1]]
+                for i in range(len(indices) - 1)
+            ]
+            arrays.append(sliced_data)
+
+        return data, arrays
 
     def get_array(self, pos='B'):
         fieldname = f'VAL{pos}'
@@ -246,40 +215,36 @@ class sgz_pty(Device):
         val = self.get(fieldname, timeout=10)
         return val
 
+    def slice_timearray(self, timearray):
+    # Determine clock unit time
+        clock_in = 200_000_000 if self.div1clock == 'ck20' else 100_000_000
+        div1 = self.div1 or 1000
+        div2 = self.div2 or 10
+        ckTime_unit = clock_in / (div1 / div2)
+
+        d = np.diff(timearray)
+        p0_candidates = np.where(d < -1 * (div1 / div2))[0]
+        p_candidates = np.where(d > div1 / div2)[0]
+
+        if len(p0_candidates) == 0 or len(p_candidates) == 0:
+            return [], []  # No valid indices found
+
+        p0 = p0_candidates[0]
+        if p0 > p_candidates[0]:
+            p0 = p_candidates[0]
+            p_candidates = p_candidates[1:]
+
+        indices = np.concatenate([[p0], p_candidates])
+        data = [
+            timearray[(indices[i] + 1):indices[i + 1]] / ckTime_unit
+            for i in range(len(indices) - 1)
+        ]
+        return data, indices
+            
     def get_timearray(self):
         # returns (time in second, time bin indices)
-        if self.div1clock == 'ck10':
-            clock_in = 100000000 # 10MHz
-        elif self.div1clock == 'ck20':
-            clock_in = 200000000 # 20MHz
-        else:
-            clock_in = 100000000 # 10MHz
-        if self.div1 is None:
-            self.div1 = 1000
-        if self.div2 is None:
-            self.div2 = 10
-        ckTime_unit = clock_in/(self.div1/self.div2)
         timearray = self.get_array('A')
-        d = np.diff(timearray)
-        p0 = np.where(d<-1*(self.div1/self.div2))
-        p0 = p0[0]
-        if type(p0) == np.ndarray:
-            p0 = p0[0]
-        p = np.where(d>self.div1/self.div2)
-        p = p[0]
-        data = []
-        if p0>p[0]:
-            p0 = p[0]
-            p = p[1:]
-        index = [p0]
-        for i in range(len(p)):
-            if i==0:
-                index_start = p0
-            else:
-                index_start = p[i-1]
-            index.append(p[i])
-            data.append(timearray[(index_start+1):p[i]]/ckTime_unit)
-        return (data, index)
+        return timearray
         #timearray = timearray[0:self.VALI]
         #return timearray
     
