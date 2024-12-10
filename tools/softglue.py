@@ -180,7 +180,7 @@ class sgz_pty(Device):
         return arr
     
     def get_arrays(self, pos = ['B', 'C', 'D']):  # returns time and position arrays
-        pvlist = [f"{self.dmaPV}.VALA"] + [f"{self.dmaPV}.VAL{p}" for p in pos]
+        pvlist = [f"{self.dmaPV}.VAL{p}" for p in pos]
         arrs = caget_many(pvlist, as_numpy=True)
         return arrs
     
@@ -220,7 +220,7 @@ class sgz_pty(Device):
         if len(res) ==0:
             return 0
         else:
-            return (res[-1]-np.min(res))/ckTime_unit
+            return (res[-1]-np.min(res))/ckTime_unit, ta
 
     def slice_timearray(self, timearray):
     # Determine clock unit time

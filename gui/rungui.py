@@ -929,11 +929,12 @@ class ptyco_main_control(QMainWindow):
     def softglue_savingdone(self):
         self.is_softglue_savingdone = True
 
-    def save_softglue(self):
+    def save_softglue_original(self):
         # read softglue data
             #foldername = os.getcwd()
         try:
             s12softglue.flush()
+            time.sleep(0.1)
         except:
             self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
             print(self.recent_error_msg)            
@@ -947,13 +948,12 @@ class ptyco_main_control(QMainWindow):
         self.softglue_data = []
         #s12softglue.PROC=1
         t0 = time.time()
-        #time.sleep(3)
-        #s12softglue.flush()
+
         while len_t<N_cnt:
             t, dt = s12softglue.get_sliced_arrays(self.parameters.softglue_channels)
             print(f"Time required to get arrays is {time.time()-t0}")
             # if softglue data does not get updated on time, flush.
-            if len(t)==N_cnt:
+            if len(t)>=N_cnt:
                 break
             if (len_t == len(t)) or (len(t)<N_cnt):
                 print("flushed")
@@ -983,8 +983,80 @@ class ptyco_main_control(QMainWindow):
         w.signal.finished.connect(self.softglue_savingdone)
         self.threadpool.start(w)
         #self.save2disk_softglue()
-    
+
+    def save_softglue(self):
+        # read softglue data
+            #foldername = os.getcwd()
+        try:
+            s12softglue.flush()
+            time.sleep(0.1)
+        except:
+            self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
+            print(self.recent_error_msg)            
+        N_cnt = 0
+        if hasattr(self.pts.hexapod, "pulse_number"):
+            N_cnt = self.pts.hexapod.pulse_number
+        t = []
+#        ct0 = time.time()
+        count = 0
+        self.softglue_data = []
+        #s12softglue.PROC=1
+        t0 = time.time()
+        t, timearray = s12softglue.get_latest_scantime()
+        timeout = 10
+        while (t<self.fly1d_tm):
+            if time.time()-t0>timeout:
+                break
+            s12softglue.flush()
+            time.sleep(0.25)
+            t, timearray = s12softglue.get_latest_scantime()
+            print(f'Flushed and {t=}')
+        print(f"Time required to be read to read softglue is {time.time()-t0}")
+        arrs = s12softglue.get_arrays(self.parameters.softglue_channels)
+        print(f"Time required to read softglue is {time.time()-t0}")
+
+        self.softglue_data = (timearray, arrs)
+        self.softglue_N_cnt = N_cnt
+        foldername, filename = self.get_softglue_filename()
+        if len(foldername) == 0:
+            return
+        foldername = os.path.join(foldername, 'positions', self.scannumberstring)
+        self.softglue_folder = foldername
+        self.softglue_filename =filename
+
+        while self.is_softglue_savingdone is False:
+            print("Previous soft glue has not been done. Waiting for done.")
+            time.sleep(0.025)
+        self.is_softglue_savingdone = False
+        w = Worker(self.save2disk_softglue)
+        w.signal.finished.connect(self.softglue_savingdone)
+        self.threadpool.start(w)
+
     def save2disk_softglue(self):
+        t, indices = s12softglue.slice_timearray(self.softglue_data[0])
+        dt = s12softglue.slice_arrays(indices, self.softglue_data[1]) # Skip the first array (timearray)
+        N_cnt = self.softglue_N_cnt
+        #t, dt = self.softglue_data
+        foldername = self.softglue_folder
+        filename = self.softglue_filename
+
+        p = pathlib.Path(foldername)
+        p.mkdir(parents=True, exist_ok=True)
+        if len(t)<N_cnt:
+            print("*********************************")
+            print(f"Only {len(t)}, less than the ideal {N_cnt} data will be saved in {foldername}/{filename}.")
+            print("*********************************")
+        try:
+            for i, td in enumerate(t):
+                if i>=N_cnt:
+                    continue
+                scanname = '%s_%i.dat' % (filename, i)
+                dt2 = np.column_stack((td, dt[0][i], dt[1][i], dt[2][i]))
+                np.savetxt(os.path.join(foldername, scanname), dt2, fmt="%1.8e %1.8e %1.8e %1.8e")
+        except:
+            print("error in save2disk_softglue")
+
+    def save2disk_softglue_original(self):
         N_cnt = self.softglue_N_cnt
         t, dt = self.softglue_data
         foldername = self.softglue_folder
@@ -1065,17 +1137,19 @@ class ptyco_main_control(QMainWindow):
         success=False
         timeout = 5
         cnt = 0
-        while success == False:
-            try:
-                self.save_softglue()
-                success = True
-            except:
-                self.recent_error_msg = "The softglue flush failed while save_softglue, it will be flushed again....."
-                print(self.recent_error_msg)
-                s12softglue.flush()
-                cnt = cnt + 1
-                if cnt>timeout:
-                    break
+#        self.save_softglue()
+#        success=True
+        try:
+            self.save_softglue()
+            success = True
+        except:
+            pass
+            # self.recent_error_msg = "The softglue flush failed while save_softglue, it will be flushed again....."
+            # print(self.recent_error_msg)
+            # s12softglue.flush()
+            # cnt = cnt + 1
+            # if cnt>timeout:
+            #     break
         print(f"Elapsed time to save softglue data since flydone = {time.time()-ct0}")
         # if read softglue failed...
         if success == False:
@@ -1749,6 +1823,8 @@ class ptyco_main_control(QMainWindow):
                         time.sleep(10)
                         msg = f'Beam has been down for {int((time.time()-ct0)/60)} minutes.'
                         update_status(msg)
+                        if self.isStopScanIssued:
+                            break
                     # Need some action after shutter back up
                     self.shutter.put(1)
                     msg = f'Beam just came back. A-shutter open command was sent and run will resume in 5mins.'
