@@ -117,8 +117,7 @@ def mcs_counter_wait(timeExp):
 				break
 			time.sleep(0.1)
 	while (abs(t-time.time())<=wait_time):
-         time.sleep(0.01)
-#		print("Counting for %0.3f seconds........................."%abs(t-time.time()))
+		time.sleep(0.01)
 	t = time.time()
 	while (strk.scaler.S1 is not crnt_value):
 		crnt_value = strk.scaler.S1

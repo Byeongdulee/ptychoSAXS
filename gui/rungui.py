@@ -2661,7 +2661,7 @@ class motor_control(QMainWindow):
         #controller = ['galil', 'smarAct', 'newport']
         self.motornames = ['Beamstopv','Beamstoph','ZFv','ZFh','Camerav','Camerah','OSAv','OSAh', 
                       'trans1', 'trans2', 'tilt1', 'tilt2',
-                      'ZF_Z','cam_Z','osa_Z',]
+                      'ZF_Z','osa_Z','cam_Z',]
         self.controller = ['galil','galil','galil','galil','galil','galil','galil','galil',
                       'smarAct','smarAct','smarAct','smarAct',
                       'newport','newport','newport']
