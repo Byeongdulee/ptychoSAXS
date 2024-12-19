@@ -1306,7 +1306,7 @@ class ptyco_main_control(QMainWindow):
         self.progress_3d = None
         self.motor_p0 = initial_motorpos
 
-        scaninfo.append('\n#otor Information\n')
+        scaninfo.append('\n#Motor Information\n')
         m = self.get_pos_all()
         for name in self.motornames:
             scaninfo.append(name)
