@@ -135,7 +135,6 @@ def mcs_counter_waittime(timeExp):
 		time.sleep(0.02)
 		if (abs(t-time.time())>wait_timeout):
 			raise ValueError('Network timeout in mcs_counter_waittime')
-			break
 	strk.scaler.CNT = 0
 
 def mcs_counter_waitcountingstarted():
