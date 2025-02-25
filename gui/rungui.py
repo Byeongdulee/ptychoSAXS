@@ -474,12 +474,14 @@ class ptyco_main_control(QMainWindow):
         for i, name in enumerate(self.motornames):
             n = i + 1
             line_edit_suffixes = ["tweak", "L", "R", "N", "t"]
+            try:
+                for j, suffix in enumerate(line_edit_suffixes):
+                    value = '' if numbers[i, j] == -999999 else str(numbers[i, j])
+                    line_edit_name = f"ed_lup_{n}_{suffix}" if suffix != "tweak" else f"ed_{n}_{suffix}"
+                    self.ui.findChild(QLineEdit, line_edit_name).setText(value)
+            except:
+                pass
             
-            for j, suffix in enumerate(line_edit_suffixes):
-                value = '' if numbers[i, j] == -999999 else str(numbers[i, j])
-                line_edit_name = f"ed_lup_{n}_{suffix}" if suffix != "tweak" else f"ed_{n}_{suffix}"
-                self.ui.findChild(QLineEdit, line_edit_name).setText(value)
-
     def set_hdf_plugin_use(self):
         if self.ui.actionUse_hdf_plugin.isChecked():
             self.ui.actionUse_hdf_plugin.setChecked(True)
@@ -921,7 +923,7 @@ class ptyco_main_control(QMainWindow):
                     filename = "%s" % rstrip_from_char(filename, "_")
                 
         if len(filename) ==0:
-            self.recent_error_msg = "****** Error: detector ioc does not response."
+            self.recent_error_msg = "****** Detector ioc is not available."
             print(self.recent_error_msg)
             filename = "temp%i"%int(time.time())
         return (foldername, filename)
@@ -1011,7 +1013,7 @@ class ptyco_main_control(QMainWindow):
             time.sleep(0.25)
             t, timearray = s12softglue.get_latest_scantime()
             print(f'Flushed and {t=}')
-        print(f"Time required to be read to read softglue is {time.time()-t0}")
+        print(f"Time required to have softglue reading ready is {time.time()-t0}")
         arrs = s12softglue.get_arrays(self.parameters.softglue_channels)
         print(f"Time required to read softglue is {time.time()-t0}")
 
@@ -2644,11 +2646,18 @@ class ptyco_main_control(QMainWindow):
         motornumber = self.motornames.index(axis)
         self.mv(motornumber=motornumber, val=pos)
 
-import ptychosaxs.tw_galil as gl
-import ptychosaxs.smaract_gonio as smaract
-import ptychosaxs.newport_piezo as np_piezo
+try:
+    import ptychosaxs.tw_galil as gl
+    import ptychosaxs.smaract_gonio as smaract
+    import ptychosaxs.newport_piezo as np_piezo
+    MotorControlAvailable = True
+except:
+    MotorControlAvailable = False
+    print("Motor Control is NOT available.")
+
 class motor_control(QMainWindow):
 #    resized = QtCore.pyqtSignal()
+
     MOTOR_PREC = "%0.3f"
     def __init__(self):
         super(motor_control, self).__init__()
@@ -2852,7 +2861,8 @@ class motor_control(QMainWindow):
 
 app = QApplication(sys.argv)
 main_panel = ptyco_main_control()
-motor_panel = motor_control()
+if MotorControlAvailable:
+    motor_panel = motor_control()
 
 def main():
 #    run gui with server option

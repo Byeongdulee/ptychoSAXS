@@ -6,13 +6,13 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1070</width>
-    <height>801</height>
+    <width>1200</width>
+    <height>813</height>
    </rect>
   </property>
   <property name="maximumSize">
    <size>
-    <width>1070</width>
+    <width>1200</width>
     <height>16777215</height>
    </size>
   </property>
@@ -2144,8 +2144,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1070</width>
-     <height>22</height>
+     <width>1200</width>
+     <height>31</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
