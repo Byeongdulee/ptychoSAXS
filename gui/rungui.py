@@ -18,6 +18,7 @@ from PyQt5 import uic, QtCore, QtGui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget, QFormLayout
 from PyQt5.QtWidgets import QLabel, QLineEdit, QMessageBox, QInputDialog, QDialog, QDialogButtonBox
 from PyQt5.QtCore import QTimer, QObject, pyqtSlot, pyqtSignal, QRunnable, QThreadPool, QSize
+import pathlib
 
 import time
 #import QThread
@@ -374,7 +375,10 @@ class ptyco_main_control(QMainWindow):
         self.isStruckCountNeeded = False
 
         # set default softglue collection freq. 10 micro seconds.
-        s12softglue.set_count_freq(100)
+        if s12softglue.isConnected:
+            s12softglue.set_count_freq(100)
+        else:
+            print("Softglue does not work.")
 
         self.rpos = []
         self.mpos = []
@@ -570,16 +574,28 @@ class ptyco_main_control(QMainWindow):
         self.scannumberstring = '%0.3i'%self.parameters.scan_number
         txt = "%s%0.3i"%(txt,self.parameters.scan_number)
         self.ui.lb_scanname.setText(txt)
-        wf_temp = self.ui.ed_workingfolder.text().split(':')
-        workingfolder = wf_temp[1]
-        
+        #wf_temp = self.ui.ed_workingfolder.text().split(':')
+        p = pathlib.Path(self.ui.ed_workingfolder.text())
+        wf_temp = p.parts
+        #wf_temp = tmp[1]
+        #workingfolder = ""
+        for i in range(1, len(wf_temp)):
+            if i==1:
+                workingfolder = wf_temp[i]
+            else:
+                workingfolder = "%s/%s" %(workingfolder, wf_temp[i])
+        print(workingfolder)
         if update_detector:
             for det in self.detector:
                 if det is not None:
+                    print(det.basepath, " This is the basepath")
+                    print(workingfolder, " This is the workingfolder")
                     ptycho_path = os.path.join(det.basepath, workingfolder, 'ptycho', self.scannumberstring).replace('\\', '/')
+                    print(ptycho_path, " This is ptycho_path")
                     det.FilePath = ptycho_path
                     tif_path = os.path.join(det.basepath, workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
                     det.FilePath = tif_path
+                    print(tif_path, " This is tif_path")
                     det.filePut('FilePath', ptycho_path)
                     det.filePut('FileName', txt)
                     det.FileName = txt
@@ -606,17 +622,20 @@ class ptyco_main_control(QMainWindow):
             self.ui.actionevery_10_millie_seconds.setChecked(False)
             self.ui.actionDetout.setChecked(False)
             self.ui.actionTrigout.setChecked(True)
-            s12softglue.set_count_freq(10)
+            if s12softglue.isConnected:
+                s12softglue.set_count_freq(10)
         if val==2:
             self.ui.actionevery_10_millie_seconds.setChecked(False)
             self.ui.actionDetout.setChecked(True)
             self.ui.actionTrigout.setChecked(False)
-            s12softglue.set_count_freq(100)
+            if s12softglue.isConnected:
+                s12softglue.set_count_freq(100)
         if val==3:
             self.ui.actionevery_10_millie_seconds.setChecked(True)
             self.ui.actionDetout.setChecked(False)
             self.ui.actionTrigout.setChecked(False)
-            s12softglue.set_count_freq(1000)
+            if s12softglue.isConnected:
+                s12softglue.set_count_freq(1000)
             
     def stopscan(self):
         self.isStopScanIssued = True
@@ -883,6 +902,8 @@ class ptyco_main_control(QMainWindow):
             else:
                 self.ui.actionWAXS.setChecked(False)
                 self.detector[1] = None
+        print("base path of the detector %i is %s" % (N, self.detector[N-1].basepath))
+        self.update_scanname()
         if N==3:
             if self.ui.actionStruck.isChecked():
                 self.ui.actionStruck.setChecked(True)
@@ -989,6 +1010,9 @@ class ptyco_main_control(QMainWindow):
     def save_softglue(self):
         # read softglue data
             #foldername = os.getcwd()
+        if not s12softglue.isConnected:
+            print("Cannot save_softglue because softglue is not connected.")
+            return
         try:
             s12softglue.flush()
             time.sleep(0.1)
@@ -1035,6 +1059,9 @@ class ptyco_main_control(QMainWindow):
         self.threadpool.start(w)
 
     def save2disk_softglue(self):
+        if not s12softglue.isConnected:
+            print("Cannot save2disk_softglue since softglue is not connected.")
+            return
         t, indices = s12softglue.slice_timearray(self.softglue_data[0])
         dt = s12softglue.slice_arrays(indices, self.softglue_data[1]) # Skip the first array (timearray)
         N_cnt = self.softglue_N_cnt
@@ -1222,7 +1249,8 @@ class ptyco_main_control(QMainWindow):
 
     def timescan(self):
         if self.ui.actionckTime_reset_before_scan.isChecked():
-            s12softglue.ckTime_reset()
+            if s12softglue.isConnected:
+                s12softglue.ckTime_reset()
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
         #if self.isscan:
@@ -1252,7 +1280,8 @@ class ptyco_main_control(QMainWindow):
         #         det.FileNumber = 1
 
         if self.ui.actionckTime_reset_before_scan.isChecked():
-            s12softglue.ckTime_reset()
+            if s12softglue.isConnected:
+                s12softglue.ckTime_reset()
 
         # reset the progress bar
         self.ui.progressBar.setValue(0)
@@ -1340,7 +1369,8 @@ class ptyco_main_control(QMainWindow):
         self.write_motor_scan_range()
         self.isStopScanIssued = False
         if self.ui.actionckTime_reset_before_scan.isChecked():
-            s12softglue.ckTime_reset()
+            if s12softglue.isConnected:
+                s12softglue.ckTime_reset()
         motor = [xmotor, ymotor, phimotor]
 #        print(motor)
         # logging
@@ -1699,9 +1729,11 @@ class ptyco_main_control(QMainWindow):
         #self.ui.progressBar.setValue(0)
 
         # prepare to collect Detector images
+        isDET_selected = False
         if len(self.detector)>0:
             for det in self.detector:
                 if det is not None:
+                    isDET_selected = True
                     print(f"Exposure time set to %0.3f seconds for {det._prefix}."% expt)
                     try:
                         #det.fly_ready(expt, len(pos))
@@ -1735,7 +1767,7 @@ class ptyco_main_control(QMainWindow):
             self.pts.mv(axis, value)
 
             # trigger the detector.
-            if len(self.detector)>0:
+            if isDET_selected:
                 struck.arm_mcs_counter()
                 struck.mcs_counter_waitstarted()
                 dg645_12ID.trigger()
@@ -1743,10 +1775,10 @@ class ptyco_main_control(QMainWindow):
                     time.sleep(0.01)
 
             if self.isStruckCountNeeded:
-                if len(self.detector)==0:
+                if isDET_selected:
                     struck.mcs_counter_count(expt)
-                    while struck.strk.scaler.CNT:
-                        time.sleep(0.01)
+                    #while struck.strk.scaler.CNT:
+                    #    time.sleep(0.01)
                 cnts = struck.read_scaler_all()
                 self.rpos.append([cnts[2], cnts[3], cnts[4]])
                 # data = [value, cnts[2],cnts[3],cnts[4]]
@@ -1757,7 +1789,7 @@ class ptyco_main_control(QMainWindow):
                 # data = [value, [r[0], r[1], r[2]]]
                 # self.log_data(data)
             #pos = self.get_motorpos(self.signalmotor)
-            time.sleep(expt+1)
+            time.sleep(0.1)
             self.mpos.append(value)
             #self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
 
@@ -1963,10 +1995,12 @@ class ptyco_main_control(QMainWindow):
         #self.mpos = []
         self.plotlabels = []
         if self.ui.actionckTime_reset_before_scan.isChecked():
-            s12softglue.ckTime_reset()
+            if s12softglue.isConnected:
+                s12softglue.ckTime_reset()
         if self.ui.actionMemory_clear_before_scan.isChecked():
             try:
-                s12softglue.memory_clear()
+                if s12softglue.isConnected:
+                    s12softglue.memory_clear()
             except TimeoutError:
                 self.recent_error_msg = "softglue memory_clear timeout"
                 print(self.recent_error_msg)
@@ -2047,12 +2081,13 @@ class ptyco_main_control(QMainWindow):
                 movestep = abs(fe-st)/self.pts.hexapod.pulse_number*1000*self.parameters._ratio_exp_period
                 print(f"Actual exposure time: {expt:0.3e} s. In distance: {movestep:.3e} um.")
 #                print("During the exposure, the motor moves %0.3f um." % movestep)
-                N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
-                self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
-                print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a shot.")
-                if N_counts>100000:
-                    self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
-                    raise SOFTGLUE_Setup_Error(self.recent_error_msg)
+                if s12softglue.isConnected:
+                    N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
+                    self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
+                    print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a shot.")
+                    if N_counts>100000:
+                        self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                        raise SOFTGLUE_Setup_Error(self.recent_error_msg)
 
                 if isTestRun:
                     return
@@ -2172,11 +2207,14 @@ class ptyco_main_control(QMainWindow):
                 det.ForceStop(2)
 
     def is_traj_running(self):
-        if s12softglue.get_eventN() == 0:
-            return False
-        else:
-            return True
-        
+        ret = False
+        if s12softglue.isConnected:
+            if s12softglue.get_eventN() == 0:
+                ret = False
+            else:
+                ret = True
+        return ret
+            
     def print_fly_settings(self, motornumber):
         print('')
         print("Currently, the flyscan only works for X axis of the hexapod.")
@@ -2486,6 +2524,8 @@ class ptyco_main_control(QMainWindow):
         else:
             r = np.asarray(self.rpos)
             pos = np.asarray(self.mpos)
+        if len(pos) != len(r[:,0]):
+            return
         try:
             xl = f"{self.signalmotor} ({self.signalmotorunit})"
         except:
