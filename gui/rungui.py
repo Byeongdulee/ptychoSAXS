@@ -1116,6 +1116,37 @@ class ptyco_main_control(QMainWindow):
         except:
             print("error in save2disk_softglue")
 
+    def save_hexapod_record(self, filename, option="a"):
+        timeout = 5
+        cnt = 0
+        hpos = []
+#        self.timer.stop()
+#        time.sleep(0.5)
+        wave = self.pts.hexapod.get_wavelen()
+        Ndata = wave[1][1] # read the wavelet 1.
+        print(f"Number of Ndata : {Ndata}")
+        while True:
+            try:
+                hpos = self.pts.hexapod.get_records(Ndata-100)
+                break
+            except:
+                pass
+            time.sleep(0.5)
+            cnt = cnt + 1
+            if cnt>timeout:
+                break
+        if len(hpos)==0:
+            print("Hexapod record saving failed.")
+            return
+#        self.timer.start(100)
+
+        with open(filename, option) as f:
+            strv = "N   X0   X1   Y0    Y1"
+            f.write("%s\n"%(i, strv))
+            for i, m in enumerate(hpos["X"][0]):
+                strv = "%0.5e   %0.5e   %0.5e   %0.5e"%(hpos["X"][0][i],hpos["X"][1][i],hpos["Z"][0][i],hpos["Z"][1][i])
+                f.write("%i    %s\n"%(i, strv))
+
     def flydone(self, return_motor=True):
         if return_motor:
             for key in self.motor_p0:
@@ -1144,15 +1175,13 @@ class ptyco_main_control(QMainWindow):
                 # save qds data.
                 pos = np.asarray(self.mpos)
                 r = np.asarray(self.rpos)
-            # hexapod read
-            if self.is_hexrecord_required:
-                hpos = self.pts.hexapod.get_records()
-                self.save_list(self.parameters.logfilename, hpos[:,0],hpos,[0,1,2],"a")
-        
             try:
                 self.save_nparray(self.parameters.logfilename, pos,r,[0,1,2],"a")
             except:
                 self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
+            # hexapod read
+            if self.is_hexrecord_required:
+                self.save_hexapod_record(self.parameters.logfilename)
             scaninfo = []
             scaninfo.append('#I detector_filename')
             for det in self.detector:
@@ -1441,7 +1470,7 @@ class ptyco_main_control(QMainWindow):
         dg645_12ID.set_pilatus_fly(0.001)
         self.motor_p0 = initial_motorpos
 
-        scaninfo.append('\n#otor Information\n')
+        scaninfo.append('\n# Motor Information\n')
         m = self.get_pos_all()
         for name in self.motornames:
             scaninfo.append(name)
