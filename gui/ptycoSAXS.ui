@@ -2145,7 +2145,7 @@
      <x>0</x>
      <y>0</y>
      <width>1200</width>
-     <height>31</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -2154,6 +2154,7 @@
     </property>
     <addaction name="actionEnable_fly_with_controller"/>
     <addaction name="actionSave_flyscan_result"/>
+    <addaction name="actionRecord_traj_during_scan"/>
     <addaction name="separator"/>
     <addaction name="actionSet_the_default_vel_acc"/>
     <addaction name="actionPrint_flyscan_settings"/>
@@ -2543,6 +2544,14 @@
   <action name="actionRatio_of_exptime_period_for_Flyscan">
    <property name="text">
     <string>Ratio of exptime/period for Flyscan</string>
+   </property>
+  </action>
+  <action name="actionRecord_traj_during_scan">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Record traj during scan</string>
    </property>
   </action>
  </widget>

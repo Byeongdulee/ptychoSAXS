@@ -321,6 +321,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionEnable_fly_with_controller.setCheckable(True)
         self.ui.actionEnable_fly_with_controller.setChecked(True)
         self.ui.actionEnable_fly_with_controller.triggered.connect(self.select_flymode) # hexapod flyscan type.
+        self.ui.actionRecord_traj_during_scan.triggered.connect(self.select_hexrecord) # hexapod record during scan.
         self.ui.actionSet_the_default_vel_acc.triggered.connect(self.sethexapodvel_default)  # hexapod set vel acc into default
         self.ui.actionSet_default_speed.triggered.connect(self.setphivel_default)
         self.ui.actionSave.triggered.connect(self.savescan)
@@ -340,6 +341,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionSet_gonio_default_vel_acc.triggered.connect(self.smaract_set_defaultspeed)
         self.ui.actionScanStop.triggered.connect(self.stopscan)
         self.isStopScanIssued = False
+        self.is_hexrecord_required = False
         self.ui.action2D_scan.triggered.connect(lambda: self.fly2d(xm, ym))
         self.ui.action3D_scan.triggered.connect(lambda: self.fly3d(xm, ym, phim))
         self.ui.actionSelect_time_intervals.triggered.connect(self.select_timeintervals)
@@ -923,6 +925,14 @@ class ptyco_main_control(QMainWindow):
         else:
             self.hexapod_flymode = HEXAPOD_FLYMODE_STANDARD
             self.ui.actionEnable_fly_with_controller.setChecked(False)
+       
+    def select_hexrecord(self):
+        if self.ui.actionRecord_traj_during_scan.isChecked():  # when checked, this value is False
+            self.ui.actionRecord_traj_during_scan.setChecked(True)
+            self.is_hexrecord_required = True
+        else:
+            self.is_hexrecord_required = False
+            self.ui.actionRecord_traj_during_scan.setChecked(False)
 
     def get_softglue_filename(self):
         foldername = self.ui.ed_workingfolder.text()
@@ -1040,7 +1050,7 @@ class ptyco_main_control(QMainWindow):
             print(f'Flushed and {t=}')
 #        print(f"Time required to have softglue reading ready is {time.time()-t0}")
         arrs = s12softglue.get_arrays(self.parameters.softglue_channels)
-        print(f"Time required to read softglue is {time.time()-t0}")
+#        print(f"Time required to read softglue is {time.time()-t0}")
 
         self.softglue_data = (timearray, arrs)
         self.softglue_N_cnt = N_cnt
@@ -1134,6 +1144,11 @@ class ptyco_main_control(QMainWindow):
                 # save qds data.
                 pos = np.asarray(self.mpos)
                 r = np.asarray(self.rpos)
+            # hexapod read
+            if self.is_hexrecord_required:
+                hpos = self.pts.hexapod.get_records()
+                self.save_list(self.parameters.logfilename, hpos[:,0],hpos,[0,1,2],"a")
+        
             try:
                 self.save_nparray(self.parameters.logfilename, pos,r,[0,1,2],"a")
             except:
@@ -1169,6 +1184,8 @@ class ptyco_main_control(QMainWindow):
         cnt = 0
 #        self.save_softglue()
 #        success=True
+
+
         try:
             self.save_softglue()
             success = True
