@@ -705,7 +705,8 @@ class ptyco_main_control(QMainWindow):
             self.ui.actionTestFly.setChecked(True)
         else:
             self.ui.actionTestFly.setChecked(False)
-            self.detector[1] = None
+            #self.detector[1] = None
+            
     def fit_wobble_eccentricity(self):
         tp = np.asarray(self.mpos)
         rp = np.asarray(self.rpos)
