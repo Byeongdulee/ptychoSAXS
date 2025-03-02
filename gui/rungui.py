@@ -706,7 +706,7 @@ class ptyco_main_control(QMainWindow):
         else:
             self.ui.actionTestFly.setChecked(False)
             #self.detector[1] = None
-            
+
     def fit_wobble_eccentricity(self):
         tp = np.asarray(self.mpos)
         rp = np.asarray(self.rpos)
@@ -1038,7 +1038,7 @@ class ptyco_main_control(QMainWindow):
             time.sleep(0.25)
             t, timearray = s12softglue.get_latest_scantime()
             print(f'Flushed and {t=}')
-        print(f"Time required to have softglue reading ready is {time.time()-t0}")
+#        print(f"Time required to have softglue reading ready is {time.time()-t0}")
         arrs = s12softglue.get_arrays(self.parameters.softglue_channels)
         print(f"Time required to read softglue is {time.time()-t0}")
 
