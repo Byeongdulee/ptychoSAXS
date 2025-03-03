@@ -73,7 +73,7 @@ QDS_UNIT_MM = 2
 QDS_UNIT_DEFAULT = QDS_UNIT_UM  # default QDS output is um
 DEFAULTS = {'xmotor':0, 'ymotor':2, 'phimotor':6}  #vertical stage is Z in the scan_gui, change 'ymotor' from 1 to 2, JD
 inifilename = "pty-co-saxs.ini"
-
+STRUCK_CHANNELS = [0, 3,4]
 def rstrip_from_char(string, char):
     """Removes characters from the right of the string starting from the first occurrence of 'char'."""
 #    print(f'{string=}')
@@ -178,7 +178,9 @@ class beamstatus(QObject):
     def __init__(self):
         # A station shutter..
         self.shutter_val = epics.PV('PB:12ID:STA_A_FES_CLSD_PL', callback=self.check_A_shutter)
-        self.shutter = epics.PV('12ida2:rShtrA:Open')
+        self.shutterA = epics.PV('12ida2:rShtrA:Open')
+        self.shutterC_open = epics.PV('12ida2:rShtrC:Open')
+        self.shutterC_close = epics.PV('12ida2:rShtrC:Close')
 
     def check_A_shutter(self, value, **kws):
         if value == 0:
@@ -187,10 +189,25 @@ class beamstatus(QObject):
             self.signal.onChange.emit(True)
 
     def open_shutter(self):
-        self.shutter.put(1)
+        self.shutterA.put(1)
 
-    def close_shutter(self):
-        self.shutter.put(0)
+#    def close_shutter(self):
+#        self.shutterA.put(0)
+
+    def open_shutterC(self):
+        self.shutterC_open.put(1)
+
+    def close_shutterC(self):
+        self.shutterC_close.put(1)
+
+class shutter():
+    def __init__(self):
+        self.shutterC_open = epics.PV('12ida2:rShtrC:Open')
+        self.shutterC_close = epics.PV('12ida2:rShtrC:Close')
+    def open(self):
+        self.shutterC_open.put(1)
+    def close(self):
+        self.shutterC_close.put(1)
 
 class ptyco_main_control(QMainWindow):
 #    resized = QtCore.pyqtSignal()
@@ -407,6 +424,8 @@ class ptyco_main_control(QMainWindow):
 #        self.shutter_status = epics.PV('12idc:scaler1.CNT', callback=self.checkshutter) # to test.
         self.shutter_status = epics.PV('PA:12ID:STA_A_BEAMREADY_PL.VAL', callback=self.checkshutter)
         self.shutter = epics.PV('12ida2:rShtrA:Open')
+        self.shutterC = shutter()
+
         # figure to plot
         # a figure instance to plot on
         self.figure = plt.figure()
@@ -905,7 +924,7 @@ class ptyco_main_control(QMainWindow):
             else:
                 self.ui.actionWAXS.setChecked(False)
                 self.detector[1] = None
-        print("base path of the detector %i is %s" % (N, self.detector[N-1].basepath))
+#        print("base path of the detector %i is %s" % (N, self.detector[N-1].basepath))
         self.update_scanname()
         if N==3:
             if self.ui.actionStruck.isChecked():
@@ -1149,6 +1168,8 @@ class ptyco_main_control(QMainWindow):
 
     def flydone(self, return_motor=True):
         if return_motor:
+            # when 1D scan is done.
+            self.shutterC.close()
             for key in self.motor_p0:
                 self.mv(key, self.motor_p0[key])
 
@@ -1167,7 +1188,7 @@ class ptyco_main_control(QMainWindow):
         if len(self.parameters.logfilename)>0:
             if self.isStruckCountNeeded:
                 # save struck data.
-                r = struck.read_mcs([0, 1, 2])
+                r = struck.read_mcs(STRUCK_CHANNELS)
                 pos = np.arange(len(r[0]))
                 self.mpos = pos
                 print("Number of MCS channels : ", len(r))
@@ -1277,6 +1298,7 @@ class ptyco_main_control(QMainWindow):
 #            print("save_scaninfo is empty yet. This will save phi angles......")
         self.isfly = False
         self.updateprogressbar(100)
+        self.shutterC.close()
 
     def flydone3d(self, value=0):
         for key in self.motor_p0:
@@ -1290,6 +1312,7 @@ class ptyco_main_control(QMainWindow):
         self.updatepos()
         self.isfly = False
         self.updateprogressbar(100)
+        self.shutterC.close()
     
     def timescanstop(self):
         self.isscan = False
@@ -2559,7 +2582,7 @@ class ptyco_main_control(QMainWindow):
             if self.isfly:
                 #print("this is fly in plot")
                 #pos = np.asarray(self.mpos)
-                r = struck.read_mcs([0, 1, 2])
+                r = struck.read_mcs(STRUCK_CHANNELS)
                 pos = np.arange(len(r[0]))
                 r = np.stack(r).T
                 r = np.asarray(r)
