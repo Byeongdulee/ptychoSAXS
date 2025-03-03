@@ -2103,6 +2103,7 @@ class ptyco_main_control(QMainWindow):
 #            print("Clear plot")
             self.clearplot()
         
+        print("Time to finish line 2106: %0.3f" % (time.time()-t0))
         # logging datatype
         scaninfo = []
         scaninfo.append('#H')
@@ -2124,6 +2125,7 @@ class ptyco_main_control(QMainWindow):
         tm = self.fly1d_tm
 
         pos = self.pts.get_pos(axis)
+        print("Time to finish line 2127: %0.3f" % (time.time()-t0))
         if axis in self.pts.hexapod.axes:
             if self.ui.cb_reversescandir.isChecked():
                 if abs(st-pos)>abs(fe-pos):
@@ -2162,6 +2164,7 @@ class ptyco_main_control(QMainWindow):
                         dg645_12ID.set_pilatus_fly(expt)
                     except:
                         raise DG645_Error
+                print("Time to finish line 2165: %0.3f" % (time.time()-t0))
                 movestep = abs(fe-st)/self.pts.hexapod.pulse_number*1000*self.parameters._ratio_exp_period
                 print(f"Actual exposure time: {expt:0.3e} s. In distance: {movestep:.3e} um.")
 #                print("During the exposure, the motor moves %0.3f um." % movestep)
@@ -2193,6 +2196,7 @@ class ptyco_main_control(QMainWindow):
 #                print("Ready for traj")
                 pos = self.pts.get_pos(axis)
                 #print(f"pos is {pos} before traj run start.")
+                print("Time to finish line 2196: %0.3f" % (time.time()-t0))
                 if not isTestRun:
                     if self.isStruckCountNeeded:
                         struck.mcs_init()
