@@ -1290,6 +1290,7 @@ class ptyco_main_control(QMainWindow):
         self.mpos = []
         if len(self.motor_p0.keys()) ==1: # 1d fly
             self.updateprogressbar(100)
+        print(f"Elapsed time to finish flydone = {time.time()-ct0}")
 
     def flydone2d(self, value=0):
         for key in self.motor_p0:
@@ -2070,6 +2071,7 @@ class ptyco_main_control(QMainWindow):
         self.run_stop_issued()
 
     def fly0(self, motornumber=-1, update_progress=None, update_status=None):
+        t0 = time.time()
         axis = self.motornames[motornumber]
         self.signalmotor = axis
         self.signalmotorunit = self.motorunits[motornumber]
@@ -2204,6 +2206,7 @@ class ptyco_main_control(QMainWindow):
                     timeout = 5
                     i = 0
 #                    print("Hexapod is at the initial position.")
+                    print("Time to prepare scan start fly0: %0.3f" % (time.time()-t0))
                     while not istraj_running:
                         try:
                             self.pts.hexapod.run_traj(axis)
@@ -2287,6 +2290,7 @@ class ptyco_main_control(QMainWindow):
         for det in self.detector:
             if det is not None:
                 det.ForceStop(2)
+        print("Time to finish fly0: %0.3f" % (time.time()-t0))
 
     def is_traj_running(self):
         ret = False
