@@ -204,8 +204,17 @@ class shutter():
     def __init__(self):
         self.shutterC_open = epics.PV('12ida2:rShtrC:Open')
         self.shutterC_close = epics.PV('12ida2:rShtrC:Close')
+        self.status = epics.PV('PA:12ID:STA_C_BEAMREADY_PL.VAL')
     def open(self):
+        timout = 5
         self.shutterC_open.put(1)
+        t0 = time.time()
+        while self.status.get()==0:
+            time.sleep(0.1)
+            if time.time()-t0>timout:
+                print("Shutter won't open in timeout (5s).")
+                break
+
     def close(self):
         self.shutterC_close.put(1)
 
@@ -609,14 +618,14 @@ class ptyco_main_control(QMainWindow):
         if update_detector:
             for det in self.detector:
                 if det is not None:
-                    print(det.basepath, " This is the basepath")
-                    print(workingfolder, " This is the workingfolder")
+#                    print(det.basepath, " This is the basepath")
+#                    print(workingfolder, " This is the workingfolder")
                     ptycho_path = os.path.join(det.basepath, workingfolder, 'ptycho', self.scannumberstring).replace('\\', '/')
-                    print(ptycho_path, " This is ptycho_path")
+#                    print(ptycho_path, " This is ptycho_path")
                     det.FilePath = ptycho_path
                     tif_path = os.path.join(det.basepath, workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
                     det.FilePath = tif_path
-                    print(tif_path, " This is tif_path")
+#                    print(tif_path, " This is tif_path")
                     det.filePut('FilePath', ptycho_path)
                     det.filePut('FileName', txt)
                     det.FileName = txt
@@ -1420,6 +1429,7 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append('#D')
         scaninfo.append(time.ctime())
         self.isscan = True
+        self.shutterC.open()
         w = Worker(self.fly2d0, xmotor, ymotor, scanname=scanname, 
                    update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone2d)
@@ -1507,6 +1517,7 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append(time.ctime())
         self.time_scanstart = time.time()
         self.isscan = True
+        self.shutterC.open()
         w = Worker(self.fly3d0, xmotor, ymotor, phimotor, scanname=scanname, 
             update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone3d)
@@ -1591,6 +1602,7 @@ class ptyco_main_control(QMainWindow):
         self.write_scaninfo_to_logfile(scaninfo)
 
         self.isscan = True
+        self.shutterC.open()
         w = Worker(self.fly0, motornumber, update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone)
         w.signal.progress.connect(self.updateprogressbar)
