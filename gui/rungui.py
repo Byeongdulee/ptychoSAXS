@@ -73,7 +73,7 @@ QDS_UNIT_MM = 2
 QDS_UNIT_DEFAULT = QDS_UNIT_UM  # default QDS output is um
 DEFAULTS = {'xmotor':0, 'ymotor':2, 'phimotor':6}  #vertical stage is Z in the scan_gui, change 'ymotor' from 1 to 2, JD
 inifilename = "pty-co-saxs.ini"
-STRUCK_CHANNELS = [0, 3,4]
+STRUCK_CHANNELS = [0, 1, 4]
 def rstrip_from_char(string, char):
     """Removes characters from the right of the string starting from the first occurrence of 'char'."""
 #    print(f'{string=}')
@@ -1161,7 +1161,7 @@ class ptyco_main_control(QMainWindow):
 
         with open(filename, option) as f:
             strv = "N   X0   X1   Y0    Y1"
-            f.write("%s\n"%(i, strv))
+            f.write("%s\n"%strv)
             for i, m in enumerate(hpos["X"][0]):
                 strv = "%0.5e   %0.5e   %0.5e   %0.5e"%(hpos["X"][0][i],hpos["X"][1][i],hpos["Z"][0][i],hpos["Z"][1][i])
                 f.write("%i    %s\n"%(i, strv))
@@ -1581,7 +1581,7 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append(fe)
         scaninfo.append(tm)
         scaninfo.append(step)
-        scaninfo.append('\n#otor Information\n')
+        scaninfo.append('\n#Motor Information\n')
         m = self.get_pos_all()
         for name in self.motornames:
             scaninfo.append(name)
