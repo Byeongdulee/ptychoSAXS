@@ -7,10 +7,12 @@ ptychoSAXS.egg-info/requires.txt
 ptychoSAXS.egg-info/top_level.txt
 ptychosaxs/__init__ copy.py
 ptychosaxs/__init__.py
+ptychosaxs/epicsmotor.py
 ptychosaxs/interferometers.py
 ptychosaxs/motions.py
 ptychosaxs/newport_piezo.py
 ptychosaxs/ptychosaxs.py
 ptychosaxs/ptychosaxs_obsolete.py
 ptychosaxs/smaract_gonio.py
+ptychosaxs/switchsetup.py
 ptychosaxs/tw_galil.py

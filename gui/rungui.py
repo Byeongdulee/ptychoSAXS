@@ -166,6 +166,23 @@ class mover(QRunnable):
         self.pts.mvr(self.axis, self.pos)
         self.signal.finished.emit(True)
 
+
+# Step 1: Create a move class
+class runstruck(QRunnable):
+
+    def __init__(self, pulseN, tm):
+        super(mover, self).__init__()
+        self.pulseN = pulseN
+        self.tm = tm
+        self.signal = workerSignals()
+    
+    @pyqtSlot()
+    def run(self):
+        struck.mcs_init()
+        struck.mcs_ready(self.pulseN, self.tm)
+        struck.arm_mcs()
+        self.signal.finished.emit(True)
+
 ## shutter stuff.. Could be eventually separated out.
 def open_shutter(self):
     epics.caput('12ida2:rShtrC:Open', 1)
@@ -1352,6 +1369,10 @@ class ptyco_main_control(QMainWindow):
         self.threadpool.start(w)
         
     def fly2d(self, xmotor=0, ymotor=1, scanname = ""):
+        if self.isStruckCountNeeded:
+            struck.mcs_init()
+            self.isMCS_ready = False
+
         self.write_motor_scan_range()
         self.isStopScanIssued = False
         # for det in self.detector: #JD
@@ -1447,6 +1468,10 @@ class ptyco_main_control(QMainWindow):
         self.ui.statusbar.showMessage(message)
 
     def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname=""):
+        if self.isStruckCountNeeded:
+            struck.mcs_init()
+            self.isMCS_ready = False
+            
         self.write_motor_scan_range()
         self.isStopScanIssued = False
         if self.ui.actionckTime_reset_before_scan.isChecked():
@@ -1530,6 +1555,10 @@ class ptyco_main_control(QMainWindow):
 
     def fly(self, motornumber=-1):
         self.update_scanname()
+        if self.isStruckCountNeeded:
+            struck.mcs_init()
+            self.isMCS_ready = False
+
         self.write_motor_scan_range()
         self.isStopScanIssued = False
         if motornumber<0:
@@ -2140,6 +2169,7 @@ class ptyco_main_control(QMainWindow):
                 direction = int(step)/abs(step)
 #                print("Will set the traj up")
                 self.pts.hexapod.set_traj(axis, tm, fe-st, st, direction, abs(step), 50)
+
                 #expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
                 period = self.pts.hexapod.scantime/self.pts.hexapod.pulse_number
                 #expt = period-self.det_readout_time  JD
@@ -2158,12 +2188,26 @@ class ptyco_main_control(QMainWindow):
 #                    print("******* Cannot run.")
                     raise DET_OVER_READOUT_SPEED_Error(self.recent_error_msg)
                 # set the delay generator
+
+
+                if not isTestRun:
+                    if self.isStruckCountNeeded:
+                        #struck.mcs_init()
+                        if not self.isMCS_ready:
+                            struck.mcs_ready(self.pts.hexapod.pulse_number, tm+10)
+                            self.isMCS_ready = True
+                            print(self.pts.hexapod.pulse_number, " MCS Ncouts updated.")
+                        struck.arm_mcs()
+                    else:
+                        pass
                 if expt != dg645_12ID._exposuretime:
                     try:
 #                        print(f"Acutal exposure time: {expt}s.")
                         dg645_12ID.set_pilatus_fly(expt)
                     except:
                         raise DG645_Error
+                    
+
                 #print("Time to finish line 2165: %0.3f" % (time.time()-t0)) #take up to 0.1 s down to this far.
                 movestep = abs(fe-st)/self.pts.hexapod.pulse_number*1000*self.parameters._ratio_exp_period
                 print(f"Actual exposure time: {expt:0.3e} s. In distance: {movestep:.3e} um.")
@@ -2199,13 +2243,6 @@ class ptyco_main_control(QMainWindow):
                 #print(f"pos is {pos} before traj run start.")
                 #print("Time to finish line 2196: %0.3f" % (time.time()-t0)) # take 0.1 second
                 if not isTestRun:
-                    if self.isStruckCountNeeded:
-                        struck.mcs_init()
-                        struck.mcs_ready(self.pts.hexapod.pulse_number, tm+10)
-                        print(self.pts.hexapod.pulse_number, " MCS Ncouts updated.")
-                        struck.arm_mcs()
-                    else:
-                        pass
 #                        epics.caput('12idc:scaler1.CNT', 1)
                     istraj_running = False
                     timeout = 5
