@@ -2103,7 +2103,7 @@ class ptyco_main_control(QMainWindow):
 #            print("Clear plot")
             self.clearplot()
         
-        print("Time to finish line 2106: %0.3f" % (time.time()-t0))
+        #print("Time to finish line 2106: %0.3f" % (time.time()-t0)) very fast down to this far.
         # logging datatype
         scaninfo = []
         scaninfo.append('#H')
@@ -2125,7 +2125,7 @@ class ptyco_main_control(QMainWindow):
         tm = self.fly1d_tm
 
         pos = self.pts.get_pos(axis)
-        print("Time to finish line 2127: %0.3f" % (time.time()-t0))
+        #print("Time to finish line 2127: %0.3f" % (time.time()-t0)) very fast down to this far
         if axis in self.pts.hexapod.axes:
             if self.ui.cb_reversescandir.isChecked():
                 if abs(st-pos)>abs(fe-pos):
@@ -2164,7 +2164,7 @@ class ptyco_main_control(QMainWindow):
                         dg645_12ID.set_pilatus_fly(expt)
                     except:
                         raise DG645_Error
-                print("Time to finish line 2165: %0.3f" % (time.time()-t0))
+                #print("Time to finish line 2165: %0.3f" % (time.time()-t0)) #take up to 0.1 s down to this far.
                 movestep = abs(fe-st)/self.pts.hexapod.pulse_number*1000*self.parameters._ratio_exp_period
                 print(f"Actual exposure time: {expt:0.3e} s. In distance: {movestep:.3e} um.")
 #                print("During the exposure, the motor moves %0.3f um." % movestep)
@@ -2179,14 +2179,15 @@ class ptyco_main_control(QMainWindow):
                 if isTestRun:
                     return
                 
-                self.pts.hexapod.goto_start_pos(axis)
-
+                #print("Time to finish line 2182: %0.3f" % (time.time()-t0))
+                self.pts.hexapod.goto_start_pos(axis) # took 0.4 second
+                #print("Time to finish line 2184: %0.3f" % (time.time()-t0))
                 for det in self.detector:
                     if det is not None:
                         try:
                             det.fly_ready(expt, self.pts.hexapod.pulse_number, period=period, 
                                           isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
-#                            print(self.use_hdf_plugin, "dpluging.")
+                #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
                         except TimeoutError:
                             self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
                             print(self.recent_error_msg)
@@ -2196,7 +2197,7 @@ class ptyco_main_control(QMainWindow):
 #                print("Ready for traj")
                 pos = self.pts.get_pos(axis)
                 #print(f"pos is {pos} before traj run start.")
-                print("Time to finish line 2196: %0.3f" % (time.time()-t0))
+                #print("Time to finish line 2196: %0.3f" % (time.time()-t0)) # take 0.1 second
                 if not isTestRun:
                     if self.isStruckCountNeeded:
                         struck.mcs_init()
@@ -2210,7 +2211,7 @@ class ptyco_main_control(QMainWindow):
                     timeout = 5
                     i = 0
 #                    print("Hexapod is at the initial position.")
-                    print("Time to prepare scan start fly0: %0.3f" % (time.time()-t0))
+                #    print("Time to prepare scan start fly0: %0.3f" % (time.time()-t0))
                     while not istraj_running:
                         try:
                             self.pts.hexapod.run_traj(axis)
@@ -2294,7 +2295,7 @@ class ptyco_main_control(QMainWindow):
         for det in self.detector:
             if det is not None:
                 det.ForceStop(2)
-        print("Time to finish fly0: %0.3f" % (time.time()-t0))
+        #print("Time to finish fly0: %0.3f" % (time.time()-t0))
 
     def is_traj_running(self):
         ret = False
