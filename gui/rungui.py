@@ -407,6 +407,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionSet_waittime_between_scans.triggered.connect(self.set_waittime_between_scans)
         self.ui.actionMonitor_Beamline_Status.triggered.connect(self.set_monitor_beamline_status)
         self.ui.actionUse_hdf_plugin.triggered.connect(self.set_hdf_plugin_use)
+        self.ui.actionPtychography_mode.triggered.connect(self.select_detector_mode)
         self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)+1))
         self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_exp_period_ratio)
 #        self.ui.ed_scanname.returnPressed.connect(self.update_scannumber)
@@ -541,6 +542,14 @@ class ptyco_main_control(QMainWindow):
             self.ui.actionUse_hdf_plugin.setChecked(False)
             self.use_hdf_plugin = False
 
+    def select_detector_mode(self):
+        if self.ui.actionPtychography_mode.isChecked():
+            self.ui.actionPtychography_mode.setChecked(True)
+            self.is_ptychomode = True
+        else:
+            self.ui.actionPtychography_mode.setChecked(False)
+            self.is_ptychomode = False
+
     def set_monitor_beamline_status(self):
         if self.ui.actionMonitor_Beamline_Status.isChecked():
             self.ui.actionMonitor_Beamline_Status.setChecked(True)
@@ -633,19 +642,30 @@ class ptyco_main_control(QMainWindow):
                 workingfolder = "%s/%s" %(workingfolder, wf_temp[i])
         print(workingfolder)
         if update_detector:
-            for det in self.detector:
+            for i, det in enumerate(self.detector):
+                if i==0:
+                    tp = 'S'
+                if i==1:
+                    tp = 'W'
+                if i>1:
+                    tp = ""
                 if det is not None:
 #                    print(det.basepath, " This is the basepath")
 #                    print(workingfolder, " This is the workingfolder")
-                    ptycho_path = os.path.join(det.basepath, workingfolder, 'ptycho', self.scannumberstring).replace('\\', '/')
-#                    print(ptycho_path, " This is ptycho_path")
-                    det.FilePath = ptycho_path
-                    tif_path = os.path.join(det.basepath, workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
+                    if self.is_ptychomode:
+                        basepath = det.basepath
+                        ptycho_path = os.path.join(basepath, workingfolder, 'ptycho', self.scannumberstring).replace('\\', '/')
+                        det.FilePath = ptycho_path
+                        tif_path = os.path.join(basepath, workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
+                    else: # SAXS/WAXS mode
+                        basepath = "mnt/Sector_12/12id-c"
+                        ptycho_path = os.path.join(basepath, workingfolder, 'SAXS').replace('\\', '/')
+                        det.FilePath = ptycho_path
+                        tif_path = os.path.join("ramdisk").replace('\\', '/')
                     det.FilePath = tif_path
-#                    print(tif_path, " This is tif_path")
-                    det.filePut('FilePath', ptycho_path)
-                    det.filePut('FileName', txt)
                     det.FileName = txt
+                    det.filePut('FilePath', ptycho_path)
+                    det.filePut('FileName', [tp, txt])
 
     def choose_softglue_channels(self):
         strv = ''
@@ -2187,9 +2207,9 @@ class ptyco_main_control(QMainWindow):
                     print(self.recent_error_msg)
 #                    print("******* Cannot run.")
                     raise DET_OVER_READOUT_SPEED_Error(self.recent_error_msg)
+
+
                 # set the delay generator
-
-
                 if not isTestRun:
                     if self.isStruckCountNeeded:
                         #struck.mcs_init()
@@ -2208,7 +2228,7 @@ class ptyco_main_control(QMainWindow):
                         raise DG645_Error
                     
 
-                #print("Time to finish line 2165: %0.3f" % (time.time()-t0)) #take up to 0.1 s down to this far.
+                #SoftGlue ready for recording interferometer values
                 movestep = abs(fe-st)/self.pts.hexapod.pulse_number*1000*self.parameters._ratio_exp_period
                 print(f"Actual exposure time: {expt:0.3e} s. In distance: {movestep:.3e} um.")
 #                print("During the exposure, the motor moves %0.3f um." % movestep)
@@ -2223,6 +2243,7 @@ class ptyco_main_control(QMainWindow):
                 if isTestRun:
                     return
                 
+                # Scan start ............................
                 #print("Time to finish line 2182: %0.3f" % (time.time()-t0))
                 self.pts.hexapod.goto_start_pos(axis) # took 0.4 second
                 #print("Time to finish line 2184: %0.3f" % (time.time()-t0))
@@ -2295,14 +2316,41 @@ class ptyco_main_control(QMainWindow):
                 #print("Should be in run.")
 
         if motornumber >=6:
-            # st = float(self.ui.ed_lup_7_L.text())
-            # fe = float(self.ui.ed_lup_7_R.text())
-            # tm = float(self.ui.ed_lup_7_t.text())
+            Nstep = round(tm/step) # step is the period.
+            expt = step*self.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
+
+            # MCS ready
+            if not isTestRun:
+                if self.isStruckCountNeeded:
+                    #struck.mcs_init()
+                    if not self.isMCS_ready:
+                        struck.mcs_ready(Nstep, tm+10)
+                        self.isMCS_ready = True
+                        print(Nstep, " MCS Ncouts updated.")
+                    struck.arm_mcs()
+                else:
+                    pass
+
+            # set the delay generator
+            if expt != dg645_12ID._exposuretime:
+                try:
+                    dg645_12ID.set_pilatus2(expt, Nstep, step)
+                except:
+                    raise DG645_Error
+            
+            # softglue ready
+            if s12softglue.isConnected:
+                N_counts = s12softglue.number_acquisition(expt, Nstep)
+                if N_counts>100000:
+                    self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                    raise SOFTGLUE_Setup_Error(self.recent_error_msg)
+
             if self.ui.cb_reversescandir.isChecked():
                 if abs(st-pos)>abs(fe-pos):
                     t = fe
                     fe = st
                     st = t 
+
             if motornumber ==6:
                 # enable fit menu
                 self.ui.actionFit_QDS_phi.setEnabled(True)
@@ -2314,8 +2362,11 @@ class ptyco_main_control(QMainWindow):
                 time.sleep(0.2)
                 self.pts.set_speed(axis, abs(fe-st)/tm,abs(fe-st)/tm*10)
 #                print(f"Speed of phi is set to {self.pts.phi.vel}.")
-                self.pts.mv('phi', fe, wait=True)
-                print("Should be in run.")
+                self.pts.mv('phi', fe, wait=False)
+                dg645_12ID.trigger()
+                print("Phi scan started..")
+                while self.pts.ismoving(axis):
+                    time.sleep(0.2)
             else:
                 self.pts.mv(axis, st, wait=True)
                 #ax = self.pts.gonio.channel_names.index(axis)
