@@ -2246,6 +2246,7 @@
     <addaction name="separator"/>
     <addaction name="actionReset_to_Fly_mode"/>
     <addaction name="actionUse_hdf_plugin"/>
+    <addaction name="actionPtychography_mode"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuHexapod"/>
@@ -2552,6 +2553,17 @@
    </property>
    <property name="text">
     <string>Record traj during scan</string>
+   </property>
+  </action>
+  <action name="actionPtychography_mode">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Ptychography mode</string>
    </property>
   </action>
  </widget>
