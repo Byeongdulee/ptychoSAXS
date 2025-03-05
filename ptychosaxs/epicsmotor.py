@@ -13,8 +13,6 @@ class epicsmotor(object):
         self.newport_piezo = []
         for pv in pvlist:
             self.newport_piezo.append(Motor(pv))
-            self.newport_piezo.append(Motor(pv))
-            self.newport_piezo.append(Motor(pv))
         self.motornames = []
         self.motorunits = []
         if len(motornames)==0:

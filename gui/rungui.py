@@ -40,6 +40,8 @@ import datetime
 
 import pathlib
 import numpy as np
+#sys.path.append('../..')
+#sys.path.append('../tools')
 
 #from tools.panda import get_pandadata
 from tools.softglue import sgz_pty, SOFTGLUE_Setup_Error
@@ -73,7 +75,7 @@ QDS_UNIT_MM = 2
 QDS_UNIT_DEFAULT = QDS_UNIT_UM  # default QDS output is um
 DEFAULTS = {'xmotor':0, 'ymotor':2, 'phimotor':6}  #vertical stage is Z in the scan_gui, change 'ymotor' from 1 to 2, JD
 inifilename = "pty-co-saxs.ini"
-STRUCK_CHANNELS = [0, 1, 4]
+STRUCK_CHANNELS = [0, 3, 4]
 def rstrip_from_char(string, char):
     """Removes characters from the right of the string starting from the first occurrence of 'char'."""
 #    print(f'{string=}')
@@ -313,6 +315,7 @@ class ptyco_main_control(QMainWindow):
         self.motorunits = []
 #        print(motornames, " line 241")
         for i, name in enumerate(motornames):
+            
             try:
 #                print(name)
 #                print(self.pts.isconnected(name))
@@ -1471,7 +1474,7 @@ class ptyco_main_control(QMainWindow):
         if self.isStruckCountNeeded:
             struck.mcs_init()
             self.isMCS_ready = False
-            
+
         self.write_motor_scan_range()
         self.isStopScanIssued = False
         if self.ui.actionckTime_reset_before_scan.isChecked():
@@ -1892,7 +1895,7 @@ class ptyco_main_control(QMainWindow):
                     #while struck.strk.scaler.CNT:
                     #    time.sleep(0.01)
                 cnts = struck.read_scaler_all()
-                self.rpos.append([cnts[2], cnts[3], cnts[4]])
+                self.rpos.append([cnts[0], cnts[1], cnts[4]])
                 # data = [value, cnts[2],cnts[3],cnts[4]]
                 # self.log_data(data)
             else:
@@ -2816,12 +2819,25 @@ class ptyco_main_control(QMainWindow):
 
 try:
     import ptychosaxs.tw_galil as gl
+    MotorControlAvailable = True
+except:
+    MotorControlAvailable = False
+    print("Galil is not working")
+
+try:
     import ptychosaxs.smaract_gonio as smaract
+    MotorControlAvailable = True
+except:
+    MotorControlAvailable = False
+    print("SmarAct is not working")
+
+#MotorControlAvailable = False
+try:
     import ptychosaxs.newport_piezo as np_piezo
     MotorControlAvailable = True
 except:
     MotorControlAvailable = False
-    print("Motor Control is NOT available.")
+    print("Piezo is NOT available.")
 
 class motor_control(QMainWindow):
 #    resized = QtCore.pyqtSignal()
@@ -2867,6 +2883,7 @@ class motor_control(QMainWindow):
             axisname = controller.motornames[self.motorindices[i]]
             self.ui.findChild(QLabel, "lb%i"%n).setText(name)
             self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(str(controller.get_pos(axisname)))
+#            print(axisname, " This is in line 3042")
             self.ui.findChild(QPushButton, "pb_tweak%iL"%n).clicked.connect(lambda: self.mvr(-1, -1))
             self.ui.findChild(QPushButton, "pb_tweak%iR"%n).clicked.connect(lambda: self.mvr(-1, 1))
             # self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stepscan(-1))
@@ -3023,6 +3040,7 @@ class motor_control(QMainWindow):
             axis = controller.motornames[self.motorindices[motornumber]]
             if val is None:
                 with self.lock:
+                    print(axis, " This is in line 3042")
                     val = controller.get_pos(axis)
             i = motornumber
             self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText("%0.6f"%val)

@@ -311,9 +311,13 @@ class motors(object):
     
     def isconnected(self, axis = 'X'):
         #print(axis, " This is in motions.py")
+#        print(axis)
         if "newport" in axis:
         #    print(axis, " 22222 This is in motions.py")
+            print("Newport is connected")
             return True
+#        else:
+#            print("Newport not connected")
         if axis in self.gonio.channel_names:
             ax = self.gonio.channel_names.index(axis)
             return self.gonio.connected[ax]
