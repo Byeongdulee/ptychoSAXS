@@ -259,6 +259,7 @@ class ptyco_main_control(QMainWindow):
 #        self.hexapod_flymode = HEXAPOD_FLYMODE_STANDARD
 
         self.is_selfsaved = False
+        self.is_ptychomode = True
         self.parameters = py12inifunc.ini(inifilename)
         # When you need new field to inifile, edit the ini file first.
         try:
@@ -667,8 +668,10 @@ class ptyco_main_control(QMainWindow):
                         tif_path = os.path.join("ramdisk").replace('\\', '/')
                     det.FilePath = tif_path
                     det.FileName = txt
+                    print(tp+txt)
+                    print(ptycho_path)
                     det.filePut('FilePath', ptycho_path)
-                    det.filePut('FileName', [tp, txt])
+                    det.filePut('FileName', tp+txt)
 
     def choose_softglue_channels(self):
         strv = ''
@@ -1149,7 +1152,10 @@ class ptyco_main_control(QMainWindow):
         filename = self.softglue_filename
 
         p = pathlib.Path(foldername)
-        p.mkdir(parents=True, exist_ok=True)
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+        except:
+            print("Error of creating a folder: %s. ************************"%foldername)
         if len(t)<N_cnt:
             print("*********************************")
             print(f"Only {len(t)}, less than the ideal {N_cnt} data will be saved in {foldername}/{filename}.")
@@ -1820,6 +1826,7 @@ class ptyco_main_control(QMainWindow):
         self.rpos = []
         self.mpos = []
         pos = self.pts.get_pos(axis)
+        pos0 = pos
         self.isfly = False
         n = motornumber+1
 
@@ -1865,6 +1872,7 @@ class ptyco_main_control(QMainWindow):
 
         # prepare to collect Detector images
         isDET_selected = False
+
         if len(self.detector)>0:
             for det in self.detector:
                 if det is not None:
@@ -1901,21 +1909,22 @@ class ptyco_main_control(QMainWindow):
                 break
             self.pts.mv(axis, value)
 
+            if self.isStruckCountNeeded:
+                struck.mcs_counter_count(expt)
+                dg645_12ID.trigger()
             # trigger the detector.
             if isDET_selected:
-                struck.arm_mcs_counter()
-                struck.mcs_counter_waitstarted()
+                #struck.arm_mcs_counter()
+                #struck.mcs_counter_waitstarted()
                 dg645_12ID.trigger()
-                while struck.strk.scaler.CNT:
-                    time.sleep(0.01)
+                #while struck.strk.scaler.CNT:
+                #    time.sleep(0.01)
 
-            if self.isStruckCountNeeded:
-                if isDET_selected:
-                    struck.mcs_counter_count(expt)
                     #while struck.strk.scaler.CNT:
                     #    time.sleep(0.01)
+            if self.isStruckCountNeeded:
                 cnts = struck.read_scaler_all()
-                self.rpos.append([cnts[0], cnts[1], cnts[4]])
+                self.rpos.append([cnts[2], cnts[3], cnts[4]])
                 # data = [value, cnts[2],cnts[3],cnts[4]]
                 # self.log_data(data)
             else:
@@ -1924,9 +1933,10 @@ class ptyco_main_control(QMainWindow):
                 # data = [value, [r[0], r[1], r[2]]]
                 # self.log_data(data)
             #pos = self.get_motorpos(self.signalmotor)
-            time.sleep(0.1)
+            #time.sleep(0.1)
             self.mpos.append(value)
             #self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
+        self.pts.mv(axis, pos0)
 
     def fly3d0(self, xmotor=0, ymotor=1, phimotor=6, scanname = "", update_progress=None, update_status=None):
         # xmotor is for flying
@@ -2212,7 +2222,6 @@ class ptyco_main_control(QMainWindow):
                     raise DET_OVER_READOUT_SPEED_Error(self.recent_error_msg)
 
 
-                # set the delay generator
                 if not isTestRun:
                     if self.isStruckCountNeeded:
                         #struck.mcs_init()
@@ -2223,6 +2232,7 @@ class ptyco_main_control(QMainWindow):
                         struck.arm_mcs()
                     else:
                         pass
+                # set the delay generator
                 if expt != dg645_12ID._exposuretime:
                     try:
 #                        print(f"Acutal exposure time: {expt}s.")
