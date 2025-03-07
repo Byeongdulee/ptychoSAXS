@@ -390,6 +390,7 @@ class ptyco_main_control(QMainWindow):
         self.isStopScanIssued = False
         self.is_hexrecord_required = False
         self.ui.action2D_scan.triggered.connect(lambda: self.fly2d(xm, ym))
+        self.ui.action2D_XY_snake_scan.triggered.connect(lambda: self.fly2d(xm, ym, snake=True))
         self.ui.action3D_scan.triggered.connect(lambda: self.fly3d(xm, ym, phim))
         self.ui.actionSelect_time_intervals.triggered.connect(self.select_timeintervals)
         self.ui.actionTrigout.triggered.connect(lambda: self.set_softglue_in(1))
@@ -412,6 +413,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionMonitor_Beamline_Status.triggered.connect(self.set_monitor_beamline_status)
         self.ui.actionUse_hdf_plugin.triggered.connect(self.set_hdf_plugin_use)
         self.ui.actionPtychography_mode.triggered.connect(self.select_detector_mode)
+        self.ui.actionCapture_multi_frames.triggered.connect(self.select_hdf_multiframecapture)
         self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)+1))
         self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_exp_period_ratio)
 #        self.ui.ed_scanname.returnPressed.connect(self.update_scannumber)
@@ -554,6 +556,14 @@ class ptyco_main_control(QMainWindow):
             self.ui.actionPtychography_mode.setChecked(False)
             self.is_ptychomode = False
 
+    def select_hdf_multiframecapture(self):
+        if self.ui.actionCapture_multi_frames.isChecked():
+            self.ui.actionCapture_multi_frames.setChecked(True)
+            self.hdf_plugin_savemode = True
+        else:
+            self.ui.actionPtychography_mode.setChecked(False)
+            self.hdf_plugin_savemode = False
+
     def set_monitor_beamline_status(self):
         if self.ui.actionMonitor_Beamline_Status.isChecked():
             self.ui.actionMonitor_Beamline_Status.setChecked(True)
@@ -644,7 +654,7 @@ class ptyco_main_control(QMainWindow):
                 workingfolder = wf_temp[i]
             else:
                 workingfolder = "%s/%s" %(workingfolder, wf_temp[i])
-        print(workingfolder)
+#        print(workingfolder)
         if update_detector:
             for i, det in enumerate(self.detector):
                 if i==0:
@@ -668,8 +678,8 @@ class ptyco_main_control(QMainWindow):
                         tif_path = os.path.join("ramdisk").replace('\\', '/')
                     det.FilePath = tif_path
                     det.FileName = txt
-                    print(tp+txt)
-                    print(ptycho_path)
+#                    print(tp+txt)
+#                    print(ptycho_path)
                     det.filePut('FilePath', ptycho_path)
                     det.filePut('FileName', tp+txt)
 
@@ -1397,7 +1407,7 @@ class ptyco_main_control(QMainWindow):
         w.signal.finished.connect(self.scandone)
         self.threadpool.start(w)
         
-    def fly2d(self, xmotor=0, ymotor=1, scanname = ""):
+    def fly2d(self, xmotor=0, ymotor=1, scanname = "", snake=False):
         if self.isStruckCountNeeded:
             struck.mcs_init()
             self.isMCS_ready = False
