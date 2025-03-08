@@ -561,7 +561,7 @@ class ptyco_main_control(QMainWindow):
             self.ui.actionCapture_multi_frames.setChecked(True)
             self.hdf_plugin_savemode = True
         else:
-            self.ui.actionPtychography_mode.setChecked(False)
+            self.ui.actionCapture_multi_frames.setChecked(False)
             self.hdf_plugin_savemode = False
 
     def set_monitor_beamline_status(self):
@@ -672,13 +672,13 @@ class ptyco_main_control(QMainWindow):
                         det.FilePath = ptycho_path
                         tif_path = os.path.join(basepath, workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
                     else: # SAXS/WAXS mode
-                        basepath = "mnt/Sector_12/12id-c"
-                        ptycho_path = os.path.join(basepath, workingfolder, 'SAXS').replace('\\', '/')
+                        basepath = "/mnt/Sector_12/12id-c"
+                        ptycho_path = os.path.join(basepath, workingfolder, tp+'AXS').replace('\\', '/')
                         det.FilePath = ptycho_path
-                        tif_path = os.path.join("ramdisk").replace('\\', '/')
+                        tif_path = os.path.join("/ramdisk").replace('\\', '/')
                     det.FilePath = tif_path
                     det.FileName = txt
-#                    print(tp+txt)
+                    print(tp+txt)
 #                    print(ptycho_path)
                     det.filePut('FilePath', ptycho_path)
                     det.filePut('FileName', tp+txt)
@@ -767,7 +767,7 @@ class ptyco_main_control(QMainWindow):
         self.parameters.writeini()
 
     def set_exp_period_ratio(self):
-        val, ok = QInputDialog().getDouble(self, "Exposuretime/Period for Flyscan", "Fraction", self.parameters._ratio_exp_period)
+        val, ok = QInputDialog().getDouble(self, "Exposuretime/Period for Flyscan", "Fraction", self.parameters._ratio_exp_period, decimals=2)
         self.parameters._ratio_exp_period = val
         self.parameters.writeini()
 
@@ -1236,6 +1236,8 @@ class ptyco_main_control(QMainWindow):
             # when 1D scan is done.
             self.shutterC.close()
             for key in self.motor_p0:
+                if self.motornames[key] == 'phi':
+                    self.setphivel_default()
                 self.mv(key, self.motor_p0[key])
 
         print("fly done.......")
@@ -2341,7 +2343,22 @@ class ptyco_main_control(QMainWindow):
         if motornumber >=6:
             Nstep = round(tm/step) # step is the period.
             expt = step*self.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
-
+            if step - expt < 0.05:
+                raise DET_MIN_READOUT_Error("Period - Exposure Time should be longer than 50 microseconds.")
+            
+            # Need to make detectors ready
+            for det in self.detector:
+                if det is not None:
+                    try:
+                        det.fly_ready(expt, Nstep, period=step, 
+                                        isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
+            #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
+                    except TimeoutError:
+                        self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
+                        print(self.recent_error_msg)
+                        self.ui.statusbar.showMessage(self.recent_error_msg)
+                        #showerror("Detector timeout.")
+                        return            
             # MCS ready
             if not isTestRun:
                 if self.isStruckCountNeeded:
@@ -2362,11 +2379,12 @@ class ptyco_main_control(QMainWindow):
                     raise DG645_Error
             
             # softglue ready
-            if s12softglue.isConnected:
-                N_counts = s12softglue.number_acquisition(expt, Nstep)
-                if N_counts>100000:
-                    self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
-                    raise SOFTGLUE_Setup_Error(self.recent_error_msg)
+            if self.is_ptychomode:
+                if s12softglue.isConnected:
+                    N_counts = s12softglue.number_acquisition(expt, Nstep)
+                    if N_counts>100000:
+                        self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                        raise SOFTGLUE_Setup_Error(self.recent_error_msg)
 
             if self.ui.cb_reversescandir.isChecked():
                 if abs(st-pos)>abs(fe-pos):
