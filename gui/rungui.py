@@ -418,7 +418,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_exp_period_ratio)
 #        self.ui.ed_scanname.returnPressed.connect(self.update_scannumber)
         self.use_hdf_plugin = True
-        self.hdf_plugin_savemode = 0 # single frame mode, 1 for capture, 2 for streaming
+        self.hdf_plugin_savemode = True # single frame mode, 1 for capture, 2 for streaming
 
         if os.name != 'nt':
             self.ui.menuQDS.setDisabled(True)
@@ -952,8 +952,8 @@ class ptyco_main_control(QMainWindow):
             for det in self.detector:
                 if det is not None:
                     if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
-                        while det.fileGet('FileWrite_RBV'):
-                            time.sleep(0.1)
+                        while det.fileGet('WriteFile_RBV'):
+                            time.sleep(0.01)
                         fnum = det.fileGet('FileNumber_RBV')
                         if str(fnum-1) not in fn:
                             fn = det.fileGet('FullFileName_RBV', as_string=True)
@@ -1021,14 +1021,15 @@ class ptyco_main_control(QMainWindow):
         filename = ""
         for det in self.detector:
             if det is not None:
-                if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
-                    while det.fileGet('FileWrite_RBV'):
-                        time.sleep(0.1)
+                if self.use_hdf_plugin and self.hdf_plugin_savemode:# capture mode
+                    while det.fileGet('WriteFile_RBV'):
+                        time.sleep(0.01)
                     fnum = det.fileGet('FileNumber_RBV')
+                    fn = det.fileGet('FullFileName_RBV', as_string=True)
                     if str(fnum-1) not in fn:
                         fn = det.fileGet('FullFileName_RBV', as_string=True)
                     filename = os.path.basename(fn)
-                    filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)                
+                    filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)      
                 else:
                     fnum = det.FileNumber_RBV
                     fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
@@ -1115,7 +1116,7 @@ class ptyco_main_control(QMainWindow):
         if hasattr(self.pts.hexapod, "pulse_number"):
             N_cnt = self.pts.hexapod.pulse_number
         t = []
-#        ct0 = time.time()
+        ct0 = time.time()
         count = 0
         self.softglue_data = []
         #s12softglue.PROC=1
@@ -1129,9 +1130,9 @@ class ptyco_main_control(QMainWindow):
             time.sleep(0.25)
             t, timearray = s12softglue.get_latest_scantime()
             print(f'Flushed and {t=}')
-#        print(f"Time required to have softglue reading ready is {time.time()-t0}")
+        print(f"Time required to have softglue reading ready is {time.time()-t0}")
         arrs = s12softglue.get_arrays(self.parameters.softglue_channels)
-#        print(f"Time required to read softglue is {time.time()-t0}")
+        print(f"Time required to read softglue is {time.time()-t0}")
 
         self.softglue_data = (timearray, arrs)
         self.softglue_N_cnt = N_cnt
@@ -1281,12 +1282,11 @@ class ptyco_main_control(QMainWindow):
 #        self.save_softglue()
 #        success=True
 
-
         try:
-            self.save_softglue()
-            success = True
+           self.save_softglue()
+           success = True
         except:
-            pass
+           pass
             # self.recent_error_msg = "The softglue flush failed while save_softglue, it will be flushed again....."
             # print(self.recent_error_msg)
             # s12softglue.flush()
@@ -1301,7 +1301,7 @@ class ptyco_main_control(QMainWindow):
             if det is not None:
                 fn = ""
                 if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
-                    while det.fileGet('FileWrite_RBV'): # still saving?
+                    while det.fileGet('WriteFile_RBV'): # still saving?
                         time.sleep(0.01)
                     fnum = det.fileGet('FileNumber_RBV')
                     if str(fnum-1) not in fn:
@@ -1326,7 +1326,7 @@ class ptyco_main_control(QMainWindow):
             # for det in self.detector:
             #     if det is not None:
             #         if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
-            #             while det.fileGet('FileWrite_RBV'): # still saving?
+            #             while det.fileGet('WriteFile_RBV'): # still saving?
             #                 time.sleep(0.01)
             #                 print("Captures still being saved.")
             #             fnum = det.fileGet('FileNumber_RBV')
