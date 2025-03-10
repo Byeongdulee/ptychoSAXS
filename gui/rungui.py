@@ -1270,28 +1270,7 @@ class ptyco_main_control(QMainWindow):
             # hexapod read
             if self.is_hexrecord_required:
                 self.save_hexapod_record(self.parameters.logfilename)
-            scaninfo = []
-            scaninfo.append('#I detector_filename')
-            for det in self.detector:
-                if det is not None:
-                    fn = ""
-                    if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
-                        while det.fileGet('FileWrite_RBV'):
-                            time.sleep(0.1)
-                        fnum = det.fileGet('FileNumber_RBV')
-                        if str(fnum-1) not in fn:
-                            fn = det.fileGet('FullFileName_RBV', as_string=True)
-                    else:
-                        fnum = det.FileNumber_RBV
-                        fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
 
-                    filename = os.path.basename(fn)
-                    scaninfo.append(filename)
-                    # if no cpature, comment the two line out.
-#                    while det.fileGet('WriteFile_RBV'):
-#                        time.sleep(0.1)
-            if len(scaninfo)>1:
-                self.write_scaninfo_to_logfile(scaninfo)
             scaninfo = []
             scaninfo.append('#D')
             scaninfo.append(time.ctime())
@@ -1316,28 +1295,54 @@ class ptyco_main_control(QMainWindow):
             #     break
         print(f"Elapsed time to save softglue data since flydone = {time.time()-ct0}")
         # if read softglue failed...
+        scaninfo = []
+        scaninfo.append('#I detector_filename')
+        for det in self.detector:
+            if det is not None:
+                fn = ""
+                if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
+                    while det.fileGet('FileWrite_RBV'): # still saving?
+                        time.sleep(0.01)
+                    fnum = det.fileGet('FileNumber_RBV')
+                    if str(fnum-1) not in fn:
+                        fn = det.fileGet('FullFileName_RBV', as_string=True)
+                else:
+                    fnum = det.FileNumber_RBV
+                    fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+                print("===============================")
+                print(f"saved filename: {fn}")
+                print("===============================")
+                filename = os.path.basename(fn)
+                scaninfo.append(filename)
+        if len(scaninfo)>1:
+            self.write_scaninfo_to_logfile(scaninfo)
+
         if success == False:
             foldername = self.ui.ed_workingfolder.text()
             if len(foldername) == 0:
                 return
-            filename = ""
-            for det in self.detector:
-                if det is not None:
-                    if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
-                        while det.fileGet('FileWrite_RBV'):
-                            time.sleep(0.1)
-                        fnum = det.fileGet('FileNumber_RBV')
-                        if str(fnum-1) not in fn:
-                            fn = det.fileGet('FullFileName_RBV', as_string=True)
-                    else:
-                        fnum = det.FileNumber_RBV
-                        fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-                    filename = os.path.basename(fn)
-                    filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
+            filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
+            # filename = ""
+            # for det in self.detector:
+            #     if det is not None:
+            #         if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
+            #             while det.fileGet('FileWrite_RBV'): # still saving?
+            #                 time.sleep(0.01)
+            #                 print("Captures still being saved.")
+            #             fnum = det.fileGet('FileNumber_RBV')
+            #             if str(fnum-1) not in fn:
+            #                 fn = det.fileGet('FullFileName_RBV', as_string=True)
+            #         else:
+            #             fnum = det.FileNumber_RBV
+            #             fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+            #         filename = os.path.basename(fn)
+            #         filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
+            
             if len(filename) ==0:
                 self.recent_error_msg = "****** Error: detector ioc does not response."
                 print(self.recent_error_msg)
                 filename = "temp%i"%int(time.time())
+            
             filename = f"{filename}.dat"
             print(f"\nSoftglue epics erorr.....Data read from usb will be saved in {filename}\n")
             try:
