@@ -2210,6 +2210,9 @@ class ptyco_main_control(QMainWindow):
             scanname=f"{scanname}{axis}"
         Nline = len(pos)
 
+
+        ##### ############## need to work from this........
+
         print()
         scaninfo = []
         scaninfo.append('#I Y = ')
