@@ -1623,28 +1623,7 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append(n)    
         initial_motorpos = {}    
 
-        # n = motornumber+1
-        # p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-        # if len(p0)==0:
-        #     p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-        #     self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
-        # p0 = float(p0)
-        # st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())+p0
-        # fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())+p0
-        # tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
-        # try:
-        #     step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-        # except:
-        #     step = 0.1
-        #     self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setText("%0.3f"%step)
-        # if abs(tm) <= 0.033:
-        #     print(f"Note that Max speed of Pilatus2M is 30Hz.")
-        #     print("******* Cannot run.")
-        #     return
-
         try:
-            #p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-            #if len(p0)==0:
             p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
             self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
             p0 = float(p0)
@@ -2148,6 +2127,131 @@ class ptyco_main_control(QMainWindow):
                 update_status(msg)
 
         self.run_stop_issued()
+    
+    def fly_traj(self, xmotor=0, ymotor=-1):
+    # Just in case when the user update edit box (during 3d scan) 
+    # Will need to update the positions.
+        isSNAKE = False
+        if ymotor>-1: # 2D SNAKE scan
+            n = ymotor+1
+            Yaxis = self.motornames[ymotor]
+            p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+            p0 = float(p0)
+            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+            step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+            self.fly2d_p0 = p0
+            self.fly2d_st = st
+            self.fly2d_fe = fe
+            self.fly2d_step = step
+            isSNAKE = True
+
+        n = xmotor+1
+        Xaxis = self.motornames[xmotor]
+        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        p0 = float(p0)
+        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        self.fly1d_p0 = p0
+        self.fly1d_st = st
+        self.fly1d_fe = fe
+        self.fly1d_tm = tm
+        self.fly1d_step = step
+
+        if isSNAKE:
+            # get relative scan range and convert it to absolute...
+            Yst = self.fly2d_st + self.fly2d_p0
+            Yfe = self.fly2d_fe + self.fly2d_p0
+            Ystep = self.fly2d_step
+
+            # get relative scan range and convert it to absolute...
+            Xst = self.fly1d_st + self.fly1d_p0
+            Xfe = self.fly1d_fe + self.fly1d_p0
+            Xstep = self.fly1d_step  # step time
+            Xtm = self.fly1d_tm
+            self.pts.hexapod.set_traj_SNAKE(time_per_line = Xtm, 
+                                            start_X0 = Xst, 
+                                            X_distance=Xfe-Xst, 
+                                            start_Y0 = Yst, 
+                                            start_Yf = Yfe, 
+                                            Y_step = Ystep, 
+                                            pulse_step=Xstep)
+            #axes = [Xaxis, Yaxis]
+            #wavtableIDs = [13, 14]
+            #self.pts.hexapod.assign_axis2wavtable(axes, wavtableIDs)
+        else: # regular scan
+            self.pts.hexapod.set_traj(Xaxis, tm, fe-st, st, 1, abs(step), 50)
+
+    def fly2d0_SNAKE(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
+        self.update_scanname()
+        for det in self.detector: #JD
+            if det is not None:  #JD
+                det.filePut('FileNumber', 1)  #JD
+                det.FileNumber = 1
+
+        # xmotor is for flying
+        # ymotor is for stepping
+        axis = self.motornames[ymotor]
+#        print(f'{axis=}, which is {ymotor=}') #JD
+        self.signalmotor2 = axis
+        self.signalmotorunit2 = self.motorunits[ymotor]
+#        self.rpos2 = []
+#        self.mpos2 = []
+        pos = self.pts.get_pos(axis)
+        self.isfly2 = False
+
+
+#        print(pos)
+        if len(scanname):
+            scanname=axis
+        else:
+            scanname=f"{scanname}{axis}"
+        Nline = len(pos)
+
+        print()
+        scaninfo = []
+        scaninfo.append('#I Y = ')
+        scaninfo.append(value)
+        self.write_scaninfo_to_logfile(scaninfo) 
+
+        t0 = time.time()
+        self.pts.mv(axis, value)
+        ismoving = True
+        while ismoving:
+            ismoving = self.pts.ismoving(axis)
+#            print("All motors are ready for fly scan.")
+        # fly here
+        if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):
+            for det in self.detector: #JD
+                if det is not None:  #JD            
+                    det.filePut('FileNumber', i+1) 
+
+        self.fly0(xmotor)
+#            print("CCCC")
+        self.flydone(return_motor=False)
+        # try:
+        #epics.caput('12idc:scaler1.CNT', 0)
+        # except:
+        #     print("epics 2 error")
+        t1 = time.time()
+        while (time.time()-t1 < self.parameters._waittime_between_scans):
+            time.sleep(0.01)
+        timeelapsed = time.time()-t0
+        if update_progress:
+            if self.fly3d_p0: # 3d scan
+                c3d, all3d = self.progress_3d
+                update_progress(int((Nline*c3d+(i+1))/(Nline*all3d)*100))
+            else:
+                update_progress(int((i+1)/len(pos)*100))
+        msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
+        msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(Nline-i-1),2)}s\n"
+        msg = "%s%s"%(msg1, msg2)
+        if update_status:
+            update_status(msg)
+
+        self.run_stop_issued()
 
     def fly0(self, motornumber=-1, update_progress=None, update_status=None):
         t0 = time.time()
@@ -2218,7 +2322,12 @@ class ptyco_main_control(QMainWindow):
 #                print("Running the fly scan with controller")
                 direction = int(step)/abs(step)
 #                print("Will set the traj up")
-                self.pts.hexapod.set_traj(axis, tm, fe-st, st, direction, abs(step), 50)
+#                self.pts.hexapod.set_traj(axis, tm, fe-st, st, direction, abs(step), 50)
+                if direction==1:
+                    dirv = 0
+                else:
+                    dirv = 6
+                self.pts.hexapod.assign_axis2wavtable(axis, self.pts.hexapod.WaveGenID[axis]+dirv)
 
                 #expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
                 period = self.pts.hexapod.scantime/self.pts.hexapod.pulse_number
@@ -2479,6 +2588,11 @@ class ptyco_main_control(QMainWindow):
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
                 direction = int(step)/abs(step)
                 self.pts.hexapod.set_traj(axis, tm, fe-st, st, direction, abs(step), 50)
+                if direction==1:
+                    dirv = 0
+                else:
+                    dirv = 6
+                self.pts.hexapod.assign_axis2wavtable(axis, self.pts.hexapod.WaveGenID[axis]+dirv)                
             else:
                 print("Currently, the flyscan only works for X axis.")
         else:
