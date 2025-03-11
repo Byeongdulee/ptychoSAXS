@@ -389,9 +389,10 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionScanStop.triggered.connect(self.stopscan)
         self.isStopScanIssued = False
         self.is_hexrecord_required = False
-        self.ui.action2D_scan.triggered.connect(lambda: self.fly2d(xm, ym))
-        self.ui.action2D_XY_snake_scan.triggered.connect(lambda: self.fly2d(xm, ym, snake=True))
-        self.ui.action3D_scan.triggered.connect(lambda: self.fly3d(xm, ym, phim))
+        self.ui.actionflyX_and_stepY.triggered.connect(lambda: self.fly2d(xm, ym))
+        self.ui.actionsnake.triggered.connect(lambda: self.fly2d(xm, ym, snake=True))
+        self.ui.actionnormal_2D.triggered.connect(lambda: self.fly3d(xm, ym, phim))
+        self.ui.actionsnake_2D.triggered.connect(lambda: self.fly3d(xm, ym, phim, snake=True))
         self.ui.actionSelect_time_intervals.triggered.connect(self.select_timeintervals)
         self.ui.actionTrigout.triggered.connect(lambda: self.set_softglue_in(1))
         self.ui.actionDetout.triggered.connect(lambda: self.set_softglue_in(2))
@@ -1421,10 +1422,6 @@ class ptyco_main_control(QMainWindow):
 
         self.write_motor_scan_range()
         self.isStopScanIssued = False
-        # for det in self.detector: #JD
-        #     if det is not None:  #JD
-        #         det.filePut('FileNumber', 1)  #JD
-        #         det.FileNumber = 1
 
         if self.ui.actionckTime_reset_before_scan.isChecked():
             if s12softglue.isConnected:
@@ -1432,13 +1429,17 @@ class ptyco_main_control(QMainWindow):
 
         # reset the progress bar
         self.ui.progressBar.setValue(0)
+        if snake:
+            scan_name = 'fly2d_SNAKE'
+        else:
+            scan_name = 'fly2d'
         motor = [xmotor, ymotor]
-        print(f'\n\nfly2d:{xmotor=}; {ymotor=}') #JD
+        print(f'\n\n{scan_name}:{xmotor=}; {ymotor=}') #JD
                 # logging
         scaninfo = []
         scaninfo.append('\n#S')
         scaninfo.append(self.parameters.scan_number)
-        scaninfo.append('fly2d')
+        scaninfo.append(scan_name)
         initial_motorpos = {}
         for i, m in enumerate(motor):
             n = m+1
@@ -1496,11 +1497,110 @@ class ptyco_main_control(QMainWindow):
         scaninfo = []
         scaninfo.append('#D')
         scaninfo.append(time.ctime())
+        if snake:
+            self.fly_traj(xmotor, ymotor)
+            w = Worker(self.fly2d0_SNAKE, xmotor, ymotor, scanname=scanname, 
+                    update_progress=None, update_status=None)
+            w.signal.finished.connect(lambda: self.flydone(False))
+        else:
+            self.fly_traj(xmotor)
+            w = Worker(self.fly2d0, xmotor, ymotor, scanname=scanname, 
+                    update_progress=None, update_status=None)
+            w.signal.finished.connect(self.flydone2d)
+        w.signal.progress.connect(self.updateprogressbar)
+        w.signal.statusmessage.connect(self.update_status_bar)
+        w.kwargs['update_progress'] = w.signal.progress.emit
+        w.kwargs['update_status'] = w.signal.statusmessage.emit
+
         self.isscan = True
         self.shutterC.open()
-        w = Worker(self.fly2d0, xmotor, ymotor, scanname=scanname, 
+        self.threadpool.start(w)
+
+    def fly2d_SNAKE(self, xmotor=0, ymotor=1, scanname = "", snake=False):
+        if self.isStruckCountNeeded:
+            struck.mcs_init()
+            self.isMCS_ready = False
+
+        self.write_motor_scan_range()
+        self.isStopScanIssued = False
+
+        if self.ui.actionckTime_reset_before_scan.isChecked():
+            if s12softglue.isConnected:
+                s12softglue.ckTime_reset()
+
+        # reset the progress bar
+        self.ui.progressBar.setValue(0)
+        motor = [xmotor, ymotor]
+        print(f'\n\nfly2d_SNAKE:{xmotor=}; {ymotor=}') #JD
+                # logging
+        scaninfo = []
+        scaninfo.append('\n#S')
+        scaninfo.append(self.parameters.scan_number)
+        scaninfo.append('fly2d_SNAKE')
+        initial_motorpos = {}
+        for i, m in enumerate(motor):
+            n = m+1
+            try:
+                scaninfo.append(n)
+                #p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+                #if len(p0)==0:
+                p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+                self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+                p0 = float(p0)
+                initial_motorpos[m] = p0
+                st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+                fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+                tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+                step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+                scaninfo.append(p0)
+                scaninfo.append(st)
+                scaninfo.append(fe)
+                scaninfo.append(tm)      
+                scaninfo.append(step)      
+            except:
+                showerror("Check scan paramters.")
+                return 0
+            if i == 0:
+                self.fly1d_p0 = p0
+                self.fly1d_st = st
+                self.fly1d_fe = fe
+                self.fly1d_tm = tm
+                self.fly1d_step = step
+            if i == 1:
+                self.fly2d_p0 = p0
+                self.fly2d_st = st
+                self.fly2d_fe = fe
+                self.fly2d_tm = tm
+                self.fly2d_step = step
+        self.time_scanstart = time.time()
+        dg645_12ID.set_pilatus_fly(0.001)
+        self.fly3d_p0 = None
+        self.fly3d_st = None
+        self.fly3d_fe = None
+        self.fly3d_tm = None
+        self.fly3d_step = None
+        self.progress_3d = None
+        self.motor_p0 = initial_motorpos
+
+        self.fly_traj(xmotor, ymotor)
+
+        scaninfo.append('\n#Motor Information\n')
+        m = self.get_pos_all()
+        for name in self.motornames:
+            scaninfo.append(name)
+        scaninfo.append('\n')
+        for key in m:
+            scaninfo.append(m[key])
+
+        self.write_scaninfo_to_logfile(scaninfo)
+        scaninfo = []
+        scaninfo.append('#D')
+        scaninfo.append(time.ctime())
+        self.isscan = True
+        self.shutterC.open()
+        w = Worker(self.fly2d0_SNAKE, xmotor, ymotor, scanname=scanname, 
                    update_progress=None, update_status=None)
-        w.signal.finished.connect(self.flydone2d)
+        w.signal.finished.connect(lambda: self.flydone(False))
         w.signal.progress.connect(self.updateprogressbar)
         w.signal.statusmessage.connect(self.update_status_bar)
         w.kwargs['update_progress'] = w.signal.progress.emit
@@ -1513,7 +1613,7 @@ class ptyco_main_control(QMainWindow):
     def update_status_bar(self, message):
         self.ui.statusbar.showMessage(message)
 
-    def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname=""):
+    def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname="", snake=False):
         if self.isStruckCountNeeded:
             struck.mcs_init()
             self.isMCS_ready = False
@@ -1523,13 +1623,19 @@ class ptyco_main_control(QMainWindow):
         if self.ui.actionckTime_reset_before_scan.isChecked():
             if s12softglue.isConnected:
                 s12softglue.ckTime_reset()
+        if snake:
+            scan_name = 'fly3d_SNAKE'
+        else:
+            scan_name = 'fly3d'
+
         motor = [xmotor, ymotor, phimotor]
+        axis = self.motornames[xmotor]
 #        print(motor)
         # logging
         scaninfo = []
         scaninfo.append('\n#S')
         scaninfo.append(self.parameters.scan_number)
-        scaninfo.append('fly3d')
+        scaninfo.append(scan_name)
         initial_motorpos = {}
         for i, m in enumerate(motor):
             n = m+1
@@ -1588,9 +1694,15 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append('#D')
         scaninfo.append(time.ctime())
         self.time_scanstart = time.time()
+
+        if snake:
+            self.fly_traj(xmotor, ymotor)
+        else:
+            self.fly_traj(xmotor)
+
         self.isscan = True
         self.shutterC.open()
-        w = Worker(self.fly3d0, xmotor, ymotor, phimotor, scanname=scanname, 
+        w = Worker(self.fly3d0, xmotor, ymotor, phimotor, scanname=scanname, snake=snake,
             update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone3d)
         w.signal.progress.connect(self.updateprogressbar)
@@ -1613,6 +1725,7 @@ class ptyco_main_control(QMainWindow):
             n = int(re.findall(r'\d+', objname)[0])
             motornumber = n-1
         else:
+            axis = self.motornames[motornumber]
             n = motornumber + 1
 
         # logging
@@ -1656,6 +1769,7 @@ class ptyco_main_control(QMainWindow):
             scaninfo.append(m[key])
         self.write_scaninfo_to_logfile(scaninfo)
 
+        self.fly_traj(axis)
         self.isscan = True
         self.shutterC.open()
         w = Worker(self.fly0, motornumber, update_progress=None, update_status=None)
@@ -1934,7 +2048,7 @@ class ptyco_main_control(QMainWindow):
             #self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
         self.pts.mv(axis, pos0)
 
-    def fly3d0(self, xmotor=0, ymotor=1, phimotor=6, scanname = "", update_progress=None, update_status=None):
+    def fly3d0(self, xmotor=0, ymotor=1, phimotor=6, scanname = "", snake=False, update_progress=None, update_status=None):
         # xmotor is for flying
         # ymotor is for stepping
         # phimotor is for rotation
@@ -1984,8 +2098,12 @@ class ptyco_main_control(QMainWindow):
             # fly here
             scan="%s%0.3d"%(scanname, i)
             self.progress_3d = (i, len(pos))
-            self.fly2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
-                update_progress=update_progress, update_status=update_status)
+            if snake:
+                self.fly2d0_SNAKE(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
+                    update_progress=update_progress, update_status=update_status)
+            else:
+                self.fly2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
+                    update_progress=update_progress, update_status=update_status)
             if update_status:
                 msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {(i+1)/len(pos)*100}%.'
                 update_status(msg)
@@ -2135,42 +2253,50 @@ class ptyco_main_control(QMainWindow):
         if ymotor>-1: # 2D SNAKE scan
             n = ymotor+1
             Yaxis = self.motornames[ymotor]
-            p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-            p0 = float(p0)
-            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
-            step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-            self.fly2d_p0 = p0
-            self.fly2d_st = st
-            self.fly2d_fe = fe
-            self.fly2d_step = step
+            # p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+            # p0 = float(p0)
+            # st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+            # fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+            # step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+            # self.fly2d_p0 = p0
+            # self.fly2d_st = st
+            # self.fly2d_fe = fe
+            # self.fly2d_step = step
             isSNAKE = True
 
         n = xmotor+1
         Xaxis = self.motornames[xmotor]
-        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-        p0 = float(p0)
-        st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-        fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
-        tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
-        step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-        self.fly1d_p0 = p0
-        self.fly1d_st = st
-        self.fly1d_fe = fe
-        self.fly1d_tm = tm
-        self.fly1d_step = step
+        # p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        # p0 = float(p0)
+        # st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+        # fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        # tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        # step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+        # self.fly1d_p0 = p0
+        # self.fly1d_st = st
+        # self.fly1d_fe = fe
+        # self.fly1d_tm = tm
+        # self.fly1d_step = step
 
+        # get relative scan range and convert it to absolute...
+        Xst = self.fly1d_st + self.fly1d_p0
+        Xfe = self.fly1d_fe + self.fly1d_p0
+        Xstep = self.fly1d_step  # step time
+        Xtm = self.fly1d_tm
+        self.Xi = Xst
+        self.Xf = Xfe
+        self.Xaxis = Xaxis
+        
         if isSNAKE:
             # get relative scan range and convert it to absolute...
             Yst = self.fly2d_st + self.fly2d_p0
             Yfe = self.fly2d_fe + self.fly2d_p0
             Ystep = self.fly2d_step
 
-            # get relative scan range and convert it to absolute...
-            Xst = self.fly1d_st + self.fly1d_p0
-            Xfe = self.fly1d_fe + self.fly1d_p0
-            Xstep = self.fly1d_step  # step time
-            Xtm = self.fly1d_tm
+            self.Yi = Yst
+            self.Yf = Yfe
+            self.Yaxis = Yaxis
+
             self.pts.hexapod.set_traj_SNAKE(time_per_line = Xtm, 
                                             start_X0 = Xst, 
                                             X_distance=Xfe-Xst, 
@@ -2182,7 +2308,7 @@ class ptyco_main_control(QMainWindow):
             #wavtableIDs = [13, 14]
             #self.pts.hexapod.assign_axis2wavtable(axes, wavtableIDs)
         else: # regular scan
-            self.pts.hexapod.set_traj(Xaxis, tm, fe-st, st, 1, abs(step), 50)
+            self.pts.hexapod.set_traj(Xaxis, Xtm, Xfe-Xst, Xst, 1, abs(Xstep), 50)
 
     def fly2d0_SNAKE(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
         self.update_scanname()
@@ -2191,70 +2317,157 @@ class ptyco_main_control(QMainWindow):
                 det.filePut('FileNumber', 1)  #JD
                 det.FileNumber = 1
 
-        # xmotor is for flying
-        # ymotor is for stepping
-        axis = self.motornames[ymotor]
-#        print(f'{axis=}, which is {ymotor=}') #JD
-        self.signalmotor2 = axis
-        self.signalmotorunit2 = self.motorunits[ymotor]
-#        self.rpos2 = []
-#        self.mpos2 = []
-        pos = self.pts.get_pos(axis)
+
         self.isfly2 = False
-
-
-#        print(pos)
-        if len(scanname):
-            scanname=axis
-        else:
-            scanname=f"{scanname}{axis}"
-        Nline = len(pos)
-
-
         ##### ############## need to work from this........
 
         print()
-        scaninfo = []
-        scaninfo.append('#I Y = ')
-        scaninfo.append(value)
-        self.write_scaninfo_to_logfile(scaninfo) 
+        # scaninfo = []
+        # scaninfo.append('#I Y = ')
+        # scaninfo.append(value)
+        # self.write_scaninfo_to_logfile(scaninfo) 
 
         t0 = time.time()
-        self.pts.mv(axis, value)
-        ismoving = True
-        while ismoving:
-            ismoving = self.pts.ismoving(axis)
-#            print("All motors are ready for fly scan.")
-        # fly here
+
         if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):
             for det in self.detector: #JD
                 if det is not None:  #JD            
-                    det.filePut('FileNumber', i+1) 
+                    det.filePut('FileNumber', 1) 
 
-        self.fly0(xmotor)
-#            print("CCCC")
-        self.flydone(return_motor=False)
-        # try:
-        #epics.caput('12idc:scaler1.CNT', 0)
-        # except:
-        #     print("epics 2 error")
-        t1 = time.time()
-        while (time.time()-t1 < self.parameters._waittime_between_scans):
-            time.sleep(0.01)
-        timeelapsed = time.time()-t0
-        if update_progress:
-            if self.fly3d_p0: # 3d scan
-                c3d, all3d = self.progress_3d
-                update_progress(int((Nline*c3d+(i+1))/(Nline*all3d)*100))
+        self.plotlabels = []
+        if self.ui.actionckTime_reset_before_scan.isChecked():
+            if s12softglue.isConnected:
+                s12softglue.ckTime_reset()
+        if self.ui.actionMemory_clear_before_scan.isChecked():
+            try:
+                if s12softglue.isConnected:
+                    s12softglue.memory_clear()
+            except TimeoutError:
+                self.recent_error_msg = "softglue memory_clear timeout"
+                print(self.recent_error_msg)
+
+
+        isTestRun = self.ui.actionTestFly.isChecked()
+        if isTestRun:
+            print("**** Test Run:")
+        self.isfly = True
+        self.isscan = True
+
+        # disable fit menu
+        self.ui.actionFit_QDS_phi.setEnabled(False)
+
+        if not self.ui.cb_keepprevscan.isChecked():
+            self.clearplot()
+        
+        # logging datatype
+        scaninfo = []
+        scaninfo.append('#H')
+        if self.isStruckCountNeeded:
+            scaninfo.append(self.Xaxis)
+            scaninfo.append(struck.strk.scaler.NM2)
+            scaninfo.append(struck.strk.scaler.NM3)
+            scaninfo.append(struck.strk.scaler.NM4)
+        else:
+            scaninfo.append(self.Xaxis)
+            scaninfo.append('QDS1')
+            scaninfo.append('QDS2')
+            scaninfo.append('QDS3')
+        self.write_scaninfo_to_logfile(scaninfo)  
+
+
+        #expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
+        period = self.pts.hexapod.pulse_step
+        #expt = period-self.det_readout_time  JD
+        expt = period*self.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
+        if period-expt < DETECTOR_READOUTTIME:
+            raise RuntimeError("expouretime is too short to readout DET images.")
+
+        if expt <= 0:
+            self.recent_error_msg = f"Note that after subtracting the detector readout time {self.det_readout_time:.3e} s, the exposure time becomes equal or less than 0."
+            print(self.recent_error_msg)
+#                    print("******* Cannot run.")
+            raise DET_MIN_READOUT_Error(self.recent_error_msg)
+        if abs(period-expt) <= 0.033:
+            self.recent_error_msg = f"Note that Max speed of Pilatus2M is 30Hz."
+            print(self.recent_error_msg)
+#                    print("******* Cannot run.")
+            raise DET_OVER_READOUT_SPEED_Error(self.recent_error_msg)
+
+        if not isTestRun:
+            if self.isStruckCountNeeded:
+                #struck.mcs_init()
+                if not self.isMCS_ready:
+                    struck.mcs_ready(self.pts.hexapod.pulse_number, self.pts.hexapod.pulse_number*period+10)
+                    self.isMCS_ready = True
+                    print(self.pts.hexapod.pulse_number, " MCS Ncouts updated.")
+                struck.arm_mcs()
             else:
-                update_progress(int((i+1)/len(pos)*100))
-        msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
-        msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(Nline-i-1),2)}s\n"
-        msg = "%s%s"%(msg1, msg2)
-        if update_status:
-            update_status(msg)
+                pass
+        # set the delay generator
+        if expt != dg645_12ID._exposuretime:
+            try:
+#                        print(f"Acutal exposure time: {expt}s.")
+                dg645_12ID.set_pilatus_fly(expt)
+            except:
+                raise DG645_Error
+            
 
-        self.run_stop_issued()
+        #SoftGlue ready for recording interferometer values
+        movestep = self.fly1d_step*1000*self.parameters._ratio_exp_period
+        print(f"Actual exposure time: {expt:0.3e} s. In distance: {movestep:.3e} um.")
+#                print("During the exposure, the motor moves %0.3f um." % movestep)
+        if s12softglue.isConnected:
+            N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
+            self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
+            print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a shot.")
+            if N_counts>100000:
+                self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                raise SOFTGLUE_Setup_Error(self.recent_error_msg)
+
+        if isTestRun:
+            return
+        
+        # Scan start ............................
+        #print("Time to finish line 2182: %0.3f" % (time.time()-t0))
+        axes = [self.Xaxis, self.Yaxis]
+        self.pts.hexapod.goto_start_pos(axes) # took 0.4 second
+        #print("Time to finish line 2184: %0.3f" % (time.time()-t0))
+        for det in self.detector:
+            if det is not None:
+                try:
+                    det.fly_ready(expt, self.pts.hexapod.pulse_number, period=period, 
+                                    isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
+        #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
+                except TimeoutError:
+                    self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
+                    print(self.recent_error_msg)
+                    self.ui.statusbar.showMessage(self.recent_error_msg)
+                    #showerror("Detector timeout.")
+                    return
+#                print("Ready for traj")
+
+        if not isTestRun:
+            self.pts.hexapod.run_traj(axes)
+
+        isattarget = False
+        while not isattarget:
+            try:
+                isattarget = self.pts.hexapod.isattarget(axes[0])
+            except:
+                isattarget = False
+            #self.updatepos()
+#                    print("Waiting to be done...")
+            time.sleep(0.5)
+        if self.isStruckCountNeeded:
+            struck.strk.stop()
+        else:
+            pass
+
+        # check if data collections are all done..
+        for det in self.detector:
+            if det is not None:
+                det.ForceStop(2)
+        #print("Time to finish fly0: %0.3f" % (time.time()-t0))
 
     def fly0(self, motornumber=-1, update_progress=None, update_status=None):
         t0 = time.time()
@@ -2349,7 +2562,6 @@ class ptyco_main_control(QMainWindow):
                     print(self.recent_error_msg)
 #                    print("******* Cannot run.")
                     raise DET_OVER_READOUT_SPEED_Error(self.recent_error_msg)
-
 
                 if not isTestRun:
                     if self.isStruckCountNeeded:

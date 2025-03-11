@@ -2207,14 +2207,27 @@
     <property name="title">
      <string>Scan</string>
     </property>
+    <widget class="QMenu" name="menu2D_XY_scan">
+     <property name="title">
+      <string>2D XY scan</string>
+     </property>
+     <addaction name="actionflyX_and_stepY"/>
+     <addaction name="actionsnake"/>
+    </widget>
+    <widget class="QMenu" name="menu3D_XYphi_scan">
+     <property name="title">
+      <string>3D XYphi scan</string>
+     </property>
+     <addaction name="actionnormal_2D"/>
+     <addaction name="actionsnake_2D"/>
+    </widget>
     <addaction name="actionTestFly"/>
     <addaction name="actionMonitor_Beamline_Status"/>
     <addaction name="separator"/>
     <addaction name="actionRatio_of_exptime_period_for_Flyscan"/>
     <addaction name="actionSet_waittime_between_scans"/>
-    <addaction name="action2D_scan"/>
-    <addaction name="action2D_XY_snake_scan"/>
-    <addaction name="action3D_scan"/>
+    <addaction name="menu2D_XY_scan"/>
+    <addaction name="menu3D_XYphi_scan"/>
     <addaction name="separator"/>
     <addaction name="actionScanStop"/>
    </widget>
@@ -2369,16 +2382,6 @@
   <action name="actionSet_gonio_default_vel_acc">
    <property name="text">
     <string>Set the default vel/acc</string>
-   </property>
-  </action>
-  <action name="action2D_scan">
-   <property name="text">
-    <string>2D XY scan</string>
-   </property>
-  </action>
-  <action name="action3D_scan">
-   <property name="text">
-    <string>3D XYphi scan</string>
    </property>
   </action>
   <action name="actionScanStop">
@@ -2582,6 +2585,26 @@
   <action name="action2D_XY_snake_scan">
    <property name="text">
     <string>2D XY snake scan</string>
+   </property>
+  </action>
+  <action name="actionflyX_and_stepY">
+   <property name="text">
+    <string>flyX and stepY</string>
+   </property>
+  </action>
+  <action name="actionsnake">
+   <property name="text">
+    <string>snake</string>
+   </property>
+  </action>
+  <action name="actionnormal_2D">
+   <property name="text">
+    <string>normal 2D</string>
+   </property>
+  </action>
+  <action name="actionsnake_2D">
+   <property name="text">
+    <string>snake 2D</string>
    </property>
   </action>
  </widget>
