@@ -2297,13 +2297,7 @@ class ptyco_main_control(QMainWindow):
             self.Yf = Yfe
             self.Yaxis = Yaxis
 
-            self.pts.hexapod.set_traj_SNAKE(time_per_line = Xtm, 
-                                            start_X0 = Xst, 
-                                            X_distance=Xfe-Xst, 
-                                            start_Y0 = Yst, 
-                                            start_Yf = Yfe, 
-                                            Y_step = Ystep, 
-                                            pulse_step=Xstep)
+            self.pts.hexapod.set_traj_SNAKE(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
             #axes = [Xaxis, Yaxis]
             #wavtableIDs = [13, 14]
             #self.pts.hexapod.assign_axis2wavtable(axes, wavtableIDs)
@@ -2406,7 +2400,6 @@ class ptyco_main_control(QMainWindow):
         # set the delay generator
         if expt != dg645_12ID._exposuretime:
             try:
-#                        print(f"Acutal exposure time: {expt}s.")
                 dg645_12ID.set_pilatus_fly(expt)
             except:
                 raise DG645_Error
@@ -2435,7 +2428,7 @@ class ptyco_main_control(QMainWindow):
         for det in self.detector:
             if det is not None:
                 try:
-                    det.fly_ready(expt, self.pts.hexapod.pulse_number, period=period, 
+                    det.fly_ready(expt, self.pts.hexapod.pulse_number_per_line, self.pts.hexapod.number_of_lines, period=period, 
                                     isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
         #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
                 except TimeoutError:
@@ -2457,7 +2450,7 @@ class ptyco_main_control(QMainWindow):
                 isattarget = False
             #self.updatepos()
 #                    print("Waiting to be done...")
-            time.sleep(0.5)
+            time.sleep(0.05)
         if self.isStruckCountNeeded:
             struck.strk.stop()
         else:
@@ -2534,7 +2527,6 @@ class ptyco_main_control(QMainWindow):
                     step = -step
 #            print(self.hexapod_flymode, "fly mode")
             if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET):
-#            if (self.hexapod_flymode==HEXAPOD_FLYMODE_WAVELET) and (axis == "X"):
 #                print("Running the fly scan with controller")
                 direction = int(step)/abs(step)
 #                print("Will set the traj up")
@@ -2546,17 +2538,23 @@ class ptyco_main_control(QMainWindow):
                 self.pts.hexapod.assign_axis2wavtable(axis, self.pts.hexapod.WaveGenID[axis]+dirv)
 
                 #expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
-                period = self.pts.hexapod.scantime/self.pts.hexapod.pulse_number
+                #period = self.pts.hexapod.scantime/self.pts.hexapod.pulse_number
+                period = self.pts.hexapod.pulse_step
                 #expt = period-self.det_readout_time  JD
                 expt = period*self.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
+                
+                if self.isTestRun:
+                    print(f"{self.pts.hexapod.pulse_number} images will be collected every {period}s with exposure time of {expt}s.")
+                
                 if period-expt < DETECTOR_READOUTTIME:
-                    raise RuntimeError("expouretime is too short to readout DET images.")
+                    raise RuntimeError("Not enough time left for reading out DET images. Make the X step time longer or make the ratio_exp_period smaller.")
 
                 if expt <= 0:
                     self.recent_error_msg = f"Note that after subtracting the detector readout time {self.det_readout_time:.3e} s, the exposure time becomes equal or less than 0."
                     print(self.recent_error_msg)
 #                    print("******* Cannot run.")
                     raise DET_MIN_READOUT_Error(self.recent_error_msg)
+                
                 if abs(step) <= 0.033:
                     self.recent_error_msg = f"Note that Max speed of Pilatus2M is 30Hz."
                     print(self.recent_error_msg)
@@ -2569,14 +2567,13 @@ class ptyco_main_control(QMainWindow):
                         if not self.isMCS_ready:
                             struck.mcs_ready(self.pts.hexapod.pulse_number, tm+10)
                             self.isMCS_ready = True
-                            print(self.pts.hexapod.pulse_number, " MCS Ncouts updated.")
+                            print(f"Struck is ready for {self.pts.hexapod.pulse_number} counts.")
                         struck.arm_mcs()
                     else:
                         pass
                 # set the delay generator
                 if expt != dg645_12ID._exposuretime:
                     try:
-#                        print(f"Acutal exposure time: {expt}s.")
                         dg645_12ID.set_pilatus_fly(expt)
                     except:
                         raise DG645_Error
@@ -2584,12 +2581,12 @@ class ptyco_main_control(QMainWindow):
 
                 #SoftGlue ready for recording interferometer values
                 movestep = abs(fe-st)/self.pts.hexapod.pulse_number*1000*self.parameters._ratio_exp_period
-                print(f"Actual exposure time: {expt:0.3e} s. In distance: {movestep:.3e} um.")
+                print(f"Actual exposure time: {expt:0.3e} s, during which {axis} will move {movestep:.3e} um.")
 #                print("During the exposure, the motor moves %0.3f um." % movestep)
                 if s12softglue.isConnected:
                     N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
                     self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
-                    print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a shot.")
+                    print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a DET image.")
                     if N_counts>100000:
                         self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
                         raise SOFTGLUE_Setup_Error(self.recent_error_msg)
@@ -2617,28 +2614,27 @@ class ptyco_main_control(QMainWindow):
                 pos = self.pts.get_pos(axis)
                 #print(f"pos is {pos} before traj run start.")
                 #print("Time to finish line 2196: %0.3f" % (time.time()-t0)) # take 0.1 second
-                if not isTestRun:
-#                        epics.caput('12idc:scaler1.CNT', 1)
-                    istraj_running = False
-                    timeout = 5
-                    i = 0
+
+                istraj_running = False
+                timeout = 5
+                i = 0
 #                    print("Hexapod is at the initial position.")
-                #    print("Time to prepare scan start fly0: %0.3f" % (time.time()-t0))
-                    while not istraj_running:
-                        try:
-                            self.pts.hexapod.run_traj(axis)
-                        except:
-                            pass
-                        time.sleep(0.5)
-                        pos_tmp = self.pts.get_pos(axis)
-                        if pos_tmp != pos:
-                            istraj_running = True
-                        #istraj_running = self.is_traj_running()
-                        i = i+1
-                        if i>timeout:
-                            self.recent_error_msg = "traj scan command is resent for 5 times to the hexapod without success."
-                            print(self.recent_error_msg)
-                            break
+            #    print("Time to prepare scan start fly0: %0.3f" % (time.time()-t0))
+                while not istraj_running:
+                    try:
+                        self.pts.hexapod.run_traj(axis)
+                    except:
+                        pass
+                    time.sleep(0.05)
+                    pos_tmp = self.pts.get_pos(axis)
+                    if pos_tmp != pos:
+                        istraj_running = True
+                    #istraj_running = self.is_traj_running()
+                    i = i+1
+                    if i>timeout:
+                        self.recent_error_msg = "traj scan command is resent for 5 times to the hexapod without success."
+                        print(self.recent_error_msg)
+                        break
                 #print("Run_traj is sent command in rungui.")
                 isattarget = False
                 while not isattarget:
@@ -2648,7 +2644,7 @@ class ptyco_main_control(QMainWindow):
                         isattarget = False
                     #self.updatepos()
 #                    print("Waiting to be done...")
-                    time.sleep(0.5)
+                    time.sleep(0.05)
                 if self.isStruckCountNeeded:
                     struck.strk.stop()
                 else:
