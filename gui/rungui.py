@@ -13,6 +13,7 @@ from asyncqt import QEventLoop
 from server_json import UDPserver, create_server
 import json
 import epics
+SCAN_NUMBER_IOC = epics.PV("12idc:data:fileIndex")
 
 from PyQt5 import uic, QtCore, QtGui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QWidget, QFormLayout
@@ -415,7 +416,9 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionUse_hdf_plugin.triggered.connect(self.set_hdf_plugin_use)
         self.ui.actionPtychography_mode.triggered.connect(self.select_detector_mode)
         self.ui.actionCapture_multi_frames.triggered.connect(self.select_hdf_multiframecapture)
-        self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)+1))
+        self.parameters.scan_number +=1
+        #self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)+1))
+        self.update_scannumber()
         self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_exp_period_ratio)
 #        self.ui.ed_scanname.returnPressed.connect(self.update_scannumber)
         self.use_hdf_plugin = True
@@ -1926,8 +1929,12 @@ class ptyco_main_control(QMainWindow):
 
     def run_stop_issued(self):
         self.parameters.scan_number = self.parameters.scan_number + 1
-        self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)))
+        self.update_scannumber()
         self.parameters.writeini()        
+
+    def update_scannumber(self):
+        SCAN_NUMBER_IOC.put(int(self.parameters.scan_number))
+        self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)))
 
     def stepscan0(self, motornumber=-1, update_progress=None, update_status=None):
         axis = self.motornames[motornumber]
