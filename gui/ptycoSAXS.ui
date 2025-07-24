@@ -2145,7 +2145,7 @@
      <x>0</x>
      <y>0</y>
      <width>1200</width>
-     <height>22</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -2257,6 +2257,7 @@
     <addaction name="actionSAXS"/>
     <addaction name="actionWAXS"/>
     <addaction name="actionStruck"/>
+    <addaction name="actionSG"/>
     <addaction name="separator"/>
     <addaction name="actionReset_to_Fly_mode"/>
     <addaction name="actionUse_hdf_plugin"/>
@@ -2533,7 +2534,7 @@
     <bool>true</bool>
    </property>
    <property name="checked">
-    <bool>true</bool>
+    <bool>false</bool>
    </property>
    <property name="text">
     <string>Use hdf plugin</string>
@@ -2605,6 +2606,17 @@
   <action name="actionsnake_2D">
    <property name="text">
     <string>snake 2D</string>
+   </property>
+  </action>
+  <action name="actionSG">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>SG stream</string>
    </property>
   </action>
  </widget>

@@ -3,9 +3,9 @@ from epics import caget, caput, PV
 beamlinePV = '12idc:'
 
 try:
-	from .ad_pilatus import AD_Pilatus, EIGERMODE, PILATUSMODE
+	from .ad_pilatus import AD_Pilatus, AD_SG, EIGERMODE, PILATUSMODE
 except:
-	from ad_pilatus import AD_Pilatus, EIGERMODE, PILATUSMODE
+	from ad_pilatus import AD_Pilatus, AD_SG, EIGERMODE, PILATUSMODE
 #pil = AD_Pilatus('12idcPIL:')
 
 class DET_MIN_READOUT_Error(Exception):
@@ -56,14 +56,24 @@ class pilatus(AD_Pilatus):
 			self.SetExposurePeriod(period)
 		self.setArrayCounter(0)
 		self.setFileTemplate('%s%s_%5.5d.h5')
+#		print("")
+#		print(Npoints, x_points)
+#		print(capture)
+#		print("")
+		#if capture[0]: # as long as 
+		
+		isHDFMode = capture[0]; #use hdf plugin?
+
 		self.SetMultiFrames(Npoints, x_points)
 		#self.setFileNumber(1)
 		if not isTest:
-			if capture[0]:
+			if isHDFMode:
+				if capture[1]==2: # for SG is in streammode, save all images into a file.
+					self.SetMultiFrames(Npoints, Npoints)
 				try:
 					if capture[1]==0:
 						self.StartSingleFrame()
-					if capture[1]==1:
+					else:
 						self.StartCapture()
 						if wait:
 							self.wait_capturedone()
@@ -80,6 +90,72 @@ class pilatus(AD_Pilatus):
 
         # number of images for collection and capture
 		self.NumImages = 1
+
+        # set filesaver
+		self.filePut('NumCapture',   1)
+		self.filePut('FileNumber',    1)
+		self.StartSingleFrame()
+
+	def set_scanNumberAsfilename(self):
+		fw_dir = caget(f"{beamlinePV}data:userDir")
+		self.setFilePath(fw_dir)
+		self.setFileName('scan{:03d}'.format(caget(f'{beamlinePV}saveData_scanNumber')))
+
+
+class SG(AD_SG):
+	def __init__(self, basename="12idSGSocket:"):
+		super().__init__(basename)
+		self.setNDArrayPort()
+#		self.detmode = PILATUSMODE
+#		self.dettype = "SG"
+
+	def SetNumImages(self, n):
+		pass
+		#self.NumImages = n
+            #self.NumTriggers = 1
+        # if self.detmode == EIGERMODE:
+        #     self.NumImages = 1
+        #     self.NumTriggers = n
+
+	def wait_trigDone(self):
+		while self.Acquire_RBV:
+			if self.getCapture()==0:
+				if (self.fileGet("AutoSave")==0):
+					self.FileWrite()
+
+	def wait_capturedone(self):
+		self.CCD_waitCaptureDone()
+		if (self.fileGet("AutoSave")==0):
+			self.FileWrite()
+		self.CCD_waitFileWriting()
+
+	def set_fly_configuration(self):
+		self.filePut('FilePath', '/net/micdata/data2')
+		self.filePut('AutoIncrement', 0)
+		self.filePut('AutoSave', 1)
+		self.filePut('FileWriteMode', 2)
+
+	def fly_ready(self, expt, x_points, y_points=1, wait=False, period=0, isTest=False, capture=(True, 1)):
+		#Npoints = x_points*y_points
+		#if period>0:
+		#	self.SetExposurePeriod(period)
+		#self.setArrayCounter(0)
+		self.setFileTemplate('%s%s_%5.5d.h5')
+		#self.SetMultiFrames(Npoints, x_points)
+		#self.setFileNumber(1)
+		if not isTest:
+			self.StartCapture()
+			#if wait:
+			#	self.wait_capturedone()
+	
+	def step_ready(self, expt):
+		#self.SetExposureTime(expt)
+		#self.setArrayCounter(0)
+		#self.ImageMode = 1  #  multiple images
+		#self.TriggerMode = 3
+
+        # number of images for collection and capture
+		#self.NumImages = 1
 
         # set filesaver
 		self.filePut('NumCapture',   1)

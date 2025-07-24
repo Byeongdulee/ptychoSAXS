@@ -1,7 +1,7 @@
 try:
     from pihexapod.gcs import Hexapod, plot_record, IP, WaveGenID
 
-    acsIP = "164.54.122.5"
+    acsIP = "10.54.122.157"
     hexapodIP = IP
     hexapod = Hexapod(IP)
     hexapod.connected = [True,True,True,True,True,True]

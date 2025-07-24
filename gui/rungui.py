@@ -57,7 +57,7 @@ dg645_12ID = dg645.dg645_12ID.open_from_uri(dg645.ADDRESS_12IDC)
 from tools import struck
 
 # detectors
-from tools.detectors import pilatus, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
+from tools.detectors import pilatus, SG, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
 import re
 import analysis.planeeqn as eqn
 import py12inifunc
@@ -251,7 +251,7 @@ class ptyco_main_control(QMainWindow):
         self.recent_error_msg = ''
         self.isOK2run = True
         self.is_softglue_savingdone = True
-        self.monitor_beamline_status = True
+        self.monitor_beamline_status = False
         # list all possible motors
         # this should came from the pts.
         motornames = ['X', 'Y', 'Z', 'U', 'V', 'W', 'phi']
@@ -402,6 +402,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionSAXS.triggered.connect(lambda: self.select_detectors(1))
         self.ui.actionWAXS.triggered.connect(lambda: self.select_detectors(2))
         self.ui.actionStruck.triggered.connect(lambda: self.select_detectors(3))
+        self.ui.actionSG.triggered.connect(lambda: self.select_detectors(4))
         self.ui.actionReset_to_Fly_mode.triggered.connect(self.reset_det_flymode)
         self.ui.actionChannels_to_record.triggered.connect(self.choose_softglue_channels)
         self.ui.actionSave_current_results.triggered.connect(self.save_softglue)
@@ -421,8 +422,8 @@ class ptyco_main_control(QMainWindow):
         self.update_scannumber()
         self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_exp_period_ratio)
 #        self.ui.ed_scanname.returnPressed.connect(self.update_scannumber)
-        self.use_hdf_plugin = True
-        self.hdf_plugin_savemode = True # single frame mode, 1 for capture, 2 for streaming
+        self.use_hdf_plugin = False
+        self.hdf_plugin_savemode = 1 # single frame mode, 1 for capture, 2 for streaming
 
         if os.name != 'nt':
             self.ui.menuQDS.setDisabled(True)
@@ -500,7 +501,7 @@ class ptyco_main_control(QMainWindow):
 
         # detectors
         self.det_readout_time = 0.02 # detector minimum readout time.
-        self.detector = [None]*2
+        self.detector = [None]*4
 
         if os.name == 'nt':
             self.timer = QTimer()
@@ -563,10 +564,15 @@ class ptyco_main_control(QMainWindow):
     def select_hdf_multiframecapture(self):
         if self.ui.actionCapture_multi_frames.isChecked():
             self.ui.actionCapture_multi_frames.setChecked(True)
-            self.hdf_plugin_savemode = True
+            if self.ui.actionSG.isChecked():
+                self.hdf_plugin_savemode = 2
+            else:    
+                self.hdf_plugin_savemode = 1
+
         else:
             self.ui.actionCapture_multi_frames.setChecked(False)
-            self.hdf_plugin_savemode = False
+            self.hdf_plugin_savemode = 0
+        print(self.hdf_plugin_savemode, " This is hdf plugin save mode...")
 
     def set_monitor_beamline_status(self):
         if self.ui.actionMonitor_Beamline_Status.isChecked():
@@ -658,7 +664,7 @@ class ptyco_main_control(QMainWindow):
                 workingfolder = wf_temp[i]
             else:
                 workingfolder = "%s/%s" %(workingfolder, wf_temp[i])
-#        print(workingfolder)
+        #print(workingfolder, " update_scanname is called. with update_detector ", update_detector)
         if update_detector:
             for i, det in enumerate(self.detector):
                 if i==0:
@@ -668,21 +674,40 @@ class ptyco_main_control(QMainWindow):
                 if i>1:
                     tp = ""
                 if det is not None:
+                    #print(det._prefix, f" will be updated. {i}th detector.")
+
 #                    print(det.basepath, " This is the basepath")
 #                    print(workingfolder, " This is the workingfolder")
                     if self.is_ptychomode:
-                        basepath = det.basepath
-                        ptycho_path = os.path.join(basepath, workingfolder, 'ptycho', self.scannumberstring).replace('\\', '/')
-                        det.FilePath = ptycho_path
-                        tif_path = os.path.join(basepath, workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
+                        if "SG" in det._prefix:
+                            basepath = det.basepath
+                            ptycho_path = os.path.join(basepath, workingfolder, 'positions', self.scannumberstring).replace('\\', '/')
+                            Windows_workingfolder = self.ui.ed_workingfolder.text()
+                            Windows_ptycho_path = os.path.join(Windows_workingfolder, 'positions', self.scannumberstring).replace('\\', '/')
+
+                            self.make_positions_folder(Windows_ptycho_path)
+                            #print()
+                            #print(f"This is in update_scanname update folder... {ptycho_path} ")
+                            #print()
+                            det.FilePath = ptycho_path
+                            tif_path = ""
+                        else:
+                            basepath = det.basepath
+                            ptycho_path = os.path.join(basepath, workingfolder, 'ptycho', self.scannumberstring).replace('\\', '/')
+                            det.FilePath = ptycho_path
+                            tif_path = os.path.join("/ramdisk", workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
+                            #tif_path = os.path.join("/ramdisk").replace('\\', '/')
+
                     else: # SAXS/WAXS mode
+                        if len(tp)==0:
+                            continue
                         basepath = "/mnt/Sector_12/12id-c"
                         ptycho_path = os.path.join(basepath, workingfolder, tp+'AXS').replace('\\', '/')
                         det.FilePath = ptycho_path
                         tif_path = os.path.join("/ramdisk").replace('\\', '/')
-                    det.FilePath = tif_path
-                    det.FileName = txt
-                    print(tp+txt)
+                    if len(tif_path) > 0:
+                        det.FilePath = tif_path
+                        det.FileName = txt
 #                    print(ptycho_path)
                     det.filePut('FilePath', ptycho_path)
                     det.filePut('FileName', tp+txt)
@@ -959,6 +984,7 @@ class ptyco_main_control(QMainWindow):
                         while det.fileGet('WriteFile_RBV'):
                             time.sleep(0.01)
                         fnum = det.fileGet('FileNumber_RBV')
+                        fn = det.fileGet('FullFileName_RBV', as_string=True)
                         if str(fnum-1) not in fn:
                             fn = det.fileGet('FullFileName_RBV', as_string=True)
                     else:
@@ -975,34 +1001,68 @@ class ptyco_main_control(QMainWindow):
 
     def select_detectors(self, N):
         if N==1:
+            basename = 'S12-PILATUS1:'
             if self.ui.actionSAXS.isChecked():
                 self.ui.actionSAXS.setChecked(True)
-                self.detector[0] = pilatus('S12-PILATUS1:')
-                self.detector[0].basepath = '/ramdisk'
+                self.detector[0] = pilatus(basename)
+                self.detector[0].basepath = '/net/micdata/data2'
+                #self.detector[0].basename = basename
             else:
                 self.ui.actionSAXS.setChecked(False)
                 self.detector[0] = None
         if N==2:
+            basename = '12idcPIL:'
             if self.ui.actionWAXS.isChecked():
                 self.ui.actionWAXS.setChecked(True)
-                self.detector[1] = pilatus('12idcPIL:')
+                self.detector[1] = pilatus(basename)
                 self.detector[1].basepath = '/net/micdata/data2'
+                #self.detector[1].basename = basename
             else:
                 self.ui.actionWAXS.setChecked(False)
                 self.detector[1] = None
 #        print("base path of the detector %i is %s" % (N, self.detector[N-1].basepath))
-        self.update_scanname()
         if N==3:
             if self.ui.actionStruck.isChecked():
-                self.ui.actionStruck.setChecked(True)
-                self.isStruckCountNeeded = True
-                print("Struct in on")
+                self.switch_MCS(True)
 #                self.detector[1] = pilatus('12idcPIL:')
             else:
-                self.ui.actionStruck.setChecked(False)
-                self.isStruckCountNeeded = False
-                print("Struck is off")
-        
+                self.switch_MCS(False)
+        if N==4:
+            if self.ui.actionSG.isChecked():
+                self.switch_SGstream(True)
+            else:
+                self.switch_SGstream(False)
+        self.update_scanname()
+
+    def switch_SGstream(self, status=True):
+        basename = '12idSGSocket:'
+        if status:
+            self.ui.actionSG.setChecked(True)
+            self.detector[3] = SG(basename)
+            self.detector[3].basepath = '/net/micdata/data2'
+            #self.detector[3].basename = basename
+            if self.ui.actionCapture_multi_frames.isChecked():
+                self.hdf_plugin_savemode = 2
+            # When this is on, it will automatically turn on MCS.
+            self.switch_MCS(True)
+        else:
+            self.ui.actionSG.setChecked(False)
+            self.detector[3] = None
+            if self.ui.actionCapture_multi_frames.isChecked():
+                self.hdf_plugin_savemode = 1
+            else:
+                self.hdf_plugin_savemode = 0        
+
+    def switch_MCS(self, status=True):
+        if status:
+            self.ui.actionStruck.setChecked(True)
+            self.isStruckCountNeeded = True
+            print("Struct in on")
+        else:
+            self.ui.actionStruck.setChecked(False)
+            self.isStruckCountNeeded = False
+            print("Struck is off")      
+
     def select_flymode(self):
         if self.ui.actionEnable_fly_with_controller.isChecked():  # when checked, this value is False
             self.ui.actionEnable_fly_with_controller.setChecked(True)
@@ -1025,7 +1085,7 @@ class ptyco_main_control(QMainWindow):
         filename = ""
         for det in self.detector:
             if det is not None:
-                if self.use_hdf_plugin and self.hdf_plugin_savemode:# capture mode
+                if self.use_hdf_plugin and self.hdf_plugin_savemode>0:# capture mode
                     while det.fileGet('WriteFile_RBV'):
                         time.sleep(0.01)
                     fnum = det.fileGet('FileNumber_RBV')
@@ -1110,12 +1170,7 @@ class ptyco_main_control(QMainWindow):
         if not s12softglue.isConnected:
             print("Cannot save_softglue because softglue is not connected.")
             return
-        try:
-            s12softglue.flush()
-            time.sleep(0.1)
-        except:
-            self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
-            print(self.recent_error_msg)            
+        
         N_cnt = 0
         if hasattr(self.pts.hexapod, "pulse_number"):
             N_cnt = self.pts.hexapod.pulse_number
@@ -1155,6 +1210,15 @@ class ptyco_main_control(QMainWindow):
         w.signal.finished.connect(self.softglue_savingdone)
         self.threadpool.start(w)
 
+    def make_positions_folder(self, foldername):
+        p = pathlib.Path(foldername)
+        if p.exists():
+            return
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+        except:
+            print("Error of creating a folder: %s. ************************"%foldername)
+
     def save2disk_softglue(self):
         if not s12softglue.isConnected:
             print("Cannot save2disk_softglue since softglue is not connected.")
@@ -1165,12 +1229,7 @@ class ptyco_main_control(QMainWindow):
         #t, dt = self.softglue_data
         foldername = self.softglue_folder
         filename = self.softglue_filename
-
-        p = pathlib.Path(foldername)
-        try:
-            p.mkdir(parents=True, exist_ok=True)
-        except:
-            print("Error of creating a folder: %s. ************************"%foldername)
+        self.make_positions_folder(foldername)
         if len(t)<N_cnt:
             print("*********************************")
             print(f"Only {len(t)}, less than the ideal {N_cnt} data will be saved in {foldername}/{filename}.")
@@ -1286,37 +1345,50 @@ class ptyco_main_control(QMainWindow):
 #        self.save_softglue()
 #        success=True
 
+#        print(self.hdf_plugin_savemode,  " This is plugin savemode....")
         try:
-           self.save_softglue()
-           success = True
+            s12softglue.flush()
+            time.sleep(0.1)
         except:
-           pass
-            # self.recent_error_msg = "The softglue flush failed while save_softglue, it will be flushed again....."
-            # print(self.recent_error_msg)
-            # s12softglue.flush()
-            # cnt = cnt + 1
-            # if cnt>timeout:
-            #     break
+            self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
+            print(self.recent_error_msg) 
+        if not self.ui.actionSG.isChecked(): # SG streammode is not on.
+            try:
+                self.save_softglue()
+                success = True
+            except:
+                pass
         print(f"Elapsed time to save softglue data since flydone = {time.time()-ct0}")
         # if read softglue failed...
         scaninfo = []
         scaninfo.append('#I detector_filename')
         for det in self.detector:
             if det is not None:
+                if 'SG' in det._prefix:
+                    det.FileCaptureOff()
+                    det.Acquire = 0
+                    print("")
+                    print("Socket Capture is turned off.")
+                    print("")
+                    success = True
                 fn = ""
-                if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
+                if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):# capture mode
                     while det.fileGet('WriteFile_RBV'): # still saving?
                         time.sleep(0.01)
                     fnum = det.fileGet('FileNumber_RBV')
                     if str(fnum-1) not in fn:
                         fn = det.fileGet('FullFileName_RBV', as_string=True)
                 else:
-                    fnum = det.FileNumber_RBV
-                    fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-                print("===============================")
-                print(f"saved filename: {fn}")
-                print("===============================")
-                filename = os.path.basename(fn)
+                    if 'SG' not in det._prefix:
+                        fnum = det.FileNumber_RBV
+                        fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+                if len(fn)>0:
+                    print("===============================")
+                    print(f"saved filename: {fn}")
+                    print("===============================")
+                    filename = os.path.basename(fn)
+                else:
+                    filename = ""
                 scaninfo.append(filename)
         if len(scaninfo)>1:
             self.write_scaninfo_to_logfile(scaninfo)
@@ -1326,21 +1398,6 @@ class ptyco_main_control(QMainWindow):
             if len(foldername) == 0:
                 return
             filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
-            # filename = ""
-            # for det in self.detector:
-            #     if det is not None:
-            #         if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
-            #             while det.fileGet('WriteFile_RBV'): # still saving?
-            #                 time.sleep(0.01)
-            #                 print("Captures still being saved.")
-            #             fnum = det.fileGet('FileNumber_RBV')
-            #             if str(fnum-1) not in fn:
-            #                 fn = det.fileGet('FullFileName_RBV', as_string=True)
-            #         else:
-            #             fnum = det.FileNumber_RBV
-            #             fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-            #         filename = os.path.basename(fn)
-            #         filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
             
             if len(filename) ==0:
                 self.recent_error_msg = "****** Error: detector ioc does not response."
@@ -1419,6 +1476,12 @@ class ptyco_main_control(QMainWindow):
         self.threadpool.start(w)
         
     def fly2d(self, xmotor=0, ymotor=1, scanname = "", snake=False):
+        if snake:
+            # if snake scan chosen, softglue socket stream and MCS will be on automatically.            
+            self.switch_SGstream(True)
+        else:
+            self.switch_SGstream(False)
+
         if self.isStruckCountNeeded:
             struck.mcs_init()
             self.isMCS_ready = False
@@ -1478,6 +1541,13 @@ class ptyco_main_control(QMainWindow):
                 self.fly2d_fe = fe
                 self.fly2d_tm = tm
                 self.fly2d_step = step
+        
+        # signal for qds
+        axis = self.motornames[xmotor]
+        self.signalmotor = axis
+        self.signalmotorunit = self.motorunits[xmotor]
+        print("fly2d is called............................")
+
         self.time_scanstart = time.time()
         dg645_12ID.set_pilatus_fly(0.001)
         self.fly3d_p0 = None
@@ -1504,7 +1574,8 @@ class ptyco_main_control(QMainWindow):
             self.fly_traj(xmotor, ymotor)
             w = Worker(self.fly2d0_SNAKE, xmotor, ymotor, scanname=scanname, 
                     update_progress=None, update_status=None)
-            w.signal.finished.connect(lambda: self.flydone(False))
+            w.signal.finished.connect(self.flydone)
+            #w.signal.finished.connect(self.flydone2d)
         else:
             self.fly_traj(xmotor)
             w = Worker(self.fly2d0, xmotor, ymotor, scanname=scanname, 
@@ -1516,7 +1587,8 @@ class ptyco_main_control(QMainWindow):
         w.kwargs['update_status'] = w.signal.statusmessage.emit
 
         self.isscan = True
-        self.shutterC.open()
+        if self.monitor_beamline_status:
+            self.shutterC.open()        
         self.threadpool.start(w)
 
     def fly2d_SNAKE(self, xmotor=0, ymotor=1, scanname = "", snake=False):
@@ -1532,7 +1604,7 @@ class ptyco_main_control(QMainWindow):
                 s12softglue.ckTime_reset()
 
         # reset the progress bar
-        self.ui.progressBar.setValue(0)
+        #self.ui.progressBar.setValue(0)
         motor = [xmotor, ymotor]
         print(f'\n\nfly2d_SNAKE:{xmotor=}; {ymotor=}') #JD
                 # logging
@@ -1575,6 +1647,11 @@ class ptyco_main_control(QMainWindow):
                 self.fly2d_fe = fe
                 self.fly2d_tm = tm
                 self.fly2d_step = step
+        # signal for qds
+        axis = self.motornames[xmotor]
+        self.signalmotor = axis
+        self.signalmotorunit = self.motorunits[xmotor]
+        print("fly2d_snake is called............................")
         self.time_scanstart = time.time()
         dg645_12ID.set_pilatus_fly(0.001)
         self.fly3d_p0 = None
@@ -1600,7 +1677,8 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append('#D')
         scaninfo.append(time.ctime())
         self.isscan = True
-        self.shutterC.open()
+        if self.monitor_beamline_status:
+            self.shutterC.open()
         w = Worker(self.fly2d0_SNAKE, xmotor, ymotor, scanname=scanname, 
                    update_progress=None, update_status=None)
         w.signal.finished.connect(lambda: self.flydone(False))
@@ -1617,6 +1695,12 @@ class ptyco_main_control(QMainWindow):
         self.ui.statusbar.showMessage(message)
 
     def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname="", snake=False):
+        if snake:
+            # if snake scan chosen, softglue socket stream and MCS will be on automatically.            
+            self.switch_SGstream(True)
+        else:
+            self.switch_SGstream(False)
+
         if self.isStruckCountNeeded:
             struck.mcs_init()
             self.isMCS_ready = False
@@ -1681,6 +1765,12 @@ class ptyco_main_control(QMainWindow):
                 self.fly3d_tm = tm
                 self.fly3d_step = step
 
+        # signal for qds
+        axis = self.motornames[xmotor]
+        self.signalmotor = axis
+        self.signalmotorunit = self.motorunits[xmotor]
+        print("fly2d is called............................")
+
         dg645_12ID.set_pilatus_fly(0.001)
         self.motor_p0 = initial_motorpos
 
@@ -1704,7 +1794,8 @@ class ptyco_main_control(QMainWindow):
             self.fly_traj(xmotor)
 
         self.isscan = True
-        self.shutterC.open()
+        if self.monitor_beamline_status:
+            self.shutterC.open()
         w = Worker(self.fly3d0, xmotor, ymotor, phimotor, scanname=scanname, snake=snake,
             update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone3d)
@@ -1727,9 +1818,11 @@ class ptyco_main_control(QMainWindow):
             objname = pb.objectName()
             n = int(re.findall(r'\d+', objname)[0])
             motornumber = n-1
-        else:
-            axis = self.motornames[motornumber]
-            n = motornumber + 1
+        # else:
+        #     axis = self.motornames[motornumber]
+        #     n = motornumber + 1
+        axis = self.motornames[motornumber]
+        n = motornumber + 1
 
         # logging
         scaninfo = []
@@ -1771,10 +1864,11 @@ class ptyco_main_control(QMainWindow):
         for key in m:
             scaninfo.append(m[key])
         self.write_scaninfo_to_logfile(scaninfo)
-
-        self.fly_traj(axis)
+        print(axis, " this is axis name")
+        self.fly_traj(motornumber)
         self.isscan = True
-        self.shutterC.open()
+        if self.monitor_beamline_status:
+            self.shutterC.open()
         w = Worker(self.fly0, motornumber, update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone)
         w.signal.progress.connect(self.updateprogressbar)
@@ -2115,6 +2209,8 @@ class ptyco_main_control(QMainWindow):
                 msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {(i+1)/len(pos)*100}%.'
                 update_status(msg)
             
+            self.flydone(False)
+
             # monitoring the station ready
             if self.monitor_beamline_status:
                 if self.isOK2run is not True:
@@ -2145,10 +2241,13 @@ class ptyco_main_control(QMainWindow):
         for det in self.detector: #JD
             if det is not None:  #JD
                 det.filePut('FileNumber', 1)  #JD
-                det.FileNumber = 1
+                det.FileTemplate = '%s%s_%5.5d_00001.h5'
+                if 'SG' not in det._prefix:
+                    det.FileNumber = 1
 
         # xmotor is for flying
         # ymotor is for stepping
+#        print(self.hdf_plugin_savemode, " ------This is plugin_savemode....")
         axis = self.motornames[ymotor]
 #        print(f'{axis=}, which is {ymotor=}') #JD
         self.signalmotor2 = axis
@@ -2223,7 +2322,7 @@ class ptyco_main_control(QMainWindow):
                 ismoving = self.pts.ismoving(axis)
 #            print("All motors are ready for fly scan.")
             # fly here
-            if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):
+            if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
                 for det in self.detector: #JD
                     if det is not None:  #JD            
                         det.filePut('FileNumber', i+1) 
@@ -2316,7 +2415,9 @@ class ptyco_main_control(QMainWindow):
         for det in self.detector: #JD
             if det is not None:  #JD
                 det.filePut('FileNumber', 1)  #JD
-                det.FileNumber = 1
+                det.FileTemplate = '%s%s_%5.5d.h5'
+                if 'SG' not in det._prefix:
+                    det.FileNumber = 1
 
 
         self.isfly2 = False
@@ -2330,7 +2431,7 @@ class ptyco_main_control(QMainWindow):
 
         t0 = time.time()
 
-        if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):
+        if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
             for det in self.detector: #JD
                 if det is not None:  #JD            
                     det.filePut('FileNumber', 1) 
@@ -2449,15 +2550,25 @@ class ptyco_main_control(QMainWindow):
         if not isTestRun:
             self.pts.hexapod.run_traj(axes)
 
-        isattarget = False
-        while not isattarget:
-            try:
-                isattarget = self.pts.hexapod.isattarget(axes[0])
-            except:
-                isattarget = False
-            #self.updatepos()
-#                    print("Waiting to be done...")
-            time.sleep(0.05)
+        # snake sleep requires detectors.....
+        if self.isStruckCountNeeded:
+            isdone = False
+            while not isdone:
+                if struck.strk.Acquiring:
+                    isdone = False
+                else:
+                    isdone = True
+                time.sleep(0.1)
+        
+#         isattarget = False
+#         while not isattarget:
+#             try:
+#                 isattarget = self.pts.hexapod.isattarget(axes[0])
+#             except:
+#                 isattarget = False
+#             #self.updatepos()
+# #                    print("Waiting to be done...")
+#             time.sleep(0.05)
         if self.isStruckCountNeeded:
             struck.strk.stop()
         else:
@@ -2467,6 +2578,7 @@ class ptyco_main_control(QMainWindow):
         for det in self.detector:
             if det is not None:
                 det.ForceStop(2)
+        self.run_stop_issued()
         #print("Time to finish fly0: %0.3f" % (time.time()-t0))
 
     def fly0(self, motornumber=-1, update_progress=None, update_status=None):
@@ -2550,7 +2662,7 @@ class ptyco_main_control(QMainWindow):
                 #expt = period-self.det_readout_time  JD
                 expt = period*self.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
                 
-                if self.isTestRun:
+                if isTestRun:
                     print(f"{self.pts.hexapod.pulse_number} images will be collected every {period}s with exposure time of {expt}s.")
                 
                 if period-expt < DETECTOR_READOUTTIME:
@@ -2607,7 +2719,10 @@ class ptyco_main_control(QMainWindow):
                 #print("Time to finish line 2184: %0.3f" % (time.time()-t0))
                 for det in self.detector:
                     if det is not None:
+                        det.FileTemplate = '%s%s_%5.5d.h5'
                         try:
+#                            print(self.use_hdf_plugin, " This is use_hdf_plugin")
+#                            print(self.hdf_plugin_savemode, " This is use_hdf_plugin")
                             det.fly_ready(expt, self.pts.hexapod.pulse_number, period=period, 
                                           isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
                 #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
@@ -2617,15 +2732,15 @@ class ptyco_main_control(QMainWindow):
                             self.ui.statusbar.showMessage(self.recent_error_msg)
                             #showerror("Detector timeout.")
                             return
-#                print("Ready for traj")
+                print("Ready for traj")
                 pos = self.pts.get_pos(axis)
-                #print(f"pos is {pos} before traj run start.")
+                print(f"pos is {pos} before traj run start.")
                 #print("Time to finish line 2196: %0.3f" % (time.time()-t0)) # take 0.1 second
 
                 istraj_running = False
                 timeout = 5
                 i = 0
-#                    print("Hexapod is at the initial position.")
+                print("Trajectory scan initiated..")
             #    print("Time to prepare scan start fly0: %0.3f" % (time.time()-t0))
                 while not istraj_running:
                     try:
@@ -2642,7 +2757,7 @@ class ptyco_main_control(QMainWindow):
                         self.recent_error_msg = "traj scan command is resent for 5 times to the hexapod without success."
                         print(self.recent_error_msg)
                         break
-                #print("Run_traj is sent command in rungui.")
+                print("Run_traj is sent command in rungui.")
                 isattarget = False
                 while not isattarget:
                     try:
@@ -2755,6 +2870,7 @@ class ptyco_main_control(QMainWindow):
         # check if data collections are all done..
         for det in self.detector:
             if det is not None:
+                print(f"Detector, {det._prefix}, will be foreced to stop")
                 det.ForceStop(2)
         #print("Time to finish fly0: %0.3f" % (time.time()-t0))
 
@@ -3011,6 +3127,8 @@ class ptyco_main_control(QMainWindow):
             if self.isfly:
                 self.rpos.append([r[0], r[1], r[2]])
                 #self.mpos.append(self.pts.get_pos(self.signalmotor))
+                if not hasattr(self, 'signalmotor'):
+                    self.signalmotor = self.motornames[0]
                 self.mpos.append(self.get_motorpos(self.signalmotor))
             try:
                 self.plot()
