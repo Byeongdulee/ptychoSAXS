@@ -548,9 +548,12 @@ class ptyco_main_control(QMainWindow):
     def set_hdf_plugin_use(self):
         if self.ui.actionUse_hdf_plugin.isChecked():
             self.ui.actionUse_hdf_plugin.setChecked(True)
+            self.ui.actionCapture_multi_frames.setEnabled(True)
             self.use_hdf_plugin = True
         else:
             self.ui.actionUse_hdf_plugin.setChecked(False)
+            self.ui.actionCapture_multi_frames.setChecked(False)
+            self.ui.actionCapture_multi_frames.setEnabled(False)
             self.use_hdf_plugin = False
 
     def select_detector_mode(self):
@@ -572,7 +575,7 @@ class ptyco_main_control(QMainWindow):
         else:
             self.ui.actionCapture_multi_frames.setChecked(False)
             self.hdf_plugin_savemode = 0
-        print(self.hdf_plugin_savemode, " This is hdf plugin save mode...")
+#        print(self.hdf_plugin_savemode, " This is hdf plugin save mode...")
 
     def set_monitor_beamline_status(self):
         if self.ui.actionMonitor_Beamline_Status.isChecked():
@@ -2404,6 +2407,10 @@ class ptyco_main_control(QMainWindow):
             self.Yaxis = Yaxis
 
             self.pts.hexapod.set_traj_SNAKE(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
+            print("")
+            print("SNAKE setup")
+            print(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
+            print("")
             #axes = [Xaxis, Yaxis]
             #wavtableIDs = [13, 14]
             #self.pts.hexapod.assign_axis2wavtable(axes, wavtableIDs)
@@ -2719,7 +2726,7 @@ class ptyco_main_control(QMainWindow):
                 #print("Time to finish line 2184: %0.3f" % (time.time()-t0))
                 for det in self.detector:
                     if det is not None:
-                        det.FileTemplate = '%s%s_%5.5d.h5'
+                        det.FileTemplate = '%s%s_%5.5d_00001.h5'
                         try:
 #                            print(self.use_hdf_plugin, " This is use_hdf_plugin")
 #                            print(self.hdf_plugin_savemode, " This is use_hdf_plugin")
