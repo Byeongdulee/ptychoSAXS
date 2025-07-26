@@ -408,3 +408,5 @@ ptychoSAXS.egg-info/dependency_links.txt
 /ptychoSAXS.egg-info
 *.npy
 gui/_numbers.npy
+*.npy
+*.ini
