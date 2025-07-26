@@ -82,87 +82,24 @@ class pilatus(AD_Pilatus):
 			else:
 				self.Arm()
 	
-	def step_ready(self, expt):
+	def step_ready(self, expt, N_image):
 		self.SetExposureTime(expt)
 		self.setArrayCounter(0)
-		self.ImageMode = 1  #  multiple images
-		self.TriggerMode = 3
+		self.ImageMode = 1  #  multiple image
+		self.TriggerMode = 3 # external triger mode
+		self.FileNumber = 1
 
         # number of images for collection and capture
-		self.NumImages = 1
+		self.NumImages = N_image
 
         # set filesaver
 		self.filePut('NumCapture',   1)
 		self.filePut('FileNumber',    1)
-		self.StartSingleFrame()
+		self.StartSingleFrame() # Arm the detector
+
 
 	def set_scanNumberAsfilename(self):
 		fw_dir = caget(f"{beamlinePV}data:userDir")
 		self.setFilePath(fw_dir)
 		self.setFileName('scan{:03d}'.format(caget(f'{beamlinePV}saveData_scanNumber')))
 
-
-class SG(AD_SG):
-	def __init__(self, basename="12idSGSocket:"):
-		super().__init__(basename)
-		self.setNDArrayPort()
-#		self.detmode = PILATUSMODE
-#		self.dettype = "SG"
-
-	def SetNumImages(self, n):
-		pass
-		#self.NumImages = n
-            #self.NumTriggers = 1
-        # if self.detmode == EIGERMODE:
-        #     self.NumImages = 1
-        #     self.NumTriggers = n
-
-	def wait_trigDone(self):
-		while self.Acquire_RBV:
-			if self.getCapture()==0:
-				if (self.fileGet("AutoSave")==0):
-					self.FileWrite()
-
-	def wait_capturedone(self):
-		self.CCD_waitCaptureDone()
-		if (self.fileGet("AutoSave")==0):
-			self.FileWrite()
-		self.CCD_waitFileWriting()
-
-	def set_fly_configuration(self):
-		self.filePut('FilePath', '/net/micdata/data2')
-		self.filePut('AutoIncrement', 0)
-		self.filePut('AutoSave', 1)
-		self.filePut('FileWriteMode', 2)
-
-	def fly_ready(self, expt, x_points, y_points=1, wait=False, period=0, isTest=False, capture=(True, 1)):
-		#Npoints = x_points*y_points
-		#if period>0:
-		#	self.SetExposurePeriod(period)
-		#self.setArrayCounter(0)
-		self.setFileTemplate('%s%s_%5.5d.h5')
-		#self.SetMultiFrames(Npoints, x_points)
-		#self.setFileNumber(1)
-		if not isTest:
-			self.StartCapture()
-			#if wait:
-			#	self.wait_capturedone()
-	
-	def step_ready(self, expt):
-		#self.SetExposureTime(expt)
-		#self.setArrayCounter(0)
-		#self.ImageMode = 1  #  multiple images
-		#self.TriggerMode = 3
-
-        # number of images for collection and capture
-		#self.NumImages = 1
-
-        # set filesaver
-		self.filePut('NumCapture',   1)
-		self.filePut('FileNumber',    1)
-		self.StartSingleFrame()
-
-	def set_scanNumberAsfilename(self):
-		fw_dir = caget(f"{beamlinePV}data:userDir")
-		self.setFilePath(fw_dir)
-		self.setFileName('scan{:03d}'.format(caget(f'{beamlinePV}saveData_scanNumber')))

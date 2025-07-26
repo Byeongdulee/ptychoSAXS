@@ -11,6 +11,7 @@ class AD_Pilatus(Device):
     camattrs = ('NumImages', 'NumTriggers', 
                 'ImageMode', 'TriggerMode',
                 'AutoIncrement', 'FileNumber', 'FileNumber_RBV', 'FilePath',
+                'FileTemplate', 'FileTemplate_RBV', 
                 'FileName', 'FileName_RBV', 'FullFileName_RBV', 
                 'Acquire', 'Acquire_RBV', 'AcquireTime', 'AcquirePeriod',
                 'Armed', 'ArrayCounter', 'ArrayCounter_RBV')
