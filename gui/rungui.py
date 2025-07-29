@@ -70,6 +70,7 @@ HEXAPOD_FLYMODE_WAVELET = 0
 HEXAPOD_FLYMODE_STANDARD = 1
 FRACTION_EXPOSURE_PERIOD = 0.2
 DETECTOR_READOUTTIME = 0.02
+DETECTOR_NOT_STARTED_ERROR = -1
 QDS_UNIT_NM = 0
 QDS_UNIT_UM = 1
 QDS_UNIT_MM = 2
@@ -423,7 +424,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_exp_period_ratio)
 #        self.ui.ed_scanname.returnPressed.connect(self.update_scannumber)
         self.use_hdf_plugin = False
-        self.hdf_plugin_savemode = 1 # single frame mode, 1 for capture, 2 for streaming
+        self.hdf_plugin_savemode = 0 # single frame mode, 1 for capture, 2 for streaming
 
         if os.name != 'nt':
             self.ui.menuQDS.setDisabled(True)
@@ -502,6 +503,8 @@ class ptyco_main_control(QMainWindow):
         # detectors
         self.det_readout_time = 0.02 # detector minimum readout time.
         self.detector = [None]*4
+        self.detector_mode = ['', '', '', '']
+        self.hdf_plugin_name = ['','','','']
 
         if os.name == 'nt':
             self.timer = QTimer()
@@ -511,14 +514,20 @@ class ptyco_main_control(QMainWindow):
         #self.resized.connect(self.resizeFunction)
 
     def write_motor_scan_range(self):
-        numbers = np.random.rand(len(self.motornames), 5)
+        numbers = np.random.rand(len(self.motornames), 6)
         for i, name in enumerate(self.motornames):
             n = i + 1
-            line_edit_suffixes = ["tweak", "L", "R", "N", "t"]
+            line_edit_suffixes = ["pos", "tweak", "L", "R", "N", "t"]
             arr = []
             
             for suffix in line_edit_suffixes:
-                line_edit_name = f"ed_lup_{n}_{suffix}" if suffix != "tweak" else f"ed_{n}_{suffix}"
+                if len(suffix) == 1:
+                    line_edit_name = f"ed_lup_{n}_{suffix}" 
+                else:
+                    if suffix == "tweak":
+                        line_edit_name = f"ed_{n}_{suffix}"
+                    if suffix == "pos":
+                        line_edit_name = f"ed_{n}"
                 try:
                     value = float(self.ui.findChild(QLineEdit, line_edit_name).text())
                 except ValueError:  # More specific exception for parsing errors
@@ -536,11 +545,22 @@ class ptyco_main_control(QMainWindow):
 
         for i, name in enumerate(self.motornames):
             n = i + 1
-            line_edit_suffixes = ["tweak", "L", "R", "N", "t"]
+            if numbers.shape[1]==5:
+                line_edit_suffixes = ["tweak", "L", "R", "N", "t"]
+            if numbers.shape[1]==6:
+                line_edit_suffixes = ["pos", "tweak", "L", "R", "N", "t"]
             try:
                 for j, suffix in enumerate(line_edit_suffixes):
                     value = '' if numbers[i, j] == -999999 else str(numbers[i, j])
-                    line_edit_name = f"ed_lup_{n}_{suffix}" if suffix != "tweak" else f"ed_{n}_{suffix}"
+                    if len(suffix) == 1:
+                        line_edit_name = f"ed_lup_{n}_{suffix}"
+                    else :
+                        if suffix == "tweak":
+                            line_edit_name = f"ed_{n}_{suffix}"
+                        if suffix == "pos":
+                            line_edit_name = f"ed_{n}"
+                            if len(value)>0:
+                                value = "%0.6f"%float(value)
                     self.ui.findChild(QLineEdit, line_edit_name).setText(value)
             except:
                 pass
@@ -560,9 +580,35 @@ class ptyco_main_control(QMainWindow):
         if self.ui.actionPtychography_mode.isChecked():
             self.ui.actionPtychography_mode.setChecked(True)
             self.is_ptychomode = True
+            # if both detectors are chosen..
+            if self.ui.actionSAXS.isChecked() and self.ui.actionWAXS.isChecked():
+                # ask which one is for ptychography
+                detectors = ["SAXS", "WAXS"]
+                selected, ok = QInputDialog.getItem(
+                    self, "Select Detector for Ptychography",
+                    "Which detector will be used for ptychography measurement?",
+                    detectors, 0, False
+                )
+                if ok:
+                    if selected == "SAXS":
+                        self.detector_mode[0] = 'ptycho'
+                        self.detector_mode[1] = 'scattering'
+                    else:
+                        self.detector_mode[1] = 'ptycho'
+                        self.detector_mode[0] = 'scattering'                
+            else:
+                if self.ui.actionSAXS.isChecked():
+                    self.detector_mode[0] = 'ptycho'
+                if self.ui.actionWAXS.isChecked():
+                    self.detector_mode[1] = 'ptycho'
+                
         else:
             self.ui.actionPtychography_mode.setChecked(False)
             self.is_ptychomode = False
+            if self.ui.actionSAXS.isChecked():
+                self.detector_mode[0] = 'scattering'
+            if self.ui.actionWAXS.isChecked():
+                self.detector_mode[1] = 'scattering'            
 
     def select_hdf_multiframecapture(self):
         if self.ui.actionCapture_multi_frames.isChecked():
@@ -668,6 +714,7 @@ class ptyco_main_control(QMainWindow):
             else:
                 workingfolder = "%s/%s" %(workingfolder, wf_temp[i])
         #print(workingfolder, " update_scanname is called. with update_detector ", update_detector)
+        hdfname = ""
         if update_detector:
             for i, det in enumerate(self.detector):
                 if i==0:
@@ -697,13 +744,22 @@ class ptyco_main_control(QMainWindow):
                             det.FilePath = ptycho_path
                             tif_path = ""
                         else:
+                            if self.detector_mode[i] == "":
+                                self.detector_mode[i] = "ptycho"
+                            print("")
+                            print(f"Detector mode is {self.detector_mode[i]}")
+                            print("")
+                            if self.detector_mode[i] == 'ptycho':
+                                tp = ""
+                            
                             basepath = det.basepath
+                            #ptycho_path = os.path.join(basepath, workingfolder, 'ptycho').replace('\\', '/')
                             ptycho_path = os.path.join(basepath, workingfolder, 'ptycho', self.scannumberstring).replace('\\', '/')
                             det.FilePath = ptycho_path
                             tif_path = os.path.join("/ramdisk", workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
                             #tif_path = os.path.join("/ramdisk").replace('\\', '/')
 
-                    else: # SAXS/WAXS mode
+                    else: # scattering mode
                         if len(tp)==0:
                             continue
                         # basepath = "/mnt/Sector_12/12id-c"
@@ -717,11 +773,16 @@ class ptyco_main_control(QMainWindow):
                         tif_path = os.path.join("/ramdisk", workingfolder, tp_folder, self.scannumberstring).replace('\\', '/')
 
                     if len(tif_path) > 0:
-                        det.FilePath = tif_path
-                        det.FileName = tp+txt
+                        det.FilePath = '/ramdisk'
+                        det.FileName = "test"
+                        #det.FilePath = tif_path
+                        #det.FileName = tp+txt
 #                    print(ptycho_path)
                     det.filePut('FilePath', ptycho_path)
+                    print(f"txt is {txt}")
+                    hdfname = tp+txt
                     det.filePut('FileName', tp+txt)
+                    self.hdf_plugin_name[i] = hdfname
 
     def choose_softglue_channels(self):
         strv = ''
@@ -1373,34 +1434,36 @@ class ptyco_main_control(QMainWindow):
         # if read softglue failed...
         scaninfo = []
         scaninfo.append('#I detector_filename')
+
+        txt = self.ui.ed_scanname.text()
+        self.parameters.scan_number = int(self.ui.le_scannumber.text())
+        filename = "%s%0.3i"%(txt,self.parameters.scan_number)
+        scaninfo.append(filename)
+
         for det in self.detector:
             if det is not None:
                 if 'SG' in det._prefix:
                     det.FileCaptureOff()
                     det.Acquire = 0
-                    print("")
-                    print("Socket Capture is turned off.")
-                    print("")
                     success = True
-                fn = ""
-                if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):# capture mode
-                    while det.fileGet('WriteFile_RBV'): # still saving?
-                        time.sleep(0.01)
-                    fnum = det.fileGet('FileNumber_RBV')
-                    if str(fnum-1) not in fn:
-                        fn = det.fileGet('FullFileName_RBV', as_string=True)
-                else:
-                    if 'SG' not in det._prefix:
-                        fnum = det.FileNumber_RBV
-                        fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-                if len(fn)>0:
-                    print("===============================")
-                    print(f"saved filename: {fn}")
-                    print("===============================")
-                    filename = os.path.basename(fn)
-                else:
-                    filename = ""
-                scaninfo.append(filename)
+                # fn = ""
+                # if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):# capture mode
+                #     while det.fileGet('WriteFile_RBV'): # still saving?
+                #         time.sleep(0.01)
+                #     fnum = det.fileGet('FileNumber_RBV')
+                #     if str(fnum-1) not in fn:
+                #         fn = det.fileGet('FullFileName_RBV', as_string=True)
+                # else:
+                #     if 'SG' not in det._prefix:
+                #         fnum = det.FileNumber_RBV
+                #         fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+                # if len(fn)>0:
+                #     print("===============================")
+                #     print(f"saved filename: {fn}")
+                #     print("===============================")
+                #     filename = os.path.basename(fn)
+                # else:
+                #     filename = ""
         if len(scaninfo)>1:
             self.write_scaninfo_to_logfile(scaninfo)
 
@@ -1485,7 +1548,42 @@ class ptyco_main_control(QMainWindow):
         w = Worker(self.timescan0)
         w.signal.finished.connect(self.scandone)
         self.threadpool.start(w)
-        
+
+    def check_start_position(self, n):
+                        # Compare p0 and p0_original at 4 digits
+        p0_original = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+        p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
+        if len(p0_original)>0:
+            try:
+                p0_float = float(p0)
+                p0_original_float = float(p0_original)
+            except Exception:
+                p0_float = p0
+                p0_original_float = p0_original
+            print(p0_float, p0_original_float)
+            if round(p0_float, 4) != round(p0_original_float, 4):
+                msg = (
+                    f"Original position ({p0_original_float:.4f}) and new position ({p0_float:.4f}) differ.\n"
+                    "Do you want to move to the original position or update the original position with the current?"
+                )
+                dlg = QMessageBox(self)
+                dlg.setWindowTitle("Position Mismatch")
+                dlg.setText(msg)
+                move_btn = dlg.addButton("Move to original position", QMessageBox.AcceptRole)
+                update_btn = dlg.addButton("Update the original position", QMessageBox.DestructiveRole)
+                cancel_btn = dlg.addButton(QMessageBox.Cancel)
+                dlg.setIcon(QMessageBox.Question)
+                dlg.exec_()
+                clicked = dlg.clickedButton()
+                if clicked == move_btn:
+                    # Move to p0_original
+                    p0 = p0_original
+                elif clicked == update_btn:
+                    # Update the roginal position to current (new)
+                    p0_original = p0
+                    self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%float(p0_original))
+        return p0
+
     def fly2d(self, xmotor=0, ymotor=1, scanname = "", snake=False):
         if snake:
             # if snake scan chosen, softglue socket stream and MCS will be on automatically.            
@@ -1524,9 +1622,10 @@ class ptyco_main_control(QMainWindow):
                 scaninfo.append(n)
                 #p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
                 #if len(p0)==0:
-                p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-                self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+                p0 = self.check_start_position(n)
                 p0 = float(p0)
+                self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%p0)
+
                 initial_motorpos[m] = p0
                 st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
                 fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
@@ -1630,9 +1729,9 @@ class ptyco_main_control(QMainWindow):
                 scaninfo.append(n)
                 #p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
                 #if len(p0)==0:
-                p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-                self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+                p0 = self.check_start_position(n)
                 p0 = float(p0)
+                self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%p0)
                 initial_motorpos[m] = p0
                 st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
                 fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
@@ -1740,10 +1839,10 @@ class ptyco_main_control(QMainWindow):
             try:
                 scaninfo.append(n)
                 #p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-                #if len(p0)==0:
-                p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-                self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+                
+                p0 = self.check_start_position(n)
                 p0 = float(p0)
+                self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%p0)
                 initial_motorpos[m] = p0
                 st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
                 fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
@@ -1844,9 +1943,9 @@ class ptyco_main_control(QMainWindow):
         initial_motorpos = {}    
 
         try:
-            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+            p0 = self.check_start_position(n)
             p0 = float(p0)
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%p0)
             initial_motorpos[motornumber] = p0
             st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
             fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
@@ -1923,13 +2022,9 @@ class ptyco_main_control(QMainWindow):
             n = motornumber + 1
         
         try:
-            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
-#            p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-#            if len(p0)==0:
-#                p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-#                self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+            p0 = self.check_start_position(n)
             p0 = float(p0)
+            self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%p0)
             st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
             fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
             tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
@@ -2086,13 +2181,13 @@ class ptyco_main_control(QMainWindow):
         isDET_selected = False
         print(pos, " This is the phi angle to be measured...............")
         if len(self.detector)>0:
-            for det in self.detector:
+            for detN, det in enumerate(self.detector):
                 if det is not None:
                     isDET_selected = True
                     print(f"Exposure time set to %0.3f seconds for {det._prefix}."% expt)
                     try:
                         #det.fly_ready(expt, len(pos))
-                        det.step_ready(expt, len(pos))  # Arm detector for multiple data.
+                        det.step_ready(expt, len(pos), fn=self.hdf_plugin_name[detN])  # Arm detector for multiple data.
     #                            print("det is ready.")
                     except TimeoutError:
                         self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
@@ -2111,6 +2206,7 @@ class ptyco_main_control(QMainWindow):
         ## make a plot if needed.
 #        print(pos)
         N_imgcollected = 0
+        t0 = time.time()
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 break
@@ -2139,8 +2235,22 @@ class ptyco_main_control(QMainWindow):
                         time.sleep(0.1)
             # Waiting for data collection done.
             val = N_imgcollected
-            print(val, " This is current image number")
-            print(value, " This is position of motor")
+
+            # Update progress bar and status message.
+            timeelapsed = time.time()-t0
+            prog = float(i)/float(len(pos))
+            if update_progress:
+                update_progress(int(prog*100))
+            msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+            if prog>0:
+                remainingtime = timeelapsed/prog - timeelapsed
+            else:
+                remainingtime = 999
+            msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime,2)}s\n"
+            msg = "%s%s"%(msg1, msg2)
+            if update_status:
+                update_status(msg)
+
             for ndet, det in enumerate(self.detector):
                 if ndet>1: 
                     continue
@@ -2321,6 +2431,7 @@ class ptyco_main_control(QMainWindow):
         else:
             scanname=f"{scanname}{axis}"
         Nline = len(pos)
+        isreshreshed = 1
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 break
@@ -2341,12 +2452,24 @@ class ptyco_main_control(QMainWindow):
                 ismoving = self.pts.ismoving(axis)
 #            print("All motors are ready for fly scan.")
             # fly here
-            if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
-                for det in self.detector: #JD
-                    if det is not None:  #JD            
-                        det.filePut('FileNumber', i+1) 
 
-            self.fly0(xmotor)
+            status = 0
+            while status < 1:
+                if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
+                    for det in self.detector: #JD
+                        if det is not None:  #JD            
+                            det.filePut('FileNumber', i+1) 
+
+                status = self.fly0(xmotor)
+                if status is DETECTOR_NOT_STARTED_ERROR:
+                    isreshreshed = self.refresh_detectors()
+                if isreshreshed == 0:
+                    print("Detector refresh failed. Stopping scan.")
+                    msg1 = f'Detector refresh failed. Stopping scan.'
+                    update_status(msg1)
+                    break
+            if isreshreshed == 0:
+                break
 #            print("CCCC")
             self.flydone(return_motor=False)
             # try:
@@ -2370,6 +2493,21 @@ class ptyco_main_control(QMainWindow):
                 update_status(msg)
 
         self.run_stop_issued()
+
+    def refresh_detectors(self):
+        """Refresh the detectors to ensure they are ready for the next scan."""
+        stata = 1
+        for detN, det in enumerate(self.detector):
+            if detN > 1:
+                continue
+            if det is not None:
+                try:
+                    status = det.refresh() # if failed, it will return 0. ohterwise it will return 1.
+                    stata = stata*status
+                except Exception as e:
+                    print(f"Error refreshing detector {det._prefix}: {e}")
+                    self.ui.statusbar.showMessage(f"Error refreshing detector {det._prefix}: {e}")
+        return stata
     
     def fly_traj(self, xmotor=0, ymotor=-1):
     # Just in case when the user update edit box (during 3d scan) 
@@ -2761,21 +2899,21 @@ class ptyco_main_control(QMainWindow):
                 #print("Time to finish line 2182: %0.3f" % (time.time()-t0))
                 self.pts.hexapod.goto_start_pos(axis) # took 0.4 second
                 #print("Time to finish line 2184: %0.3f" % (time.time()-t0))
-                for det in self.detector:
+                for detN, det in enumerate(self.detector):
                     if det is not None:
                         det.FileTemplate = "%s%s_%5.5d_00001.tif"
                         try:
 #                            print(self.use_hdf_plugin, " This is use_hdf_plugin")
 #                            print(self.hdf_plugin_savemode, " This is use_hdf_plugin")
                             det.fly_ready(expt, self.pts.hexapod.pulse_number, period=period, 
-                                          isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
+                                          isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode), fn=self.hdf_plugin_name[detN])
                 #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
                         except TimeoutError:
                             self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
                             print(self.recent_error_msg)
                             self.ui.statusbar.showMessage(self.recent_error_msg)
                             #showerror("Detector timeout.")
-                            return
+                            return DETECTOR_NOT_STARTED_ERROR
                 print("Ready for traj")
                 pos = self.pts.get_pos(axis)
                 print(f"pos is {pos} before traj run start.")
@@ -2838,11 +2976,11 @@ class ptyco_main_control(QMainWindow):
                 raise DET_MIN_READOUT_Error("Period - Exposure Time should be longer than 50 microseconds.")
             
             # Need to make detectors ready
-            for det in self.detector:
+            for detN, det in enumerate(self.detector):
                 if det is not None:
                     try:
                         det.fly_ready(expt, Nstep, period=step, 
-                                        isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
+                                        isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode),fn=self.hdf_plugin_name[detN])
             #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
                     except TimeoutError:
                         self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
@@ -2903,20 +3041,21 @@ class ptyco_main_control(QMainWindow):
                 self.pts.mv(axis, st, wait=True)
                 #ax = self.pts.gonio.channel_names.index(axis)
                 self._prev_vel,self._prev_acc = self.pts.get_speed(axis)
-                print("prev speed was ", self._prev_vel)
-                print("speed should be ", abs(fe-st)/tm)
+#                print("prev speed was ", self._prev_vel)
+#                print("speed should be ", abs(fe-st)/tm)
                 self.pts.set_speed(axis, abs(fe-st)/tm, abs(fe-st)/tm*10)
                 time.sleep(0.02)
                 self.pts.mv(axis, fe, wait=True)
-                print("Should be in run.")
+#                print("Should be in run.")
         #self.isscan = False
 
         # check if data collections are all done..
         for det in self.detector:
             if det is not None:
-                print(f"Detector, {det._prefix}, will be foreced to stop")
+#                print(f"Detector, {det._prefix}, will be foreced to stop")
                 det.ForceStop(2)
         #print("Time to finish fly0: %0.3f" % (time.time()-t0))
+        return 1
 
     def is_traj_running(self):
         ret = False
@@ -2939,12 +3078,8 @@ class ptyco_main_control(QMainWindow):
         self.isfly = True
         n = motornumber+1
         p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-        self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
-#        p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-#        if len(p0)==0:
-#            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-#            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
         p0 = float(p0)
+        self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
         tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
@@ -3344,7 +3479,7 @@ class ptyco_main_control(QMainWindow):
                 #self.set_mv(self, axis, float(pos))
                 motornumber = self.motornames.index(axis)
                 n = motornumber+1
-                self.ui.findChild(QLineEdit, "ed_%i"%n).setText(pos)
+                self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%float(pos))
                 self.mv(motornumber=motornumber, val=float(pos))
         elif cmd == 'mvr':
             for axis, pos in data.items():
@@ -3405,238 +3540,10 @@ class ptyco_main_control(QMainWindow):
         motornumber = self.motornames.index(axis)
         self.mv(motornumber=motornumber, val=pos)
 
-try:
-    import ptychosaxs.tw_galil as gl
-    MotorControlAvailable = True
-except:
-    MotorControlAvailable = False
-    print("Galil is not working")
-
-try:
-    import ptychosaxs.smaract_gonio as smaract
-    MotorControlAvailable = True
-except:
-    MotorControlAvailable = False
-    print("SmarAct is not working")
-
-#MotorControlAvailable = False
-try:
-    import ptychosaxs.newport_piezo as np_piezo
-    MotorControlAvailable = True
-except:
-    MotorControlAvailable = False
-    print("Piezo is NOT available.")
-
-class motor_control(QMainWindow):
-#    resized = QtCore.pyqtSignal()
-
-    MOTOR_PREC = "%0.3f"
-    def __init__(self):
-        super(motor_control, self).__init__()
-        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
-        guiName = "motorGUI.ui"
-        self.ui = uic.loadUi(guiName)
-        
-        # list all possible motors
-        # this should came from the pts.
-        #controller = ['galil', 'smarAct', 'newport']
-        self.motornames = ['Beamstopv','Beamstoph','ZFv','ZFh','Camerav','Camerah','OSAv','OSAh', 
-                      'trans1', 'trans2', 'tilt1', 'tilt2',
-                      'ZF_Z','osa_Z','cam_Z',]
-        self.controller = ['galil','galil','galil','galil','galil','galil','galil','galil',
-                      'smarAct','smarAct','smarAct','smarAct',
-                      'newport','newport','newport']
-        self.motorindices = [0,1,2,3,4,5,6,7,
-                            0,1,2,3,
-                            0,1,2]
-        self.motorunits = ['step', 'step', 'step', 'step', 'step', 'step', 'step', 'step',
-                      'mm','mm','deg','deg',
-                      'mm','mm','mm']
-        self.lock = Lock()
-        self.threadpool = QThreadPool.globalInstance()
-        self.control = {}
-        self.control["galil"]= gl
-        self.control["galil"].turn_on()
-        self.control["smarAct"]= smaract
-        self.control["newport"]= np_piezo.newport()
-        enable = True
-        for i, name in enumerate(self.motornames):
-            n = i+1
-            self.enable_motors(n, enable)
-
-        # update GUI
-        for i, name in enumerate(self.motornames):
-            n = i+1
-            controller = self.control[self.controller[i]]
-            axisname = controller.motornames[self.motorindices[i]]
-            self.ui.findChild(QLabel, "lb%i"%n).setText(name)
-            self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(str(controller.get_pos(axisname)))
-#            print(axisname, " This is in line 3042")
-            self.ui.findChild(QPushButton, "pb_tweak%iL"%n).clicked.connect(lambda: self.mvr(-1, -1))
-            self.ui.findChild(QPushButton, "pb_tweak%iR"%n).clicked.connect(lambda: self.mvr(-1, 1))
-            # self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stepscan(-1))
-            # self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).clicked.connect(lambda: self.fly(-1))
-            self.ui.findChild(QLineEdit, "ed_%i"%n).returnPressed.connect(lambda: self.mv(-1, None))
-            self.ui.findChild(QLineEdit, "ed_reset_%i"%n).returnPressed.connect(lambda: self.reset(-1))
-            self.ui.findChild(QPushButton, "pb_lup_%i"%n).setText("Stop")
-            self.ui.findChild(QPushButton, "pb_lup_%i"%n).clicked.connect(lambda: self.stop(-1))
-                         
-        
-        # menu
-        self.ui.actionSmarAct_3.triggered.connect(self.enable_smarAct)
-        self.ui.actionNewport.triggered.connect(self.enable_galil)
-        self.ui.actionNewport_Piezo.triggered.connect(self.enable_newport)
-
-        if os.name == 'nt':
-            self.timer = QTimer()
-            self.timer.timeout.connect(self.updatepos)
-            self.timer.start(100)        
-        self.ui.show()
-        #self.resized.connect(self.resizeFunction)
-
-    def enable_motors(self, n, enable):
-        self.ui.findChild(QLabel, "lb%i"%n).setEnabled(enable)
-        self.ui.findChild(QLabel, "lb_%i"%n).setEnabled(enable)
-        self.ui.findChild(QPushButton, "pb_tweak%iL"%n).setEnabled(enable)
-        self.ui.findChild(QPushButton, "pb_tweak%iR"%n).setEnabled(enable)
-        self.ui.findChild(QPushButton, "pb_lup_%i"%n).setEnabled(enable)
-        self.ui.findChild(QPushButton, "pb_SAXSscan_%i"%n).setEnabled(False)
-        self.ui.findChild(QLineEdit, "ed_%i"%n).setEnabled(enable)   
-        self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).setEnabled(enable)               
-        self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).setEnabled(False)               
-        self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).setEnabled(False)               
-        self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).setEnabled(False)               
-        self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).setEnabled(False)  
-        self.ui.findChild(QLineEdit, "ed_reset_%i"%n).setEnabled(enable) 
-
-    
-    def set_ui_enability(self, controller="smarAct", enable=True):
-        for i, con in enumerate(self.controller):
-            if con == controller:
-                self.enable_motors(i+1, enable)
-
-    def enable_smarAct(self):
-        if self.ui.actionSmarAct_3.isChecked():
-            enable = True
-        else:
-            enable = False
-        self.set_ui_enability('smarAct', enable=enable)
-
-    def enable_galil(self):
-        if self.ui.actionNewport.isChecked():
-            enable = True
-        else:
-            enable = False
-        self.set_ui_enability('galil', enable=enable)
-
-    def enable_newport(self):
-        if self.ui.actionNewport_Piezo.isChecked():
-            enable = True
-        else:
-            enable = False
-        self.set_ui_enability('newport', enable=enable)
-
-    def stop(self, motornumber=-1):
-        if motornumber<0:
-            pb = self.sender()
-            objname = pb.objectName()
-            val_text = pb.text()
-            n = int(re.findall(r'\d+', objname)[0])
-            #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
-            motornumber = n-1
-        
-        controller = self.control[self.controller[motornumber]]
-        axis = controller.motornames[self.motorindices[motornumber]]
-        controller.stop(axis)
-
-    def reset(self, motornumber=-1):
-        if motornumber<0:
-            pb = self.sender()
-            objname = pb.objectName()
-            val_text = pb.text()
-            n = int(re.findall(r'\d+', objname)[0])
-            #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
-            motornumber = n-1
-        
-        controller = self.control[self.controller[motornumber]]
-        axis = controller.motornames[self.motorindices[motornumber]]
-        val = int(val_text)
-        with self.lock:
-            controller.set_pos(axis, val)
-
-    def mv(self, motornumber=-1, val=None):
-        if motornumber<0:
-            pb = self.sender()
-            objname = pb.objectName()
-            val_text = pb.text()
-            n = int(re.findall(r'\d+', objname)[0])
-            motornumber = n-1
-
-        controller = self.control[self.controller[motornumber]]
-        axis = controller.motornames[self.motorindices[motornumber]]
-        self.signalmotor = axis
-        self.signalmotorunit = controller.motorunits[self.motorindices[motornumber]]
-        self.set_ui_enability(controller, False)
-        if type(val)==type(None):
-            try:
-                val = float(val_text)
-            except:
-                showerror('Text box is empty.')
-                return
-        with self.lock:
-            controller.mv(axis, val, wait=False)
-        self.set_ui_enability(controller, True)
-
-    def mvr(self, motornumber=-1, sign=1, val=0):
-        if motornumber ==-1:
-            pb = self.sender()
-            objname = pb.objectName()
-            n = int(re.findall(r'\d+', objname)[0])
-            #n = [int(s) for s in objname.split('_') if s.isdigit()][0]
-            motornumber = n-1
-        #print("motornumber is ", motornumber)
-        controller = self.control[self.controller[motornumber]]
-        axis = controller.motornames[self.motorindices[motornumber]]
-        self.signalmotor = axis
-        #print("axis is ", axis)
-        #print("sign is ", sign)
-        self.signalmotorunit = controller.motorunits[self.motorindices[motornumber]]
-        self.set_ui_enability(controller, False)
-        if val==0:
-            val = float(self.ui.findChild(QLineEdit, "ed_%i_tweak"%n).text())
-        #print(f"Move {axis} by {sign*val}")
-
-        controller.mvr(axis, sign*val, wait=False)
-        self.set_ui_enability(controller, True)
-
-    def updatepos(self, axis = "", val=None):
-        # done = False
-        # timeout = 10
-        # ct0 = time.time()
-        if len(axis)==0:
-            for i, name in enumerate(self.motornames):
-                controller = self.control[self.controller[i]]
-                axis = controller.motornames[self.motorindices[i]]
-                if val is None:
-                    with self.lock:
-                        val = controller.get_pos(axis)
-                self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
-                val = None
-        else:
-            motornumber = self.motornames.index(axis)
-            controller = self.control[self.controller[motornumber]]
-            axis = controller.motornames[self.motorindices[motornumber]]
-            if val is None:
-                with self.lock:
-                    print(axis, " This is in line 3042")
-                    val = controller.get_pos(axis)
-            i = motornumber
-            self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText("%0.6f"%val)
-
 app = QApplication(sys.argv)
 main_panel = ptyco_main_control()
-if MotorControlAvailable:
-    motor_panel = motor_control()
+# if MotorControlAvailable:
+#     motor_panel = motor_control()
 
 def main():
 #    run gui with server option

@@ -107,9 +107,10 @@ class AD_Pilatus(Device):
         self.Arm()
         time.sleep(0.025)
 
-    def StartSingleFrame(self):
+    def StartSingleFrame(self, fn=""):
         self.ShutterMode = 0
-        fn = bytes(self.FileName_RBV).decode().strip('\x00')
+        if fn == "":
+            fn = bytes(self.FileName_RBV).decode().strip('\x00')
         self.setFileName("%s_%5.5d"%(fn, self.FileNumber_RBV))
         self.AutoIncrement = 1
         self.filePut('AutoIncrement', 1)

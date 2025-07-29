@@ -1,5 +1,5 @@
 from epics import caget, caput, PV
-
+import time
 beamlinePV = '12idc:'
 
 try:
@@ -15,6 +15,7 @@ class DET_OVER_READOUT_SPEED_Error(Exception):
     pass
 
 class pilatus(AD_Pilatus):
+	mode = ""
 	def __init__(self, basename="S12-PILATUS1:"):
 		super().__init__(basename)
 		self.setNDArrayPort()
@@ -49,7 +50,7 @@ class pilatus(AD_Pilatus):
 		self.filePut('AutoSave', 1)
 		self.filePut('FileWriteMode', 1)
 
-	def fly_ready(self, expt, x_points, y_points=1, wait=False, period=0, isTest=False, capture=(True, 1)):
+	def fly_ready(self, expt, x_points, y_points=1, wait=False, period=0, isTest=False, capture=(True, 1), fn=""):
 		Npoints = x_points*y_points
 		self.SetExposureTime(expt)
 		if period>0:
@@ -72,7 +73,7 @@ class pilatus(AD_Pilatus):
 					self.SetMultiFrames(Npoints, Npoints)
 				try:
 					if capture[1]==0:
-						self.StartSingleFrame()
+						self.StartSingleFrame(fn)
 					else:
 						self.StartCapture()
 						if wait:
@@ -82,7 +83,7 @@ class pilatus(AD_Pilatus):
 			else:
 				self.Arm()
 	
-	def step_ready(self, expt, N_image):
+	def step_ready(self, expt, N_image, fn=""):
 		self.SetExposureTime(expt)
 		self.setArrayCounter(0)
 		self.ImageMode = 1  #  multiple image
@@ -95,11 +96,46 @@ class pilatus(AD_Pilatus):
         # set filesaver
 		self.filePut('NumCapture',   1)
 		self.filePut('FileNumber',    1)
-		self.StartSingleFrame() # Arm the detector
+		self.StartSingleFrame(fn=fn) # Arm the detector
 
 
 	def set_scanNumberAsfilename(self):
 		fw_dir = caget(f"{beamlinePV}data:userDir")
 		self.setFilePath(fw_dir)
 		self.setFileName('scan{:03d}'.format(caget(f'{beamlinePV}saveData_scanNumber')))
+
+	def change2alignment_mode(self):
+		self.filePut('AutoSave', 0)
+		self.setArrayCounter(0)
+		self.TriggerMode = 4 # external triger mode
+	
+	def change2multitrigger_mode(self):
+		self.filePut('AutoSave', 1)
+		self.setArrayCounter(0)
+		self.TriggerMode = 3 # external triger mode
+
+	def refresh(self):
+		self.change2alignment_mode()
+		self.Acquire = 0
+		time.sleep(10)
+		self.Acquire = 1
+		time.sleep(1)
+		t0 = time.time()
+		timeout_trial = 3
+		while time.time()-t0 < 10:
+			if self.getArrayCounter() == 0:
+				time.sleep(0.1)
+				self.Acquire = 0
+				time.sleep(5)
+				self.Acquire = 1
+			if self.getArrayCounter() > 10:
+				break
+			if timeout_trial > 3:
+				return 0 # failed to refresh
+			timeout_trial += 1
+		self.Acquire = 0
+		self.change2multitrigger_mode()
+		return 1 # scuccessfully refreshed
+		
+
 
