@@ -115,19 +115,30 @@ class pilatus(AD_Pilatus):
 		self.TriggerMode = 3 # external triger mode
 
 	def refresh(self):
-		self.change2alignment_mode()
 		self.Acquire = 0
+		self.NumImages = 0
+		time.sleep(1)
+		self.change2alignment_mode()
+		time.sleep(1)
+		self.TriggerMode = 0 # internal triger mode
+		time.sleep(1)
+		self.TriggerMode = 4 # alignment
 		time.sleep(10)
 		self.Acquire = 1
 		time.sleep(1)
 		t0 = time.time()
 		timeout_trial = 3
-		while time.time()-t0 < 10:
+		while time.time()-t0 < 20:
 			if self.getArrayCounter() == 0:
 				time.sleep(0.1)
 				self.Acquire = 0
-				time.sleep(5)
+				time.sleep(0.1)
+				self.TriggerMode = 0 # internal triger mode
+				time.sleep(0.1)
+				self.TriggerMode = 4 # alignment
+				time.sleep(3)
 				self.Acquire = 1
+				time.sleep(1)
 			if self.getArrayCounter() > 10:
 				break
 			if timeout_trial > 3:

@@ -229,6 +229,7 @@ class motor_control(QMainWindow):
                 if val is None:
                     with self.lock:
                         val = controller.get_pos(axis)
+                        #print(val)
                 self.ui.findChild(QLabel, "lb_%i"%(i+1)).setText(self.MOTOR_PREC%val)
                 val = None
         else:

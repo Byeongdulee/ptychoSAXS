@@ -725,39 +725,42 @@ class ptyco_main_control(QMainWindow):
                     tp = "W"
                 if i>1:
                     tp = ""
+
+                Windows_workingfolder = self.ui.ed_workingfolder.text()
+
                 if det is not None:
                     #print(det._prefix, f" will be updated. {i}th detector.")
 
 #                    print(det.basepath, " This is the basepath")
 #                    print(workingfolder, " This is the workingfolder")
+                    ptycho_path = ""
+                    filename = ""
                     if self.is_ptychomode:
                         if "SG" in det._prefix:
+                            folder_type = 'positions'
                             basepath = det.basepath
-                            ptycho_path = os.path.join(basepath, workingfolder, 'positions', self.scannumberstring).replace('\\', '/')
-                            Windows_workingfolder = self.ui.ed_workingfolder.text()
-                            Windows_ptycho_path = os.path.join(Windows_workingfolder, 'positions', self.scannumberstring).replace('\\', '/')
-
-                            self.make_positions_folder(Windows_ptycho_path)
+#                            ptycho_path = os.path.join(basepath, workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
                             #print()
                             #print(f"This is in update_scanname update folder... {ptycho_path} ")
                             #print()
-                            det.FilePath = ptycho_path
+#                            det.FilePath = ptycho_path
                             tif_path = ""
                         else:
+                            folder_type = 'ptycho'
                             if self.detector_mode[i] == "":
                                 self.detector_mode[i] = "ptycho"
-                            print("")
-                            print(f"Detector mode is {self.detector_mode[i]}")
-                            print("")
+#                            print("")
+#                            print(f"Detector mode is {self.detector_mode[i]}")
+#                            print("")
                             if self.detector_mode[i] == 'ptycho':
                                 tp = ""
                             
                             basepath = det.basepath
                             #ptycho_path = os.path.join(basepath, workingfolder, 'ptycho').replace('\\', '/')
-                            ptycho_path = os.path.join(basepath, workingfolder, 'ptycho', self.scannumberstring).replace('\\', '/')
-                            det.FilePath = ptycho_path
-                            tif_path = os.path.join("/ramdisk", workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
-                            #tif_path = os.path.join("/ramdisk").replace('\\', '/')
+#                            ptycho_path = os.path.join(basepath, workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
+#                            det.FilePath = ptycho_path
+                            #tif_path = os.path.join("/ramdisk", workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
+                            tif_path = os.path.join("/ramdisk").replace('\\', '/')
 
                     else: # scattering mode
                         if len(tp)==0:
@@ -766,22 +769,33 @@ class ptyco_main_control(QMainWindow):
                         # ptycho_path = os.path.join(basepath, workingfolder, tp+'AXS').replace('\\', '/')
                         # det.FilePath = ptycho_path
                         # tif_path = os.path.join("/ramdisk").replace('\\', '/')
-                        tp_folder = tp+"AXS"
+                        folder_type = tp+"AXS"
                         basepath = det.basepath
-                        ptycho_path = os.path.join(basepath, workingfolder, tp_folder, self.scannumberstring).replace('\\', '/')
-                        det.FilePath = ptycho_path
-                        tif_path = os.path.join("/ramdisk", workingfolder, tp_folder, self.scannumberstring).replace('\\', '/')
-
-                    if len(tif_path) > 0:
-                        det.FilePath = '/ramdisk'
-                        det.FileName = "test"
+#                        det.FilePath = ptycho_path
+                        #tif_path = os.path.join("/ramdisk", workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
+                        tif_path = ""
+                    hdfname = tp+txt
+                    if i<2:
+                        if not self.use_hdf_plugin:
+                            tif_path = ptycho_path
+                            filename = hdfname
+                        if len(tif_path) ==0:
+                            tif_path = '/ramdisk'
+                        if len(filename) == 0:
+                            filename = "test"
+                        det.FilePath = tif_path
+                        det.FileName = filename
                         #det.FilePath = tif_path
                         #det.FileName = tp+txt
 #                    print(ptycho_path)
+#                    print(tif_path, " This is tif path")
+                    Windows_ptycho_path = os.path.join(Windows_workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
+                    self.make_positions_folder(Windows_ptycho_path)
+                    ptycho_path = os.path.join(basepath, workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
+#                    print(ptycho_path, " This is ptycho path")
                     det.filePut('FilePath', ptycho_path)
-                    print(f"txt is {txt}")
-                    hdfname = tp+txt
-                    det.filePut('FileName', tp+txt)
+#                    print(f"txt is {txt}")
+                    det.filePut('FileName', hdfname)
                     self.hdf_plugin_name[i] = hdfname
 
     def choose_softglue_channels(self):
@@ -1153,30 +1167,32 @@ class ptyco_main_control(QMainWindow):
 
     def get_softglue_filename(self):
         foldername = self.ui.ed_workingfolder.text()
-        
-        filename = ""
-        for det in self.detector:
-            if det is not None:
-                if self.use_hdf_plugin and self.hdf_plugin_savemode>0:# capture mode
-                    while det.fileGet('WriteFile_RBV'):
-                        time.sleep(0.01)
-                    fnum = det.fileGet('FileNumber_RBV')
-                    fn = det.fileGet('FullFileName_RBV', as_string=True)
-                    if str(fnum-1) not in fn:
-                        fn = det.fileGet('FullFileName_RBV', as_string=True)
-                    filename = os.path.basename(fn)
-                    filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)      
-                else:
-                    fnum = det.FileNumber_RBV
-                    fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-                    filename = os.path.basename(fn)
-                    filename = "%s" % rstrip_from_char(filename, "_")
-                
-        if len(filename) ==0:
-            self.recent_error_msg = "****** Detector ioc is not available."
-            print(self.recent_error_msg)
-            filename = "temp%i"%int(time.time())
+        filename = self.ui.lb_scanname.text()
         return (foldername, filename)
+
+        # filename = ""
+        # for det in self.detector:
+        #     if det is not None:
+        #         if self.use_hdf_plugin and self.hdf_plugin_savemode>0:# capture mode
+        #             while det.fileGet('WriteFile_RBV'):
+        #                 time.sleep(0.01)
+        #             fnum = det.fileGet('FileNumber_RBV')
+        #             fn = det.fileGet('FullFileName_RBV', as_string=True)
+        #             if str(fnum-1) not in fn:
+        #                 fn = det.fileGet('FullFileName_RBV', as_string=True)
+        #             filename = os.path.basename(fn)
+        #             filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)      
+        #         else:
+        #             fnum = det.FileNumber_RBV
+        #             fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+        #             filename = os.path.basename(fn)
+        #             filename = "%s" % rstrip_from_char(filename, "_")
+                
+        # if len(filename) ==0:
+        #     self.recent_error_msg = "****** Detector ioc is not available."
+        #     print(self.recent_error_msg)
+        #     filename = "temp%i"%int(time.time())
+        # return (foldername, filename)
     
     def softglue_savingdone(self):
         self.is_softglue_savingdone = True
@@ -2070,7 +2086,8 @@ class ptyco_main_control(QMainWindow):
         self.write_scaninfo_to_logfile(scaninfo)    
         # start the scan
         self.isscan = True
-        
+        if self.monitor_beamline_status:
+            self.shutterC.open()        
         w = Worker(self.stepscan0, motornumber, update_progress=None, update_status=None)
         w.signal.finished.connect(self.scandone)
         w.signal.progress.connect(self.updateprogressbar)
@@ -2329,11 +2346,15 @@ class ptyco_main_control(QMainWindow):
             scan="%s%0.3d"%(scanname, i)
             self.progress_3d = (i, len(pos))
             if snake:
-                self.fly2d0_SNAKE(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
+                retval = self.fly2d0_SNAKE(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
                     update_progress=update_progress, update_status=update_status)
             else:
-                self.fly2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
+                retval = self.fly2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
                     update_progress=update_progress, update_status=update_status)
+            if retval == -1:
+                msg = f'Detector refresh failed .'
+                update_status(msg)
+                break
             if update_status:
                 msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {(i+1)/len(pos)*100}%.'
                 update_status(msg)
@@ -2469,7 +2490,7 @@ class ptyco_main_control(QMainWindow):
                     update_status(msg1)
                     break
             if isreshreshed == 0:
-                break
+                return -1
 #            print("CCCC")
             self.flydone(return_motor=False)
             # try:
@@ -2493,6 +2514,7 @@ class ptyco_main_control(QMainWindow):
                 update_status(msg)
 
         self.run_stop_issued()
+        return 1
 
     def refresh_detectors(self):
         """Refresh the detectors to ensure they are ready for the next scan."""
@@ -2501,6 +2523,13 @@ class ptyco_main_control(QMainWindow):
             if detN > 1:
                 continue
             if det is not None:
+                scaninfo = []
+                scaninfo.append("\n")
+                scaninfo.append(f'#I {det._prefix} IOC error at %{time.ctime()}.\n')
+                m1, m2, m3 = det.getMessages()
+                scaninfo.append(f"{m1}\n{m2}\n{m3}")
+                scaninfo.append("\n")
+                self.write_scaninfo_to_logfile(scaninfo)
                 try:
                     status = det.refresh() # if failed, it will return 0. ohterwise it will return 1.
                     stata = stata*status
@@ -2761,6 +2790,7 @@ class ptyco_main_control(QMainWindow):
             if det is not None:
                 det.ForceStop(2)
         self.run_stop_issued()
+        return 1
         #print("Time to finish fly0: %0.3f" % (time.time()-t0))
 
     def fly0(self, motornumber=-1, update_progress=None, update_status=None):

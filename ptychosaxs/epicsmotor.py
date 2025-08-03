@@ -49,7 +49,7 @@ class epicsmotor(object):
             n = self.motornames.index(axis)
         if type(axis)==int:
             n = axis-1
-        pos = self.motors[n].get_position()
+        pos = self.motors[n].get('RBV')
         return pos
 
     def set_pos(self, axis, pos):

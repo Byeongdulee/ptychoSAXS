@@ -14,7 +14,8 @@ class AD_Pilatus(Device):
                 'FileTemplate', 'FileTemplate_RBV', 
                 'FileName', 'FileName_RBV', 'FullFileName_RBV', 
                 'Acquire', 'Acquire_RBV', 'AcquireTime', 'AcquirePeriod',
-                'Armed', 'ArrayCounter', 'ArrayCounter_RBV')
+                'Armed', 'ArrayCounter', 'ArrayCounter_RBV',
+                'StatusMessage_RBV', 'StringToServer_RBV', 'StringFromServer_RBV')
 
     pathattrs = ('FileNumber', 'FileNumber_RBV', 
                  'FilePath', 'FileWriteMode',
@@ -221,6 +222,9 @@ class AD_Pilatus(Device):
 
     def getLastFileName(self):
         return self.fileGet('FullFileName_RBV',as_string=True)
+
+    def getMessages(self):
+        return self.fileGet('StatusMessage_RBV',as_string=True), self.fileGet('StringToServer_RBV',as_string=True), self.fileGet('StringFromServer_RBV',as_string=True), 
 
     def FileCaptureOn(self):
         return self.filePut('Capture', 1)
