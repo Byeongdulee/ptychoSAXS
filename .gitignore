@@ -411,3 +411,5 @@ gui/_numbers.npy
 *.npy
 *.ini
 *.ini
+*.npy
+*.ini

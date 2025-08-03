@@ -776,13 +776,14 @@ class ptyco_main_control(QMainWindow):
                         tif_path = ""
                     hdfname = tp+txt
                     if i<2:
+                        filename = hdfname
                         if not self.use_hdf_plugin:
                             tif_path = ptycho_path
                             filename = hdfname
                         if len(tif_path) ==0:
                             tif_path = '/ramdisk'
-                        if len(filename) == 0:
-                            filename = "test"
+                        #if len(filename) == 0:
+                        #    filename = "test"
                         det.FilePath = tif_path
                         det.FileName = filename
                         #det.FilePath = tif_path
@@ -1168,31 +1169,31 @@ class ptyco_main_control(QMainWindow):
     def get_softglue_filename(self):
         foldername = self.ui.ed_workingfolder.text()
         filename = self.ui.lb_scanname.text()
-        return (foldername, filename)
+        #return (foldername, filename)
 
-        # filename = ""
-        # for det in self.detector:
-        #     if det is not None:
-        #         if self.use_hdf_plugin and self.hdf_plugin_savemode>0:# capture mode
-        #             while det.fileGet('WriteFile_RBV'):
-        #                 time.sleep(0.01)
-        #             fnum = det.fileGet('FileNumber_RBV')
-        #             fn = det.fileGet('FullFileName_RBV', as_string=True)
-        #             if str(fnum-1) not in fn:
-        #                 fn = det.fileGet('FullFileName_RBV', as_string=True)
-        #             filename = os.path.basename(fn)
-        #             filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)      
-        #         else:
-        #             fnum = det.FileNumber_RBV
-        #             fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-        #             filename = os.path.basename(fn)
-        #             filename = "%s" % rstrip_from_char(filename, "_")
+        filename = ""
+        for det in self.detector:
+            if det is not None:
+                if self.use_hdf_plugin and self.hdf_plugin_savemode>0:# capture mode
+                    while det.fileGet('WriteFile_RBV'):
+                        time.sleep(0.01)
+                    fnum = det.fileGet('FileNumber_RBV')
+                    fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    if str(fnum-1) not in fn:
+                        fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    filename = os.path.basename(fn)
+                    filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)      
+                else:
+                    fnum = det.FileNumber_RBV
+                    fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+                    filename = os.path.basename(fn)
+                    filename = "%s" % rstrip_from_char(filename, "_")
                 
-        # if len(filename) ==0:
-        #     self.recent_error_msg = "****** Detector ioc is not available."
-        #     print(self.recent_error_msg)
-        #     filename = "temp%i"%int(time.time())
-        # return (foldername, filename)
+        if len(filename) ==0:
+            self.recent_error_msg = "****** Detector ioc is not available."
+            print(self.recent_error_msg)
+            filename = "temp%i"%int(time.time())
+        return (foldername, filename)
     
     def softglue_savingdone(self):
         self.is_softglue_savingdone = True
