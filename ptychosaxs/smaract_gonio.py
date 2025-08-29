@@ -351,12 +351,13 @@ def set_pos(ax, position=0):
     if type(ax) == str:
         ax = motornames.index(ax)
 
-    pos=position*1E9
+    #print(ax)
+    pos=int(position*1E9)
     # For the sake of completeness, finally we use the asynchronous (non-blocking) write function to
     # set the position to -0.1 mm respectively -100 degree.
 #    position = -100000000
     print("MCS2 set position of channel {} to {}".format(ax, pos), end='')
-    print("pm.") if base_units[ax] == ctl.BaseUnit.METER else print("ndeg.")
+    print(" pm.") if base_units[ax] == ctl.BaseUnit.METER else print(" ndeg.")
     r_id = ctl.RequestWriteProperty_i64(smaract, ax, ctl.Property.POSITION, pos)
     # The function call returns immediately, without waiting for the reply from the controller.
     # ...process other tasks...

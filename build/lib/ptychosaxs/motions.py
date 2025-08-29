@@ -301,6 +301,21 @@ class motors(object):
         if axis in self.gonio.channel_names:
             ch = self.gonio.channel_names.index(axis)
             self.gonio.set_speed(ch, vel, acc)
+    
+    def set_pos(self, axis, pos=0):
+        # if 'newport_piezo' in axis:
+        #     if axis == "newport_piezo1":
+        #         n = 0
+        #     if axis == "newport_piezo2":
+        #         n = 1
+        #     if axis == "newport_piezo3":
+        #         n = 2
+        #     self.newport_piezo[n].put('VBAS', vel)
+        if axis == "phi":
+            acsc.setRPosition(self.phi.controller.hc, self.phi.axisno, pos)
+        if axis in self.gonio.channel_names:
+            ch = self.gonio.channel_names.index(axis)
+            self.gonio.set_pos(ch, pos)
         
     def disconnect(self):
         self.hexapod.disconnect()
