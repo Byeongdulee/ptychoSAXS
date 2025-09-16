@@ -2203,11 +2203,14 @@ class ptyco_main_control(QMainWindow):
             pos = self.pts.qds.get_position(self.parameters.softglue_channels)
         pos = np.array(pos)
         r = pos/1000
+        r = np.append(r, epics.caget('usxLAX:12IDE_temperature'))
+        #print(r)
         if isrefavailable:
             ref = [self.parameters._ref_X, self.parameters._ref_Z, self.parameters._ref_Z2]
-            if len(ref)<len(pos):
-                ref = ref + [0]*(len(pos)-len(ref))
+            if len(ref)<len(r):
+                ref = ref + [0]*(len(r)-len(ref))
             ref = np.array(ref) 
+            #print(ref)
             r = r-ref
         return r
 

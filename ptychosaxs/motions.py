@@ -11,6 +11,11 @@ except:
     hexapod.connected = [False,False,False,False,False,False]
     hexapod.WaveGenID = WaveGenID
 
+ishexpodavailable = True
+try:
+    hexapod.get_pos()
+except:
+    ishexpodavailable = False
 #hexapod.axis_names = ["X","Y","Z","U","V","W"]
 
 try:
@@ -145,7 +150,10 @@ class motors(object):
         if axis == "phi":
             return float(self.posphi)
         if axis in self.hexapod.axes:
-            pos = self.hexapod.get_pos()
+            if ishexpodavailable:
+                pos = self.hexapod.get_pos()
+            else:
+                pos = {"X":-999,"Y":-999,"Z":-999,"U":-999,"V":-999,"W":-999}
             return float(pos[axis])
         if axis in self.gonio.channel_names:
             ch = self.gonio.channel_names.index(axis)
