@@ -414,6 +414,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionWAXS.triggered.connect(lambda: self.select_detectors(2))
         self.ui.actionStruck.triggered.connect(lambda: self.select_detectors(3))
         self.ui.actionSG.triggered.connect(lambda: self.select_detectors(4))
+        self.ui.actionDante.triggered.connect(lambda: self.select_detectors(5))
         self.ui.actionReset_to_Fly_mode.triggered.connect(self.reset_det_flymode)
         self.ui.actionChannels_to_record.triggered.connect(self.choose_softglue_channels)
         self.ui.actionSave_current_results.triggered.connect(self.save_softglue)
@@ -514,9 +515,9 @@ class ptyco_main_control(QMainWindow):
 
         # detectors
         self.det_readout_time = 0.02 # detector minimum readout time.
-        self.detector = [None]*4
-        self.detector_mode = ['', '', '', '']
-        self.hdf_plugin_name = ['','','','']
+        self.detector = [None]*5
+        self.detector_mode = ['', '', '', '', 'XRF']
+        self.hdf_plugin_name = ['','','','', '']
 
         if os.name == 'nt':
             self.timer = QTimer()
@@ -766,17 +767,8 @@ class ptyco_main_control(QMainWindow):
 #                    print(workingfolder, " This is the workingfolder")
                     hdf_path = ""
                     filename = ""
-                    if self.is_ptychomode:
-                        if "SG" in det._prefix:
-                            folder_type = 'positions'
-                            basepath = det.basepath
-#                            hdf_path = os.path.join(basepath, workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
-                            #print()
-                            #print(f"This is in update_scanname update folder... {hdf_path} ")
-                            #print()
-#                            det.FilePath = hdf_path
-                            tif_path = ""
-                        else:
+                    if i<2:
+                        if self.is_ptychomode:
                             folder_type = 'ptycho'
                             if self.detector_mode[i] == "":
                                 self.detector_mode[i] = "ptycho"
@@ -793,18 +785,31 @@ class ptyco_main_control(QMainWindow):
                             #tif_path = os.path.join("/ramdisk", workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
                             tif_path = os.path.join("/ramdisk").replace('\\', '/')
 
-                    else: # scattering mode
-                        if len(tp)==0:
-                            continue
-                        # basepath = "/mnt/Sector_12/12id-c"
-                        # hdf_path = os.path.join(basepath, workingfolder, tp+'AXS').replace('\\', '/')
-                        # det.FilePath = hdf_path
-                        # tif_path = os.path.join("/ramdisk").replace('\\', '/')
-                        folder_type = tp+"AXS"
+                        else: # scattering mode
+                            if len(tp)==0:
+                                continue
+                            # basepath = "/mnt/Sector_12/12id-c"
+                            # hdf_path = os.path.join(basepath, workingfolder, tp+'AXS').replace('\\', '/')
+                            # det.FilePath = hdf_path
+                            # tif_path = os.path.join("/ramdisk").replace('\\', '/')
+                            folder_type = tp+"AXS"
+                            basepath = det.basepath
+    #                        det.FilePath = hdf_path
+                            #tif_path = os.path.join("/ramdisk", workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
+                            tif_path = ""
+                    if "SG" in det._prefix:
+                        folder_type = 'positions'
                         basepath = det.basepath
-#                        det.FilePath = hdf_path
-                        #tif_path = os.path.join("/ramdisk", workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
+#                            hdf_path = os.path.join(basepath, workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
+                        #print()
+                        #print(f"This is in update_scanname update folder... {hdf_path} ")
+                        #print()
+#                            det.FilePath = hdf_path
                         tif_path = ""
+                    if "Dante" in det._prefix:
+                        folder_type = 'Dante'
+                        basepath = det.basepath
+                        
                     hdfname = tp+txt
                     if i<2:
                         filename = hdfname
@@ -1167,6 +1172,15 @@ class ptyco_main_control(QMainWindow):
                 self.switch_SGstream(True)
             else:
                 self.switch_SGstream(False)
+        if N==5:
+            basename = '12idcDAN:'
+            if self.ui.actionDante.isChecked():
+                self.ui.actionDante.setChecked(True)
+                self.detector[4] = pilatus(basename)
+                self.detector[4].basepath = self.det_basepath
+            else:
+                self.ui.actionDante.setChecked(False)
+                self.detector[4] = None
         self.update_scanname()
 
     def switch_SGstream(self, status=True):
@@ -2458,11 +2472,11 @@ class ptyco_main_control(QMainWindow):
 
     def fly2d0(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
         self.update_scanname()
-        for det in self.detector: #JD
+        for i, det in enumerate(self.detector): #JD
             if det is not None:  #JD
-                det.filePut('FileNumber', 1)  #JD
-                det.FileTemplate = '%s%s_%5.5d_00001.tif'
-                if 'SG' not in det._prefix:
+                if i<2:
+                    det.filePut('FileNumber', 1)  #JD
+                    det.FileTemplate = '%s%s_%5.5d_00001.tif'
                     det.FileNumber = 1
 
         # xmotor is for flying
@@ -2672,12 +2686,13 @@ class ptyco_main_control(QMainWindow):
 
     def fly2d0_SNAKE(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
         self.update_scanname()
-        for det in self.detector: #JD
-            if det is not None:  #JD
-                det.filePut('FileNumber', 1)  #JD
-                det.FileTemplate = '%s%s_%5.5d.tif'
-                if 'SG' not in det._prefix:
-                    det.FileNumber = 1
+        for i, det in enumerate(self.detector): #JD
+            if i<2:
+                if det is not None:  #JD
+                    det.filePut('FileNumber', 1)  #JD
+                    det.FileTemplate = '%s%s_%5.5d.tif'
+                    if 'SG' not in det._prefix:
+                        det.FileNumber = 1
 
 
         self.isfly2 = False

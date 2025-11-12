@@ -2145,7 +2145,7 @@
      <x>0</x>
      <y>0</y>
      <width>1300</width>
-     <height>31</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -2257,6 +2257,7 @@
     <addaction name="actionSAXS"/>
     <addaction name="actionWAXS"/>
     <addaction name="actionStruck"/>
+    <addaction name="actionDante"/>
     <addaction name="actionSG"/>
     <addaction name="separator"/>
     <addaction name="actionReset_to_Fly_mode"/>
@@ -2266,6 +2267,7 @@
     <addaction name="actionUse_hdf_plugin"/>
     <addaction name="actionPtychography_mode"/>
     <addaction name="actionCapture_multi_frames"/>
+    <addaction name="separator"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuHexapod"/>
@@ -2636,6 +2638,11 @@
   <action name="actionPut_DET_alignmode">
    <property name="text">
     <string>Put DET alignmode</string>
+   </property>
+  </action>
+  <action name="actionDante">
+   <property name="text">
+    <string>Dante</string>
    </property>
   </action>
  </widget>
