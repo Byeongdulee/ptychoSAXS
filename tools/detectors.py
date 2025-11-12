@@ -195,7 +195,7 @@ class dante(AD_Dante):
 		
 		isHDFMode = capture[0]; #use hdf plugin?
 
-		self.SetMultiFrames(Npoints, x_points)
+		self.SetMultiFrames(Npoints)
 		#self.setFileNumber(1)
 		if not isTest:
 			if isHDFMode:
