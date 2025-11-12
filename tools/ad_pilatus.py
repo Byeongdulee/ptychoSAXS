@@ -327,7 +327,7 @@ class AD_Dante(Device):
     def CCD_waitstarted(self):
         t = time.time()
         TIMEOUT = 10
-        while self.MCAAcquiring == 0:
+        while self.MCAAcquiringd == 0:
             self.EraseStart = 1
             time.sleep(0.1)
             if abs(time.time()-t)>TIMEOUT:
@@ -372,9 +372,10 @@ class AD_Dante(Device):
         time.sleep(0.025)
 
     def StartSingleFrame(self, fn=""):
-        if fn == "":
-            fn = bytes(self.FileName_RBV).decode().strip('\x00')
-        self.setFileName("%s_%5.5d"%(fn, self.FileNumber_RBV))
+        #if fn == "":
+        #    fn = bytes(self.FileName_RBV).decode().strip('\x00')
+        if len(fn)>0:
+            self.setFileName("%s"%fn)
         self.filePut('AutoIncrement', 1)
         self.filePut('FileNumber',1)
         self.filePut('AutoSave', 1)
@@ -626,8 +627,8 @@ class AD_SG(Device):
 
     def StartSingleFrame(self):
         self.ShutterMode = 0
-        fn = bytes(self.FileName_RBV).decode().strip('\x00')
-        self.setFileName("%s_%5.5d"%(fn, self.FileNumber_RBV))
+        #fn = bytes(self.FileName_RBV).decode().strip('\x00')
+        #self.setFileName("%s_%5.5d"%(fn, self.FileNumber_RBV))
         self.AutoIncrement = 1
         self.filePut('AutoIncrement', 1)
         self.filePut('FileNumber',1)
