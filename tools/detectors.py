@@ -165,7 +165,7 @@ class dante(AD_Dante):
         #     self.NumTriggers = n
 
 	def wait_trigDone(self):
-		while self.Acquire_RBV:
+		while self.MCAAcquiring:
 			if self.getCapture()==0:
 				if (self.fileGet("AutoSave")==0):
 					self.FileWrite()
