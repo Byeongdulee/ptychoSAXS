@@ -327,7 +327,7 @@ class AD_Dante(Device):
     def CCD_waitstarted(self):
         t = time.time()
         TIMEOUT = 10
-        while self.MCAAcquiringd == 0:
+        while self.MCAAcquiring == 0:
             self.EraseStart = 1
             time.sleep(0.1)
             if abs(time.time()-t)>TIMEOUT:
