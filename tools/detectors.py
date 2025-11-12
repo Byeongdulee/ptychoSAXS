@@ -196,6 +196,9 @@ class dante(AD_Dante):
 		isHDFMode = capture[0]; #use hdf plugin?
 
 		self.SetMultiFrames(Npoints)
+		if fn == "":
+			fn = bytes(self.FileName_RBV).decode().strip('\x00')
+			self.setFileName("%s_%5.5d"%(fn, self.FileNumber_RBV))
 		#self.setFileNumber(1)
 		if not isTest:
 			if isHDFMode:
