@@ -60,7 +60,7 @@ except:
 from tools import struck
 
 # detectors
-from tools.detectors import pilatus, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
+from tools.detectors import pilatus, dante, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
 import re
 import analysis.planeeqn as eqn
 import py12inifunc
@@ -1176,7 +1176,7 @@ class ptyco_main_control(QMainWindow):
             basename = '12idcDAN:'
             if self.ui.actionDante.isChecked():
                 self.ui.actionDante.setChecked(True)
-                self.detector[4] = pilatus(basename)
+                self.detector[4] = dante(basename)
                 self.detector[4].basepath = self.det_basepath
             else:
                 self.ui.actionDante.setChecked(False)

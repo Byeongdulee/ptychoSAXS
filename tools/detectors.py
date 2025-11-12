@@ -151,7 +151,7 @@ class pilatus(AD_Pilatus):
 
 class dante(AD_Dante):
 	mode = ""
-	def __init__(self, basename="S12-PILATUS1:"):
+	def __init__(self, basename="12idcDAN:"):
 		super().__init__(basename)
 		self.setNDArrayPort()
 #		self.detmode = PILATUSMODE
