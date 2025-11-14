@@ -1,0 +1,2 @@
+run2d xmotor 0 ymotor 1 scanname test
+run3d xmotor 0 ymotor 1 phimotor 6 scanname test

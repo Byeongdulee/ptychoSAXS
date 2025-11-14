@@ -288,6 +288,7 @@ class ptyco_main_control(QMainWindow):
             self.parameters.logfilename = ""
             self.parameters.scan_number = 0
             self.parameters._ratio_exp_period = FRACTION_EXPOSURE_PERIOD
+            self.parameters.scan_time = -1
 
         self.isscan = False
         self.isfly = False
@@ -1121,6 +1122,7 @@ class ptyco_main_control(QMainWindow):
             scaninfo.append('#D')
             scaninfo.append(time.ctime())
         self.run_stop_issued()
+        self.update_status_scan_time()
 
     def set_det_alignmode(self):
         for det in self.detector:
@@ -1570,6 +1572,7 @@ class ptyco_main_control(QMainWindow):
         if len(self.motor_p0.keys()) ==1: # 1d fly
             self.updateprogressbar(100)
         print(f"Elapsed time to finish flydone = {time.time()-ct0}")
+        self.update_status_scan_time()
 
     def flydone2d(self, value=0):
         for key in self.motor_p0:
@@ -1588,6 +1591,7 @@ class ptyco_main_control(QMainWindow):
         self.isfly = False
         self.updateprogressbar(100)
         self.shutterC.close()
+        self.update_status_scan_time()
 
     def flydone3d(self, value=0):
         for key in self.motor_p0:
@@ -1602,7 +1606,12 @@ class ptyco_main_control(QMainWindow):
         self.isfly = False
         self.updateprogressbar(100)
         self.shutterC.close()
-    
+        self.update_status_scan_time()
+
+    def update_status_scan_time(self, time=-1): 
+        self.parameters.scan_time = time
+        self.parameters.writeini()
+
     def timescanstop(self):
         self.isscan = False
 
@@ -1888,7 +1897,8 @@ class ptyco_main_control(QMainWindow):
 
     def updateprogressbar(self, value):
         self.ui.progressBar.setValue(value)
-    
+        self.update_status_scan_time(value)
+        
     def update_status_bar(self, message):
         self.ui.statusbar.showMessage(message)
 
@@ -2074,6 +2084,7 @@ class ptyco_main_control(QMainWindow):
         w.kwargs['update_progress'] = w.signal.progress.emit
         self.threadpool.start(w)
         self.run_stop_issued()
+        self.update_status_scan_time()
 
     def write_scaninfo_to_logfile(self, strlist):
         if len(self.parameters.logfilename) == 0:
@@ -2231,7 +2242,7 @@ class ptyco_main_control(QMainWindow):
     def run_stop_issued(self):
         self.parameters.scan_number = self.parameters.scan_number + 1
         self.update_scannumber()
-        self.parameters.writeini()        
+        self.parameters.writeini()
 
     def update_scannumber(self):
         SCAN_NUMBER_IOC.put(int(self.parameters.scan_number))
