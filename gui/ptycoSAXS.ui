@@ -2641,6 +2641,9 @@
    </property>
   </action>
   <action name="actionDante">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Dante</string>
    </property>
