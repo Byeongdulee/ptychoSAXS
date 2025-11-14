@@ -13,19 +13,23 @@ UDP_PORT = 20002
 #   setrange axis Y L -1 R 1 N 0.01 t 2
 #   run2d
 #   run2d xmotor 0 
-#   run2d [xmotor 0 ymotor 1 scanname test]
-#   run3d [xmotor 0 ymotor 1 phimotor 6 scanname test]
+#   run2d xmotor 0 ymotor 1 scanname test
+#   run3d xmotor 0 ymotor 1 phimotor 6 scanname test
 #   setfolder folder c:\data
 #   toggle controllerfly on
 #   toggle keepprevscan off
 #   toggle reversescan on
-d = {}
-d['command']=sys.argv[1]
-data = {}
-for i in range(int((len(sys.argv)-2)/2)):
-    data[sys.argv[2*i+2]] = sys.argv[2*i+3]
-d['data'] = data
-msg = json.dumps(d)
-print(msg)
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.sendto(bytes(msg, 'utf-8'), (UDP_IP, UDP_PORT))
+def send_command(argv):
+    d = {}
+    d['command']=argv[0]
+    data = {}
+    for i in range(int((len(sys.argv)-2)/2)):
+        data[sys.argv[2*i+1]] = sys.argv[2*i+2]
+    d['data'] = data
+    msg = json.dumps(d)
+    print(msg)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.sendto(bytes(msg, 'utf-8'), (UDP_IP, UDP_PORT))
+    
+if __name__ == "__main__":
+    send_command(sys.argv[1:])
