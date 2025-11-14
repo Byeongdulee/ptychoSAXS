@@ -198,9 +198,8 @@ class dante(AD_Dante):
 		self.SetMultiFrames(Npoints)
 		#if fn != "":
 		#	fn = bytes(self.FileName_RBV).decode().strip('\x00')
-		if fn != "":
-			fn = bytes(self.FileName_RBV).decode().strip('\x00')
-		self.setFileName("%s_%5.5d"%(fn, self.FileNumber_RBV))
+		if len(fn)>0:
+			self.setFileName("%s"%fn)
 		#self.setFileNumber(1)
 		if not isTest:
 			if isHDFMode:
@@ -224,11 +223,12 @@ class dante(AD_Dante):
 		self.setFileTemplate('%s%s_%5.5d.h5')
 
 		self.SetMultiFrames(N_image)
-
+		if len(fn)>0:
+			self.setFileName("%s"%fn)
         # set filesaver
 		self.filePut('NumCapture',   1)
 		self.filePut('FileNumber',    1)
-		self.StartCapture(fn=fn) # Arm the detector
+		self.StartCapture() # Arm the detector
 		self.Arm()
 
 	def set_scanNumberAsfilename(self):

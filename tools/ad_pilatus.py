@@ -327,7 +327,7 @@ class AD_Dante(Device):
     def CCD_waitstarted(self):
         t = time.time()
         TIMEOUT = 10
-        while self.MCAAcquiringd == 0:
+        while self.MCAAcquiring == 0:
             self.EraseStart = 1
             time.sleep(0.1)
             if abs(time.time()-t)>TIMEOUT:
@@ -342,17 +342,27 @@ class AD_Dante(Device):
         "set exposure time, re-acquire offset correction"
         self.PresetReal = t
 
+    def Set_external_trigger_mode(self):
+        self.CollectMode = 1  # MCA Mapping 
+        #time.sleep(0.1)
+        self.NumMCAChannels = 2 # 4096 channels.
+        self.GatingMode = 4 # Gate high.
+        self.ListBufferSize = 4096
+
+    # free run mode
+    def Set_freerun_mode(self):
+        self.CollectMode = 1  # MCA Mapping 
+        #time.sleep(0.1)
+        self.NumMCAChannels = 2 # 4096 channels.
+        self.GatingMode = 0 # Free run mode
+        self.ListBufferSize = 4096
+
     def SetMultiFrames(self, n_trig):
         """set number of images(triggers) for camera
         AND the number of images to capture with file plugin
         When you want to arm camera for 100 images and save every 20 images into a file,
         SetMultiFrames(100, 20)
         """
-        self.CollectMode = 1  # MCA Mapping 
-        #time.sleep(0.1)
-        self.NumMCAChannels = 2 # 4096 channels.
-        self.GatingMode = 4 # Gate high.
-        self.ListBufferSize = 4096
 
         # number of images for collection and capture
         self.MappingPoints = n_trig
@@ -385,6 +395,20 @@ class AD_Dante(Device):
         #self.filePut('Capture', 1)  # start capture
         self.Arm()
         #time.sleep(0.25)
+
+    def Stop(self):
+        if self.MCAAcquiring == 1:
+            t = time.time()
+            self.StopAll = 0 # stop acquire
+            while self.MCAAcquiring == 1:
+                self.StopAll = 0 # stop acquire
+                time.sleep(0.1)
+                if abs(time.time()-t)>10:
+                    print("DANTE still running timeout.")
+                    raise TimeoutError
+        if self.getCapture() == 1:
+            self.filePut('Capture', 0)
+            time.sleep(0.1)
 
     def ForceStop(self, timeouttime = 2):
         t0 = time.time()
