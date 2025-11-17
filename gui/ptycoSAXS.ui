@@ -2254,10 +2254,17 @@
     <property name="title">
      <string>Detectors</string>
     </property>
+    <widget class="QMenu" name="menuDante">
+     <property name="title">
+      <string>XRF</string>
+     </property>
+     <addaction name="actionXSP3"/>
+     <addaction name="actionDante"/>
+    </widget>
     <addaction name="actionSAXS"/>
     <addaction name="actionWAXS"/>
     <addaction name="actionStruck"/>
-    <addaction name="actionDante"/>
+    <addaction name="menuDante"/>
     <addaction name="actionSG"/>
     <addaction name="separator"/>
     <addaction name="actionReset_to_Fly_mode"/>
@@ -2638,6 +2645,14 @@
   <action name="actionPut_DET_alignmode">
    <property name="text">
     <string>Put DET alignmode</string>
+   </property>
+  </action>
+  <action name="actionXSP3">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>XSP3</string>
    </property>
   </action>
   <action name="actionDante">

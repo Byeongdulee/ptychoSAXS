@@ -416,6 +416,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionStruck.triggered.connect(lambda: self.select_detectors(3))
         self.ui.actionSG.triggered.connect(lambda: self.select_detectors(4))
         self.ui.actionDante.triggered.connect(lambda: self.select_detectors(5))
+        self.ui.actionXSP.triggered.connect(lambda: self.select_detectors(6))
         self.ui.actionReset_to_Fly_mode.triggered.connect(self.reset_det_flymode)
         self.ui.actionChannels_to_record.triggered.connect(self.choose_softglue_channels)
         self.ui.actionSave_current_results.triggered.connect(self.save_softglue)
@@ -1178,10 +1179,21 @@ class ptyco_main_control(QMainWindow):
             basename = '12idcDAN:'
             if self.ui.actionDante.isChecked():
                 self.ui.actionDante.setChecked(True)
+                self.ui.actionXSP.setChecked(False)
                 self.detector[4] = dante(basename)
                 self.detector[4].basepath = self.det_basepath
             else:
                 self.ui.actionDante.setChecked(False)
+                self.detector[4] = None
+        if N==6:
+            basename = 'XSP3_4Chan:'
+            if self.ui.actionXSP.isChecked():
+                self.ui.actionXSP.setChecked(True)
+                self.ui.actionDante.setChecked(False)
+                self.detector[4] = dante(basename)
+                self.detector[4].basepath = self.det_basepath
+            else:
+                self.ui.actionXSP.setChecked(False)
                 self.detector[4] = None
         self.update_scanname()
 
