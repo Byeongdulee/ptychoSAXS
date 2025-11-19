@@ -12,6 +12,14 @@ class opticsbox(epicsmotor): # motors for opticsbox
     def __init__(self, pvlist=["12idc:m2", "12idc:m10", "12idc:m11", "12idc:m12", "12idc:m13"]):
         super().__init__(pvlist)
 
+class OSA(epicsmotor): # motors for OSA (Z, X, Y)
+    def __init__(self, pvlist=["12idc:m9", "12idc:m15", "12idc:m16"]):
+        super().__init__(pvlist)
+
+class camera(epicsmotor): # motors for optical camera
+    def __init__(self, pvlist=["12idc:m2"]):
+        super().__init__(pvlist)
+
 class beamstop(epicsmotor): # motors for beamstop
     def __init__(self, pvlist=["12ideSFT:m4", "12ideSFT:m5"]):
         super().__init__(pvlist)

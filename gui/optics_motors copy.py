@@ -20,7 +20,7 @@ sys.path.append('../ptychosaxs')
 import tw_galil as gl
 MotorControlAvailable = True
 try:
-    from optics import ptyoptics, opticsbox, OSA, camera, beamstop, gentry
+    from optics import ptyoptics
     from newport_piezo import newport
     MotorControlAvailable = True
 except:
@@ -41,36 +41,25 @@ class motor_control(QMainWindow):
         # this should came from the pts.
         #controller = ['galil', 'smarAct', 'newport']
         self.control = {}
-        self.control["opticsbox"]= opticsbox()
-        self.control["OSA"]= OSA()
-        self.control["camera"]= camera()
-        self.control["beamstop"]= beamstop()
-        self.motornames = []
-        self.motorunits = []
-        self.motorindices = []
-        self.controller = []
-        for i, m in enumerate(self.control["opticsbox"].motors):
-            self.motornames.append(m.DESC)
-            self.motorunits.append(m.EGU)
-            self.controller.append('opticsbox')
-            self.motorindices.append(i)
+        self.control["galil"]= gl
+        self.control["galil"].turn_on()
+        self.control["newport"]= newport()
+        self.control["optics"]= ptyoptics()
+
+        self.motornames = ['OSAv','OSAh']
+        self.controller = ['galil','galil']
+        self.motorindices = [6,7]
+        self.motorunits = ['step', 'step']
         
-        for i, m in enumerate(self.control["OSA"].motors):
+        for i, m in enumerate(self.control["optics"].motors):
             self.motornames.append(m.DESC)
             self.motorunits.append(m.EGU)
-            self.controller.append('OSA')
+            self.controller.append('optics')
             self.motorindices.append(i)
-        
-        for i, m in enumerate(self.control["camera"].motors):
+        for i, m in enumerate(self.control["newport"].motors):
             self.motornames.append(m.DESC)
             self.motorunits.append(m.EGU)
-            self.controller.append('camera')
-            self.motorindices.append(i)
-        
-        for i, m in enumerate(self.control["beamstop"].motors):
-            self.motornames.append(m.DESC)
-            self.motorunits.append(m.EGU)
-            self.controller.append('beamstop')
+            self.controller.append('newport')
             self.motorindices.append(i)
         print(self.motornames)
         self.lock = Lock()
