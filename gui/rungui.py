@@ -425,7 +425,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionTestFly.triggered.connect(self.scantest)
         self.ui.ed_workingfolder.setText(self.parameters.working_folder)
         self.ui.ed_workingfolder.returnPressed.connect(self.update_workingfolder)
-        self.ui.ed_scanname.returnPressed.connect(lambda: self.update_scanname(False))
+        self.ui.ed_scanname.returnPressed.connect(lambda: self.update_scanname(True))
         self.ui.actionSet_waittime_between_scans.triggered.connect(self.set_waittime_between_scans)
         self.ui.actionMonitor_Beamline_Status.triggered.connect(self.set_monitor_beamline_status)
         self.ui.actionUse_hdf_plugin.triggered.connect(self.set_hdf_plugin_use)
@@ -749,6 +749,7 @@ class ptyco_main_control(QMainWindow):
                 workingfolder = "%s/%s" %(workingfolder, wf_temp[i])
         #print(workingfolder, " update_scanname is called. with update_detector ", update_detector)
         hdfname = ""
+        #print(self.detector)
         if update_detector:
             for i, det in enumerate(self.detector):
                 if i==0:
@@ -763,10 +764,10 @@ class ptyco_main_control(QMainWindow):
                 Windows_workingfolder = self.ui.ed_workingfolder.text()
 
                 if det is not None:
-                    #print(det._prefix, f" will be updated. {i}th detector.")
+                    # print(det._prefix, f" will be updated. {i}th detector.")
 
-#                    print(det.basepath, " This is the basepath")
-#                    print(workingfolder, " This is the workingfolder")
+                    # print(det.basepath, " This is the basepath")
+                    # print(workingfolder, " This is the workingfolder")
                     hdf_path = ""
                     filename = ""
                     if i<2:
@@ -790,27 +791,36 @@ class ptyco_main_control(QMainWindow):
                         else: # scattering mode
                             if len(tp)==0:
                                 continue
-                            # basepath = "/mnt/Sector_12/12id-c"
+                            #basepath = "/mnt/Sector_12/12id-c/"
+                            basepath = self.det_basepath
                             # hdf_path = os.path.join(basepath, workingfolder, tp+'AXS').replace('\\', '/')
                             # det.FilePath = hdf_path
                             # tif_path = os.path.join("/ramdisk").replace('\\', '/')
                             folder_type = tp+"AXS"
-                            basepath = det.basepath
+                            # basepath = det.basepath
     #                        det.FilePath = hdf_path
                             #tif_path = os.path.join("/ramdisk", workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
                             tif_path = ""
                     if "SG" in det._prefix:
                         folder_type = 'positions'
-                        basepath = det.basepath
+                        if self.is_ptychomode:
+                            basepath = det.basepath
+                        else:
+                            basepath = self.det_basepath
 #                            hdf_path = os.path.join(basepath, workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
                         #print()
                         #print(f"This is in update_scanname update folder... {hdf_path} ")
                         #print()
 #                            det.FilePath = hdf_path
                         tif_path = ""
-                    if "Dante" in det._prefix:
-                        folder_type = 'Dante'
-                        basepath = det.basepath
+                    if "dante" in det._prefix:
+                        folder_type = 'dante'
+                        if self.is_ptychomode:
+                            basepath = det.basepath
+                        else:
+                            basepath = self.det_basepath
+                        # basepath = det.basepath
+                        #basepath = "/net/micdata/data2/12IDC/"
                         
                     hdfname = tp+txt
                     if i<2:
@@ -829,12 +839,14 @@ class ptyco_main_control(QMainWindow):
 #                    print(hdf_path)
 #                    print(tif_path, " This is tif path")
                     Windows_hdf_path = os.path.join(Windows_workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
+                    #print(Windows_hdf_path, " This is Windows hdf path")
                     self.make_positions_folder(Windows_hdf_path)
                     hdf_path = os.path.join(basepath, workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
-#                    print(hdf_path, " This is ptycho path")
+                    #print(hdf_path, " This is ptycho path")
                     det.filePut('FilePath', hdf_path)
 #                    print(f"txt is {txt}")
                     det.filePut('FileName', hdfname)
+                    #print(f"Detector {i} path set to {hdf_path}, filename set to {hdfname}")
                     self.hdf_plugin_name[i] = hdfname
 
     def choose_softglue_channels(self):
@@ -1133,7 +1145,8 @@ class ptyco_main_control(QMainWindow):
 
     def set_basepaths(self):
         # Prompt user for base path for detectors
-        default_basepath = '/net/micdata/data2'
+#        default_basepath = '/net/micdata/data2'
+        default_basepath = '/net/s12data/export/12id-c/'
         if len(self.det_basepath)>0:
             default_basepath = self.det_basepath
         text, ok = QInputDialog.getText(self, "Set Detector Base Path", "Base path for detectors:", QLineEdit.Normal, default_basepath)
@@ -1148,7 +1161,7 @@ class ptyco_main_control(QMainWindow):
             if self.ui.actionSAXS.isChecked():
                 self.ui.actionSAXS.setChecked(True)
                 self.detector[0] = pilatus(basename)
-                self.detector[0].basepath = self.det_basepath
+                #self.detector[0].basepath = self.det_basepath
                 #self.detector[0].basename = basename
             else:
                 self.ui.actionSAXS.setChecked(False)
@@ -1158,7 +1171,7 @@ class ptyco_main_control(QMainWindow):
             if self.ui.actionWAXS.isChecked():
                 self.ui.actionWAXS.setChecked(True)
                 self.detector[1] = pilatus(basename)
-                self.detector[1].basepath = self.det_basepath
+                #self.detector[1].basepath = self.det_basepath
                 #self.detector[1].basename = basename
             else:
                 self.ui.actionWAXS.setChecked(False)
@@ -1181,7 +1194,7 @@ class ptyco_main_control(QMainWindow):
                 self.ui.actionDante.setChecked(True)
                 self.ui.actionXSP3.setChecked(False)
                 self.detector[4] = dante(basename)
-                self.detector[4].basepath = self.det_basepath
+                #self.detector[4].basepath = self.det_basepath
             else:
                 self.ui.actionDante.setChecked(False)
                 self.detector[4] = None
@@ -1191,7 +1204,7 @@ class ptyco_main_control(QMainWindow):
                 self.ui.actionXSP3.setChecked(True)
                 self.ui.actionDante.setChecked(False)
                 self.detector[4] = dante(basename)
-                self.detector[4].basepath = self.det_basepath
+                #self.detector[4].basepath = self.det_basepath
             else:
                 self.ui.actionXSP3.setChecked(False)
                 self.detector[4] = None
@@ -1202,7 +1215,7 @@ class ptyco_main_control(QMainWindow):
         if status:
             self.ui.actionSG.setChecked(True)
             self.detector[3] = SG(basename)
-            self.detector[3].basepath = self.det_basepath
+            #self.detector[3].basepath = self.det_basepath
             #self.detector[3].basename = basename
             if self.ui.actionCapture_multi_frames.isChecked():
                 self.hdf_plugin_savemode = 2

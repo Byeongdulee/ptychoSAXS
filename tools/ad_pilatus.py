@@ -27,7 +27,7 @@ class AD_Pilatus(Device):
 
     _nonpvs  = ('_prefix', '_pvs', '_delim', 'filesaver','basepath',
                 'camattrs', 'pathattrs', '_nonpvs')
-    def __init__(self, prefix, filesaver='HDF1:', basepath = "/ramdisk"):
+    def __init__(self, prefix, filesaver='HDF1:', basepath = "/net/micdata/data2/"):
         camprefix = prefix + 'cam1:'
         Device.__init__(self, camprefix, delim='',
                         mutable=False,
@@ -297,7 +297,7 @@ class AD_Dante(Device):
 
     _nonpvs  = ('_prefix', '_pvs', '_delim', 'filesaver','basepath',
                 'camattrs', 'pathattrs', '_nonpvs')
-    def __init__(self, prefix, filesaver='HDF1:', basepath = "/"):
+    def __init__(self, prefix, filesaver='HDF1:', basepath = "/net/micdata/data2/"):
         camprefix = prefix + 'dante1:'
         Device.__init__(self, camprefix, delim='',
                         mutable=False,
@@ -577,7 +577,7 @@ class AD_XSP(Device):
 
     _nonpvs  = ('_prefix', '_pvs', '_delim', 'filesaver','basepath',
                 'camattrs', 'pathattrs', '_nonpvs')
-    def __init__(self, prefix, filesaver='HDF1:', basepath = "/net/s12data/export/12id-c/"):
+    def __init__(self, prefix, filesaver='HDF1:', basepath = "/net/micdata/data2/"):
         camprefix = prefix + 'det1:'
         Device.__init__(self, camprefix, delim='',
                         mutable=False,
