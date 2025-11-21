@@ -9,7 +9,7 @@ class ptyoptics(epicsmotor): # all motors
         super().__init__(pvlist)
 
 class opticsbox(epicsmotor): # motors for opticsbox
-    def __init__(self, pvlist=["12idc:m2", "12idc:m10", "12idc:m11", "12idc:m12", "12idc:m13"]):
+    def __init__(self, pvlist=["12idc:m10", "12idc:m11", "12idc:m12", "12idc:m13", "12idc:m14"]):
         super().__init__(pvlist)
 
 class OSA(epicsmotor): # motors for OSA (Z, X, Y)
