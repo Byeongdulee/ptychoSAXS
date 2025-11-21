@@ -2213,6 +2213,7 @@
      </property>
      <addaction name="actionflyX_and_stepY"/>
      <addaction name="actionsnake"/>
+     <addaction name="actionstepscan"/>
     </widget>
     <widget class="QMenu" name="menu3D_XYphi_scan">
      <property name="title">
@@ -2220,9 +2221,11 @@
      </property>
      <addaction name="actionnormal_2D"/>
      <addaction name="actionsnake_2D"/>
+     <addaction name="actionstep_2D"/>
     </widget>
     <addaction name="actionTestFly"/>
     <addaction name="actionMonitor_Beamline_Status"/>
+    <addaction name="actionShutter_Close_Afterscan"/>
     <addaction name="separator"/>
     <addaction name="actionRatio_of_exptime_period_for_Flyscan"/>
     <addaction name="actionSet_waittime_between_scans"/>
@@ -2613,17 +2616,17 @@
   </action>
   <action name="actionsnake">
    <property name="text">
-    <string>snake</string>
+    <string>fly snake</string>
    </property>
   </action>
   <action name="actionnormal_2D">
    <property name="text">
-    <string>normal 2D</string>
+    <string>fly X and step Y</string>
    </property>
   </action>
   <action name="actionsnake_2D">
    <property name="text">
-    <string>snake 2D</string>
+    <string>fly snake</string>
    </property>
   </action>
   <action name="actionSG">
@@ -2661,6 +2664,24 @@
    </property>
    <property name="text">
     <string>Dante</string>
+   </property>
+  </action>
+  <action name="actionstepscan">
+   <property name="text">
+    <string>stepscan</string>
+   </property>
+  </action>
+  <action name="actionstep_2D">
+   <property name="text">
+    <string>stepscan</string>
+   </property>
+  </action>
+  <action name="actionShutter_Close_Afterscan">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Shutter Close Afterscan</string>
    </property>
   </action>
  </widget>

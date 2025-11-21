@@ -229,7 +229,7 @@ class shutter():
     def __init__(self):
         self.shutterC_open = epics.PV('12ida2:rShtrC:Open')
         self.shutterC_close = epics.PV('12ida2:rShtrC:Close')
-        self.status = epics.PV('PA:12ID:STA_C_BEAMREADY_PL.VAL')
+        self.status = epics.PV('PB:12ID:STA_C_SCS_CLSD_PL.VAL')
     def open(self):
         timout = 5
         self.shutterC_open.put(1)
@@ -402,10 +402,13 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionScanStop.triggered.connect(self.stopscan)
         self.isStopScanIssued = False
         self.is_hexrecord_required = False
+        self.shutter_close_after_scan = False
         self.ui.actionflyX_and_stepY.triggered.connect(lambda: self.fly2d(xm, ym))
         self.ui.actionsnake.triggered.connect(lambda: self.fly2d(xm, ym, snake=True))
+        self.ui.actionstepscan.triggered.connect(self.stepscan2d(xm, ym))
         self.ui.actionnormal_2D.triggered.connect(lambda: self.fly3d(xm, ym, phim))
         self.ui.actionsnake_2D.triggered.connect(lambda: self.fly3d(xm, ym, phim, snake=True))
+        self.ui.actionstep_2D.triggered.connect(lambda: self.stepscan3d(xm, ym, phim))
         self.ui.actionSelect_time_intervals.triggered.connect(self.select_timeintervals)
         self.ui.actionTrigout.triggered.connect(lambda: self.set_softglue_in(1))
         self.ui.actionDetout.triggered.connect(lambda: self.set_softglue_in(2))
@@ -428,6 +431,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.ed_scanname.returnPressed.connect(lambda: self.update_scanname(True))
         self.ui.actionSet_waittime_between_scans.triggered.connect(self.set_waittime_between_scans)
         self.ui.actionMonitor_Beamline_Status.triggered.connect(self.set_monitor_beamline_status)
+        self.ui.actionShutter_Close_Afterscan.triggered.connect(self.set_shutter_close_after_scan)
         self.ui.actionUse_hdf_plugin.triggered.connect(self.set_hdf_plugin_use)
         self.ui.actionPtychography_mode.triggered.connect(self.select_detector_mode)
         self.ui.actionCapture_multi_frames.triggered.connect(self.select_hdf_multiframecapture)
@@ -664,6 +668,15 @@ class ptyco_main_control(QMainWindow):
         else:
             self.ui.actionMonitor_Beamline_Status.setChecked(False)
             self.monitor_beamline_status = False
+
+    def set_shutter_close_after_scan(self):
+        if self.ui.actionShutter_Close_Afterscan.isChecked():
+            self.ui.actionShutter_Close_Afterscan.setChecked(True)
+            self.shutter_close_after_scan = True
+        else:
+            self.ui.actionShutter_Close_Afterscan.setChecked(False)
+            self.shutter_close_after_scan = False
+
 
     def checkshutter(self, value, **kws):
         if not self.ui.actionMonitor_Beamline_Status.isChecked():
@@ -1476,7 +1489,8 @@ class ptyco_main_control(QMainWindow):
     def flydone(self, return_motor=True):
         if return_motor:
             # when 1D scan is done.
-            self.shutterC.close()
+            if self.shutter_close_after_scan:
+                self.shutterC.close()
             for key in self.motor_p0:
                 if self.motornames[key] == 'phi':
                     self.setphivel_default()
@@ -1615,7 +1629,8 @@ class ptyco_main_control(QMainWindow):
 #            print("save_scaninfo is empty yet. This will save phi angles......")
         self.isfly = False
         self.updateprogressbar(100)
-        self.shutterC.close()
+        if self.shutter_close_after_scan:
+            self.shutterC.close()
         self.update_status_scan_time()
 
     def flydone3d(self, value=0):
@@ -1630,7 +1645,8 @@ class ptyco_main_control(QMainWindow):
         self.updatepos()
         self.isfly = False
         self.updateprogressbar(100)
-        self.shutterC.close()
+        if self.shutter_close_after_scan:
+            self.shutterC.close()
         self.update_status_scan_time()
 
     def update_status_scan_time(self, time=-1): 
@@ -2620,9 +2636,11 @@ class ptyco_main_control(QMainWindow):
         p0 = float(p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+        step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
         self.stepscan2d_p0 = p0
         self.stepscan2d_st = st
         self.stepscan2d_fe = fe
+        self.stepscan2d_step = step
 
         n = xmotor+1
         p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
@@ -2630,10 +2648,12 @@ class ptyco_main_control(QMainWindow):
         p0 = float(p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
-        expt = float(self.ui.findChild(QLineEdit, "ed_lup_%i_tm"%n).text())
+        expt = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+        step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
         self.stepscan1d_p0 = p0
         self.stepscan1d_st = st
         self.stepscan1d_fe = fe
+        self.stepscan1d_step = step
 
         ## prepare zig-zag positions ................
         # build Y range (absolute)
@@ -2821,27 +2841,11 @@ class ptyco_main_control(QMainWindow):
 
             # monitoring the station ready
             if self.monitor_beamline_status:
+                # if beam is down, wait here
                 if self.isOK2run is not True:
-                    ct0 = time.time()
-                    while self.isOK2run is not True:
-                        time.sleep(10)
-                        msg = f'Beam has been down for {int((time.time()-ct0)/60)} minutes.'
-                        update_status(msg)
-                        if self.isStopScanIssued:
-                            break
-                    # Need some action after shutter back up
-                    self.shutter.put(1)
-                    msg = f'Beam just came back. A-shutter open command was sent and run will resume in 5mins.'
-                    update_status(msg)
-                    time.sleep(60)
-                    self.shutter.put(1)
-                    time.sleep(60*4)
-                    scaninfo = []
-                    scaninfo.append('\n')
-                    scaninfo.append('#Note: Shutter has been closed for %i mins'%int((time.time()-ct0)/60))
-                    scaninfo.append('#Note: angle %0.3f will be re-run'%value)
+                    self.wait_for_beam(update_status, value)
+                    # retry the same angle
                     i -= 1
-                    self.write_scaninfo_to_logfile(scaninfo) 
             i=i+1
 
 
@@ -2912,28 +2916,33 @@ class ptyco_main_control(QMainWindow):
 
             # monitoring the station ready
             if self.monitor_beamline_status:
+                # if beam is down, wait here
                 if self.isOK2run is not True:
-                    ct0 = time.time()
-                    while self.isOK2run is not True:
-                        time.sleep(10)
-                        msg = f'Beam has been down for {int((time.time()-ct0)/60)} minutes.'
-                        update_status(msg)
-                        if self.isStopScanIssued:
-                            break
-                    # Need some action after shutter back up
-                    self.shutter.put(1)
-                    msg = f'Beam just came back. A-shutter open command was sent and run will resume in 5mins.'
-                    update_status(msg)
-                    time.sleep(60)
-                    self.shutter.put(1)
-                    time.sleep(60*4)
-                    scaninfo = []
-                    scaninfo.append('\n')
-                    scaninfo.append('#Note: Shutter has been closed for %i mins'%int((time.time()-ct0)/60))
-                    scaninfo.append('#Note: angle %0.3f will be re-run'%value)
+                    self.wait_for_beam(update_status, value)
+                    # retry the same angle
                     i -= 1
-                    self.write_scaninfo_to_logfile(scaninfo) 
             i=i+1
+
+    def wait_for_beam(self, update_status, value):
+        ct0 = time.time()
+        while self.isOK2run is not True:
+            time.sleep(10)
+            msg = f'Beam has been down for {int((time.time()-ct0)/60)} minutes.'
+            update_status(msg)
+            if self.isStopScanIssued:
+                break
+        # Need some action after shutter back up
+        self.shutter.put(1)
+        msg = f'Beam just came back. A-shutter open command was sent and run will resume in 5mins.'
+        update_status(msg)
+        time.sleep(60)
+        self.shutter.put(1)
+        time.sleep(60*4)
+        scaninfo = []
+        scaninfo.append('\n')
+        scaninfo.append('#Note: Shutter has been closed for %i mins'%int((time.time()-ct0)/60))
+        scaninfo.append('#Note: angle %0.3f will be re-run'%value)
+        self.write_scaninfo_to_logfile(scaninfo) 
 
     def fly2d0(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
         self.update_scanname()
