@@ -2206,18 +2206,124 @@ class ptyco_main_control(QMainWindow):
         self.threadpool.start(w)
 
 
-    
-    # def createflyscanthread(self, motornumber, type):
-    #     thread = QThread()
-    #     w = Worker()
-    #     w.moveToThread(thread)
-    #     thread.started.connect(lambda: self.fly0(motornumber, type))
-    #     w.progress.connect(self.update_graph)
-    #     w.finished.connect(thread.quit)
-    #     w.finished.connect(w.deleteLater)
-    #     thread.finished.connect(thread.deleteLater)
-    #     return thread
-    
+    def stepscan2d(self, xmotor=0, ymotor=1, scanname = ""):
+        self.update_scanname()
+        self.write_motor_scan_range()
+        self.isStopScanIssued = False
+        motor = [xmotor, ymotor]
+        print(f'\n\n{scan_name}:{xmotor=}; {ymotor=}')
+
+        # logging
+        scaninfo = []
+        scaninfo.append('\n#S')
+        scaninfo.append(self.parameters.scan_number)
+        scaninfo.append(scan_name)
+        initial_motorpos = {}
+        for i, m in enumerate(motor):
+            n = m+1
+            try:
+                scaninfo.append(n)
+                #p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+                #if len(p0)==0:
+                p0 = self.check_start_position(n)
+                if type(p0) == type(None):
+                    print("Canceled.")
+                    break
+                if type(p0) == type("a"):
+                    p0 = float(p0)
+                self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%p0)
+
+                initial_motorpos[m] = p0
+                st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+                fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+                tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+                step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+                scaninfo.append(p0)
+                scaninfo.append(st)
+                scaninfo.append(fe)
+                scaninfo.append(tm)      
+                scaninfo.append(step)      
+            except:
+                showerror("Check scan paramters.")
+                return 0
+            if i == 0:
+                self.stepscan1d_p0 = p0
+                self.stepscan1d_st = st
+                self.stepscan1d_fe = fe
+                self.stepscan1d_tm = tm
+                self.stepscan1d_step = step
+            if i == 1:
+                self.stepscan2d_p0 = p0
+                self.stepscan2d_st = st
+                self.stepscan2d_fe = fe
+                self.stepscan2d_tm = tm
+                self.stepscan2d_step = step
+
+
+
+
+        # signal for qds
+        axis = self.motornames[xmotor]
+        self.signalmotor = axis
+        self.signalmotorunit = self.motorunits[xmotor]
+        print("stepscan2d is called............................")
+
+        self.time_scanstart = time.time()
+        self.stepscan3d_p0 = None
+        self.stepscan3d_st = None
+        self.stepscan3d_fe = None
+        self.stepscan3d_tm = None
+        self.stepscan3d_step = None
+        self.progress_3d = None
+        self.motor_p0 = initial_motorpos
+
+        scaninfo.append('\n#Motor Information\n')
+        m = self.get_pos_all()
+        for name in self.motornames:
+            scaninfo.append(name)
+        scaninfo.append('\n')
+        for key in m:
+            scaninfo.append(m[key])
+
+        self.write_scaninfo_to_logfile(scaninfo)
+        scaninfo = []
+        scaninfo.append('#D')
+        scaninfo.append(time.ctime())
+
+        if snake:
+            self.fly_traj(xmotor, ymotor)
+            w = Worker(self.fly2d0_SNAKE, xmotor, ymotor, scanname=scanname, 
+                    update_progress=None, update_status=None)
+            w.signal.finished.connect(self.flydone)
+            #w.signal.finished.connect(self.flydone2d)
+        else:
+            self.fly_traj(xmotor)
+            w = Worker(self.fly2d0, xmotor, ymotor, scanname=scanname, 
+                    update_progress=None, update_status=None)
+            w.signal.finished.connect(self.flydone2d)
+        w.signal.progress.connect(self.updateprogressbar)
+        w.signal.statusmessage.connect(self.update_status_bar)
+        w.kwargs['update_progress'] = w.signal.progress.emit
+        w.kwargs['update_status'] = w.signal.statusmessage.emit
+
+        self.isscan = True
+        if self.monitor_beamline_status:
+            self.shutterC.open()        
+        self.threadpool.start(w)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     def update_graph(self):
         print("update_graph called")
         pass
@@ -2415,6 +2521,253 @@ class ptyco_main_control(QMainWindow):
             #self.ui.progressBar.setValue(int((i+1)/len(pos)*100))
         self.pts.mv(axis, pos0)
 
+
+    def stepscan2d0(self, xmotor=0, ymotor=-1, phimotor=-1, scanname = "", update_progress=None, update_status=None):
+        
+        if ymotor>-1: #2d scan
+            self.update_scanname()
+            for i, det in enumerate(self.detector): #JD
+                if det is not None:  #JD
+                    if i<2:
+                        det.filePut('FileNumber', 1)  #JD
+                        det.FileTemplate = '%s%s_%5.5d_00001.tif'
+                        det.FileNumber = 1
+
+            yaxis = self.motornames[ymotor]
+            xaxis = self.motornames[xmotor]
+            self.signalmotor2 = yaxis
+            self.signalmotorunit2 = self.motorunits[ymotor]
+            #pos = self.pts.get_pos(yaxis)
+            self.isfly2 = False
+
+        # Just in case when the user update edit box (during 3d scan) 
+        # Will need to update the positions.
+            n = ymotor+1
+            p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+
+            p0 = float(p0)
+            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+            self.stepscan2d_p0 = p0
+            self.stepscan2d_st = st
+            self.stepscan2d_fe = fe
+
+            n = xmotor+1
+            p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+
+            p0 = float(p0)
+            st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+            fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+            expt = float(self.ui.findChild(QLineEdit, "ed_lup_%i_tm"%n).text())
+            self.stepscan1d_p0 = p0
+            self.stepscan1d_st = st
+            self.stepscan1d_fe = fe
+
+            # build Y range (absolute)
+            yst = self.stepscan2d_st + self.stepscan2d_p0
+            yfe = self.stepscan2d_fe + self.stepscan2d_p0
+            ystep = self.stepscan2d_step
+
+            # build X range (absolute)
+            xst = self.stepscan1d_st + self.stepscan1d_p0
+            xfe = self.stepscan1d_fe + self.stepscan1d_p0
+            xstep = self.stepscan1d_step
+            
+            if xstep == 0:
+                xstep = (xfe - xst) if (xfe != xst) else 1.0
+            xstep = -abs(xstep) if xst > xfe else abs(xstep)
+            x_coords = np.arange(xst, xfe + 0.5 * xstep, xstep)
+
+            # build Y range (absolute) from st, fe, step already computed above
+            ystep = ystep if ystep != 0 else ((yfe - yst) if (yfe != yst) else 1.0)
+            ystep = -abs(ystep) if st > fe else abs(ystep)
+            y_coords = np.arange(st, fe + 0.5 * ystep, ystep)
+
+            # create zig-zag list of (x,y) pairs: left-to-right on first row, right-to-left on next, etc.
+            coords = []
+            for j, y in enumerate(y_coords):
+                xs = x_coords if (j % 2 == 0) else x_coords[::-1]
+                coords.extend([(x, y) for x in xs])
+
+            # Nx2 numpy array of (x, y)
+            pos = np.asarray(coords)
+            Nline = len(pos)
+            # keep for later use if needed
+            self.stepscan2d_positions = pos
+
+            isreshreshed = 1
+
+            if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
+                for det in self.detector: #JD
+                    if det is not None:  #JD            
+                        det.filePut('FileNumber', i+1) 
+                        det.step_ready(expt, len(pos))
+            N_imgcollected = 0
+            t0 = time.time()
+            for i, value in enumerate(pos):
+                if self.isStopScanIssued:
+                    break
+                
+                self.pts.mv_hex(xaxis, pos[i,0], yaxis, pos[i,1])
+
+                if self.isStruckCountNeeded:
+                    struck.mcs_counter_count(expt)
+                
+                # trigger the detector.
+                dg645_12ID.trigger()
+                
+                # make sure trigger done.                
+                for ndet, det in enumerate(self.detector):
+                    if ndet>1: 
+                        continue
+                    if det is not None:
+                        while det.Acquire_RBV == 0:
+                            time.sleep(0.1)
+
+                # Update progress bar and status message.
+                timeelapsed = time.time()-t0
+                prog = float(i+1)/float(len(pos))
+                if update_progress:
+                    update_progress(int(prog*100))
+                msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+                if prog>0:
+                    remainingtime = timeelapsed/prog - timeelapsed
+                else:
+                    remainingtime = 999
+                msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime,2)}s\n"
+                msg = "%s%s"%(msg1, msg2)
+                if update_status:
+                    update_status(msg)
+
+                # wait for 1 image collection done.
+                val = N_imgcollected
+                for ndet, det in enumerate(self.detector):
+                    if ndet>1: 
+                        continue
+                    if det is not None:
+                        while val == N_imgcollected:
+                            val = det.ArrayCounter_RBV
+                            time.sleep(0.1)
+                # image collection done.
+                N_imgcollected = val
+
+                # update all relevant data.
+                if self.isStruckCountNeeded:
+                    cnts = struck.read_scaler_all()
+                    self.rpos.append([cnts[2], cnts[3], cnts[4]])
+                    # data = [value, cnts[2],cnts[3],cnts[4]]
+                    # self.log_data(data)
+                else:
+                    r = self.get_qds_pos()
+                    self.rpos.append([r[0], r[1], r[2]])
+                    # data = [value, [r[0], r[1], r[2]]]
+                    # self.log_data(data)
+                #pos = self.get_motorpos(self.signalmotor)
+                #time.sleep(0.1)
+                self.mpos.append(value)
+                t1 = time.time()
+                while (time.time()-t1 < self.parameters._waittime_between_scans):
+                    time.sleep(0.01)
+                timeelapsed = time.time()-t0
+                if update_progress:
+                    # if this is a part of 3d scan
+                    if self.stepscan3d_p0: # 3d scan
+                        c3d, all3d = self.progress_3d
+                        update_progress(int((Nline*c3d+(i+1))/(Nline*all3d)*100))
+                    else:
+                        update_progress(int((i+1)/len(pos)*100))
+                msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
+                msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(Nline-i-1),2)}s\n"
+                msg = "%s%s"%(msg1, msg2)
+                if update_status:
+                    update_status(msg)
+
+            self.run_stop_issued()
+            return 1
+
+
+    def stepscan3d0(self, xmotor=0, ymotor=-1, phimotor=-1, scanname = "", update_progress=None, update_status=None):
+        axis = self.motornames[phimotor]
+        self.signalmotor3 = axis
+        self.signalmotorunit3 = self.motorunits[phimotor]
+        self.isfly3 = False
+    
+        st = self.fly3d_st + self.fly3d_p0
+        fe = self.fly3d_fe + self.fly3d_p0
+        step = self.fly3d_step
+
+        if st>fe:
+            step = -1*abs(step)
+        if st<fe:
+            step = abs(step)
+
+        # revsere scan disabled: always scan from start to final regardless of the initial position.
+        self.pts.mv(axis, st)
+        pos = np.arange(st, fe+step/2, step)
+        if len(scanname):
+            scanname=axis
+        else:
+            scanname=f"{scanname}{axis}"
+        
+        i=0
+        while i<len(pos):
+            value = pos[i]
+#        for i, value in enumerate(pos):
+            if self.isStopScanIssued:
+                break
+            
+            # loging phi angle information
+            print("")
+            print("*****")
+            print(f"phi position : {value:.3e}")
+            scaninfo = []
+            scaninfo.append('#I phi = ')
+            scaninfo.append(value)
+            self.write_scaninfo_to_logfile(scaninfo) 
+
+            self.pts.mv(axis, value)
+            # fly here
+            scan="%s%0.3d"%(scanname, i)
+            self.progress_3d = (i, len(pos))
+            retval = self.stepscan2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
+                    update_progress=update_progress, update_status=update_status)
+            if retval == -1:
+                msg = f'Detector refresh failed .'
+                update_status(msg)
+                break
+            if update_status:
+                msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {(i+1)/len(pos)*100}%.'
+                update_status(msg)
+            
+            self.scandone(False)
+
+            # monitoring the station ready
+            if self.monitor_beamline_status:
+                if self.isOK2run is not True:
+                    ct0 = time.time()
+                    while self.isOK2run is not True:
+                        time.sleep(10)
+                        msg = f'Beam has been down for {int((time.time()-ct0)/60)} minutes.'
+                        update_status(msg)
+                        if self.isStopScanIssued:
+                            break
+                    # Need some action after shutter back up
+                    self.shutter.put(1)
+                    msg = f'Beam just came back. A-shutter open command was sent and run will resume in 5mins.'
+                    update_status(msg)
+                    time.sleep(60)
+                    self.shutter.put(1)
+                    time.sleep(60*4)
+                    scaninfo = []
+                    scaninfo.append('\n')
+                    scaninfo.append('#Note: Shutter has been closed for %i mins'%int((time.time()-ct0)/60))
+                    scaninfo.append('#Note: angle %0.3f will be re-run'%value)
+                    i -= 1
+                    self.write_scaninfo_to_logfile(scaninfo) 
+            i=i+1
+
+
+
     def fly3d0(self, xmotor=0, ymotor=1, phimotor=6, scanname = "", snake=False, update_progress=None, update_status=None):
         # xmotor is for flying
         # ymotor is for stepping
@@ -2422,8 +2775,6 @@ class ptyco_main_control(QMainWindow):
         axis = self.motornames[phimotor]
         self.signalmotor3 = axis
         self.signalmotorunit3 = self.motorunits[phimotor]
-#        self.rpos3 = []
-#        self.mpos3 = []
         pos = self.pts.get_pos(axis)
         self.isfly3 = False
         
@@ -2515,15 +2866,9 @@ class ptyco_main_control(QMainWindow):
                     det.FileTemplate = '%s%s_%5.5d_00001.tif'
                     det.FileNumber = 1
 
-        # xmotor is for flying
-        # ymotor is for stepping
-#        print(self.hdf_plugin_savemode, " ------This is plugin_savemode....")
         axis = self.motornames[ymotor]
-#        print(f'{axis=}, which is {ymotor=}') #JD
         self.signalmotor2 = axis
         self.signalmotorunit2 = self.motorunits[ymotor]
-#        self.rpos2 = []
-#        self.mpos2 = []
         pos = self.pts.get_pos(axis)
         self.isfly2 = False
 
@@ -2531,9 +2876,7 @@ class ptyco_main_control(QMainWindow):
     # Will need to update the positions.
         n = ymotor+1
         p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-#        if len(p0)==0:
-#            p0 = self.ui.findChild(QLabel, "lb_%i"%n).text()
-#            self.ui.findChild(QLineEdit, "ed_%i"%n).setText(p0)
+
         p0 = float(p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
