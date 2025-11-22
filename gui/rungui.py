@@ -1120,6 +1120,10 @@ class ptyco_main_control(QMainWindow):
         self.pts.set_speed(self.pts.hexapod.axes[0], 5, None)
 
     def scandone(self, update_scannumber=True):
+        # return to the initial positions
+        for key in self.motor_p0:
+            self.mv(key, self.motor_p0[key])
+
         print("scan done")
         self.isscan = False
         self.updatepos()
@@ -2727,11 +2731,11 @@ class ptyco_main_control(QMainWindow):
                 time.sleep(0.01)
                 pos_status = self.pts.hexapod.isattarget()
 
-            if self.isStruckCountNeeded:
-                struck.mcs_counter_count(expt)
-            
             # trigger the detector.
             dg645_12ID.trigger()
+
+            if self.isStruckCountNeeded:
+                struck.mcs_counter_count(expt)
             
             # make sure trigger done.                
             for ndet, det in enumerate(self.detector):
@@ -2762,11 +2766,13 @@ class ptyco_main_control(QMainWindow):
                 if ndet>1: 
                     continue
                 if det is not None:
-                    while val == N_imgcollected:
-                        val = det.ArrayCounter_RBV
+                    while val >= N_imgcollected:
+                        N_imgcollected = det.ArrayCounter_RBV
+                        print(N_imgcollected, " Waiting for image collection...............")
                         time.sleep(0.1)
+                    break
             # image collection done.
-            N_imgcollected = val
+            N_imgcollected = det.ArrayCounter_RBV
 
             # update all relevant data.
             if self.isStruckCountNeeded:
