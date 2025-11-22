@@ -1162,6 +1162,7 @@ class ptyco_main_control(QMainWindow):
                         # when the measurement is all done, reset the file number to 0.
                         if update_scannumber:
                             det.filePut('FileNumber', 0)
+                            print(f"Resetting file number of detector {i} to 0.")
                             if i<2: # tiff file number 0
                                 det.FileNumber = 0
                     else:
