@@ -859,6 +859,7 @@ class ptyco_main_control(QMainWindow):
                     #print(hdf_path, " This is ptycho path")
                     det.filePut('FilePath', hdf_path)
 #                    print(f"txt is {txt}")
+                    print(f"Setting detector {i} path to {hdf_path}, filename to {hdfname}")
                     det.filePut('FileName', hdfname)
                     #print(f"Detector {i} path set to {hdf_path}, filename set to {hdfname}")
                     self.hdf_plugin_name[i] = hdfname

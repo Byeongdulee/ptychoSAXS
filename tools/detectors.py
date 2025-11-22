@@ -230,7 +230,7 @@ class dante(AD_Dante):
 		if number>-1:
 			self.filePut('FileNumber', number)
 		self.StartCapture() # Arm the detector
-		self.Arm()
+		#self.Arm()
 
 	def set_scanNumberAsfilename(self):
 		fw_dir = caget(f"{beamlinePV}data:userDir")
