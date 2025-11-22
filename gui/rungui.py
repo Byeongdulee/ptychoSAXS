@@ -2713,7 +2713,6 @@ class ptyco_main_control(QMainWindow):
                     det.filePut('FileNumber', 1)  #JD
                     det.FileTemplate = '%s%s_%5.5d_00001.tif'
                     det.FileNumber = 1
-                    
 #                if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
 #                    det.filePut('FileNumber', i+1) 
                 det.step_ready(expt, Nline)
