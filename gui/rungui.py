@@ -4138,7 +4138,7 @@ class ptyco_main_control(QMainWindow):
         except:
             xmotor = DEFAULTS['xmotor']
         try:
-            detectors = data['detector']
+            detectors = data['detectors']
         except:
             detectors = ''
         try:
@@ -4178,10 +4178,15 @@ class ptyco_main_control(QMainWindow):
                 for N in range(1, 7):
                     if str(N) in detectors:
                         try:
-                            self.select_detectors(self, N, value=True)
+                            self.select_detectors(N, value=True)
                         except:
                             pass
-            
+                    else:
+                        try:
+                            self.select_detectors(N, value=False)
+                        except:
+                            pass
+
             if saxsmode:
                 self.set_hdf_plugin_use(True)
                 self.select_detector_mode(False)
@@ -4192,7 +4197,7 @@ class ptyco_main_control(QMainWindow):
                 self.set_monitor_beamline_status(False)
                 self.set_shutter_close_after_scan(False)
 
-        if cmd == 'setrange':
+        elif cmd == 'setrange':
             motornumber = self.motornames.index(data['axis'])
             n = motornumber+1
             for key, val in data.items():

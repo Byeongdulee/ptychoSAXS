@@ -23,8 +23,8 @@ def send_command(argv):
     d = {}
     d['command']=argv[0]
     data = {}
-    for i in range(int((len(sys.argv)-2)/2)):
-        data[sys.argv[2*i+1]] = sys.argv[2*i+2]
+    for i in range(int((len(argv)-1)/2)):
+        data[argv[2*i+1]] = argv[2*i+2]
     d['data'] = data
     msg = json.dumps(d)
     print(msg)
