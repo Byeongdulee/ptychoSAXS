@@ -11,10 +11,14 @@ UDP_PORT = 20002
 #   mvr X 1
 #   setrange axis X L -1 R 1 N 0.01 t 2
 #   setrange axis Y L -1 R 1 N 0.01 t 2
-#   run2d
-#   run2d xmotor 0 
-#   run2d xmotor 0 ymotor 1 scanname test
-#   run3d xmotor 0 ymotor 1 phimotor 6 scanname test
+#   fly2d
+#   fly2d xmotor 0 
+#   fly2d xmotor 0 ymotor 1 scanname test
+#   fly2d_snake xmotor 0 ymotor 1 scanname test
+#   fly3d xmotor 0 ymotor 1 phimotor 6 scanname test
+#   fly3d_snake xmotor 0 ymotor 1 phimotor 6 scanname test
+#   stepscan3d xmotor 0 ymotor 1 phimotor 6 scanname test
+#   stepscan2d scanname test
 #   setfolder folder c:\data
 #   toggle controllerfly on
 #   toggle keepprevscan off

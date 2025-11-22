@@ -1161,7 +1161,7 @@ class ptyco_main_control(QMainWindow):
                             fn = det.fileGet('FullFileName_RBV', as_string=True)
                         # when the measurement is all done, reset the file number to 0.
                         if update_scannumber:
-                            det.filePut('FileNumber', 0)
+                            det.filePut('FileNumber', 1)
                             print(f"Resetting file number of detector {i} to 0.")
                             if i<2: # tiff file number 0
                                 det.FileNumber = 0
@@ -1533,7 +1533,7 @@ class ptyco_main_control(QMainWindow):
                 strv = "%0.5e   %0.5e   %0.5e   %0.5e"%(hpos["X"][0][i],hpos["X"][1][i],hpos["Z"][0][i],hpos["Z"][1][i])
                 f.write("%i    %s\n"%(i, strv))
 
-    def flydone(self, return_motor=True):
+    def flydone(self, return_motor=True, reset_scannumber=True):
         if return_motor:
             # when 1D scan is done.
             if self.shutter_close_after_scan:
@@ -1621,10 +1621,14 @@ class ptyco_main_control(QMainWindow):
                     fnum = det.fileGet('FileNumber_RBV')
                     if str(fnum-1) not in fn:
                         fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    if update_scannumber:
+                        det.filePut('FileNumber', 1)
                 else:
                     if 'SG' not in det._prefix:
                         fnum = det.FileNumber_RBV
                         fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+                        if update_scannumber:
+                            det.FileNumber = 1
                 if len(fn)>0:
                     print("===============================")
                     print(f"saved filename: {fn}")
@@ -1885,102 +1889,102 @@ class ptyco_main_control(QMainWindow):
             self.shutterC.open()        
         self.threadpool.start(w)
 
-    def fly2d_SNAKE(self, xmotor=0, ymotor=1, scanname = "", snake=False):
-        if self.isStruckCountNeeded:
-            struck.mcs_init()
-            self.isMCS_ready = False
+    # def fly2d_SNAKE(self, xmotor=0, ymotor=1, scanname = "", snake=False):
+    #     if self.isStruckCountNeeded:
+    #         struck.mcs_init()
+    #         self.isMCS_ready = False
 
-        self.write_motor_scan_range()
-        self.isStopScanIssued = False
+    #     self.write_motor_scan_range()
+    #     self.isStopScanIssued = False
 
-        if self.ui.actionckTime_reset_before_scan.isChecked():
-            if s12softglue.isConnected:
-                s12softglue.ckTime_reset()
+    #     if self.ui.actionckTime_reset_before_scan.isChecked():
+    #         if s12softglue.isConnected:
+    #             s12softglue.ckTime_reset()
 
-        # reset the progress bar
-        #self.ui.progressBar.setValue(0)
-        motor = [xmotor, ymotor]
-        print(f'\n\nfly2d_SNAKE:{xmotor=}; {ymotor=}') #JD
-                # logging
-        scaninfo = []
-        scaninfo.append('\n#S')
-        scaninfo.append(self.parameters.scan_number)
-        scaninfo.append('fly2d_SNAKE')
-        initial_motorpos = {}
-        for i, m in enumerate(motor):
-            n = m+1
-            try:
-                scaninfo.append(n)
-                #p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-                #if len(p0)==0:
-                p0 = self.check_start_position(n)
-                p0 = float(p0)
-                self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%p0)
-                initial_motorpos[m] = p0
-                st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-                fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
-                tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
-                step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-                scaninfo.append(p0)
-                scaninfo.append(st)
-                scaninfo.append(fe)
-                scaninfo.append(tm)      
-                scaninfo.append(step)      
-            except:
-                showerror("Check scan paramters.")
-                return 0
-            if i == 0:
-                self.fly1d_p0 = p0
-                self.fly1d_st = st
-                self.fly1d_fe = fe
-                self.fly1d_tm = tm
-                self.fly1d_step = step
-            if i == 1:
-                self.fly2d_p0 = p0
-                self.fly2d_st = st
-                self.fly2d_fe = fe
-                self.fly2d_tm = tm
-                self.fly2d_step = step
-        # signal for qds
-        axis = self.motornames[xmotor]
-        self.signalmotor = axis
-        self.signalmotorunit = self.motorunits[xmotor]
-        print("fly2d_snake is called............................")
-        self.time_scanstart = time.time()
-        dg645_12ID.set_pilatus_fly(0.001)
-        self.fly3d_p0 = None
-        self.fly3d_st = None
-        self.fly3d_fe = None
-        self.fly3d_tm = None
-        self.fly3d_step = None
-        self.progress_3d = None
-        self.motor_p0 = initial_motorpos
+    #     # reset the progress bar
+    #     #self.ui.progressBar.setValue(0)
+    #     motor = [xmotor, ymotor]
+    #     print(f'\n\nfly2d_SNAKE:{xmotor=}; {ymotor=}') #JD
+    #             # logging
+    #     scaninfo = []
+    #     scaninfo.append('\n#S')
+    #     scaninfo.append(self.parameters.scan_number)
+    #     scaninfo.append('fly2d_SNAKE')
+    #     initial_motorpos = {}
+    #     for i, m in enumerate(motor):
+    #         n = m+1
+    #         try:
+    #             scaninfo.append(n)
+    #             #p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
+    #             #if len(p0)==0:
+    #             p0 = self.check_start_position(n)
+    #             p0 = float(p0)
+    #             self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%p0)
+    #             initial_motorpos[m] = p0
+    #             st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+    #             fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+    #             tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+    #             step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+    #             scaninfo.append(p0)
+    #             scaninfo.append(st)
+    #             scaninfo.append(fe)
+    #             scaninfo.append(tm)      
+    #             scaninfo.append(step)      
+    #         except:
+    #             showerror("Check scan paramters.")
+    #             return 0
+    #         if i == 0:
+    #             self.fly1d_p0 = p0
+    #             self.fly1d_st = st
+    #             self.fly1d_fe = fe
+    #             self.fly1d_tm = tm
+    #             self.fly1d_step = step
+    #         if i == 1:
+    #             self.fly2d_p0 = p0
+    #             self.fly2d_st = st
+    #             self.fly2d_fe = fe
+    #             self.fly2d_tm = tm
+    #             self.fly2d_step = step
+    #     # signal for qds
+    #     axis = self.motornames[xmotor]
+    #     self.signalmotor = axis
+    #     self.signalmotorunit = self.motorunits[xmotor]
+    #     print("fly2d_snake is called............................")
+    #     self.time_scanstart = time.time()
+    #     dg645_12ID.set_pilatus_fly(0.001)
+    #     self.fly3d_p0 = None
+    #     self.fly3d_st = None
+    #     self.fly3d_fe = None
+    #     self.fly3d_tm = None
+    #     self.fly3d_step = None
+    #     self.progress_3d = None
+    #     self.motor_p0 = initial_motorpos
 
-        self.fly_traj(xmotor, ymotor)
+    #     self.fly_traj(xmotor, ymotor)
 
-        scaninfo.append('\n#Motor Information\n')
-        m = self.get_pos_all()
-        for name in self.motornames:
-            scaninfo.append(name)
-        scaninfo.append('\n')
-        for key in m:
-            scaninfo.append(m[key])
+    #     scaninfo.append('\n#Motor Information\n')
+    #     m = self.get_pos_all()
+    #     for name in self.motornames:
+    #         scaninfo.append(name)
+    #     scaninfo.append('\n')
+    #     for key in m:
+    #         scaninfo.append(m[key])
 
-        self.write_scaninfo_to_logfile(scaninfo)
-        scaninfo = []
-        scaninfo.append('#D')
-        scaninfo.append(time.ctime())
-        self.isscan = True
-        if self.monitor_beamline_status:
-            self.shutterC.open()
-        w = Worker(self.fly2d0_SNAKE, xmotor, ymotor, scanname=scanname, 
-                   update_progress=None, update_status=None)
-        w.signal.finished.connect(lambda: self.flydone(False))
-        w.signal.progress.connect(self.updateprogressbar)
-        w.signal.statusmessage.connect(self.update_status_bar)
-        w.kwargs['update_progress'] = w.signal.progress.emit
-        w.kwargs['update_status'] = w.signal.statusmessage.emit
-        self.threadpool.start(w)
+    #     self.write_scaninfo_to_logfile(scaninfo)
+    #     scaninfo = []
+    #     scaninfo.append('#D')
+    #     scaninfo.append(time.ctime())
+    #     self.isscan = True
+    #     if self.monitor_beamline_status:
+    #         self.shutterC.open()
+    #     w = Worker(self.fly2d0_SNAKE, xmotor, ymotor, scanname=scanname, 
+    #                update_progress=None, update_status=None)
+    #     w.signal.finished.connect(lambda: self.flydone(False))
+    #     w.signal.progress.connect(self.updateprogressbar)
+    #     w.signal.statusmessage.connect(self.update_status_bar)
+    #     w.kwargs['update_progress'] = w.signal.progress.emit
+    #     w.kwargs['update_status'] = w.signal.statusmessage.emit
+    #     self.threadpool.start(w)
 
     def updateprogressbar(self, value):
         self.ui.progressBar.setValue(value)
@@ -2735,9 +2739,9 @@ class ptyco_main_control(QMainWindow):
         ## prepre detectors ............
         for i, det in enumerate(self.detector): #JD
             if det is not None:  #JD
-                if i<2:
-                    det.filePut('FileNumber', 1)  #JD
-                    det.FileTemplate = '%s%s_%5.5d_00001.tif'
+                #if i<2:
+                    #det.filePut('FileNumber', 1)  #JD
+                    #det.FileTemplate = '%s%s_%5.5d_00001.tif'
                     #det.FileNumber = 1   # this needs to be turned off.....
 #                if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
 #                    det.filePut('FileNumber', i+1) 
@@ -2987,7 +2991,7 @@ class ptyco_main_control(QMainWindow):
                 msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {(i+1)/len(pos)*100}%.'
                 update_status(msg)
             
-            self.flydone(False)
+            self.flydone(False, reset_scannumber=True)
 
             # monitoring the station ready
             if self.monitor_beamline_status:
@@ -3021,12 +3025,12 @@ class ptyco_main_control(QMainWindow):
 
     def fly2d0(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
         self.update_scanname()
-        for i, det in enumerate(self.detector): #JD
-            if det is not None:  #JD
-                if i<2:
-                    det.filePut('FileNumber', 1)  #JD
-                    det.FileTemplate = '%s%s_%5.5d_00001.tif'
-                    det.FileNumber = 1
+        #for i, det in enumerate(self.detector): #JD
+        #    if det is not None:  #JD
+                #if i<2:
+                    #det.filePut('FileNumber', 1)  #JD
+                    #det.FileTemplate = '%s%s_%5.5d_00001.tif'
+                    #det.FileNumber = 1
 
         axis = self.motornames[ymotor]
         self.signalmotor2 = axis
@@ -3117,7 +3121,7 @@ class ptyco_main_control(QMainWindow):
             if isreshreshed == 0:
                 return -1
 #            print("CCCC")
-            self.flydone(return_motor=False)
+            self.flydone(return_motor=False, reset_scannumber=False)
             # try:
             #epics.caput('12idc:scaler1.CNT', 0)
             # except:
@@ -3235,13 +3239,13 @@ class ptyco_main_control(QMainWindow):
 
     def fly2d0_SNAKE(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
         self.update_scanname()
-        for i, det in enumerate(self.detector): #JD
-            if i<2:
-                if det is not None:  #JD
-                    det.filePut('FileNumber', 1)  #JD
-                    det.FileTemplate = '%s%s_%5.5d.tif'
-                    if 'SG' not in det._prefix:
-                        det.FileNumber = 1
+        # for i, det in enumerate(self.detector): #JD
+        #     if i<2:
+        #         if det is not None:  #JD
+        #             det.filePut('FileNumber', 1)  #JD
+        #             det.FileTemplate = '%s%s_%5.5d.tif'
+        #             if 'SG' not in det._prefix:
+        #                 det.FileNumber = 1
 
 
         self.isfly2 = False
@@ -3255,10 +3259,10 @@ class ptyco_main_control(QMainWindow):
 
         t0 = time.time()
 
-        if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
-            for det in self.detector: #JD
-                if det is not None:  #JD            
-                    det.filePut('FileNumber', 1) 
+        # if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
+        #     for det in self.detector: #JD
+        #         if det is not None:  #JD            
+        #             det.filePut('FileNumber', 1) 
 
         self.plotlabels = []
         if self.ui.actionckTime_reset_before_scan.isChecked():
@@ -4237,11 +4241,17 @@ class ptyco_main_control(QMainWindow):
                 motornumber = self.motornames.index(axis)
                 self.mvr(motornumber=motornumber, val=float(pos))
         
-        elif cmd == 'run2d':
+        elif cmd == 'fly2d':
             self.fly2d(xmotor=xmotor,ymotor=ymotor,scanname=scanname)
+
+        elif cmd == 'fly2d_snake':
+            self.fly2d(xmotor=xmotor,ymotor=ymotor,snake=True, scanname=scanname)
             
-        elif cmd == 'run3d':
+        elif cmd == 'fly3d':
             self.fly3d(xmotor=xmotor,ymotor=ymotor,phimotor=phimotor,scanname=scanname)
+            
+        elif cmd == 'fly3d_snake':
+            self.fly3d(xmotor=xmotor,ymotor=ymotor,phimotor=phimotor,snake=True,scanname=scanname)
 
         elif cmd == 'stepscan3d':
             self.stepscan3d(xmotor=xmotor,ymotor=ymotor,phimotor=phimotor)
