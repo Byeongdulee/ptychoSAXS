@@ -1118,7 +1118,7 @@ class ptyco_main_control(QMainWindow):
 #        print(self.pts.phi.vel, " This was vel value")
         self.pts.set_speed(self.pts.hexapod.axes[0], 5, None)
 
-    def scandone(self, value):
+    def scandone(self, update_scannumber=True):
         print("scan done")
         self.isscan = False
         self.updatepos()
@@ -1143,6 +1143,9 @@ class ptyco_main_control(QMainWindow):
                         fn = det.fileGet('FullFileName_RBV', as_string=True)
                         if str(fnum-1) not in fn:
                             fn = det.fileGet('FullFileName_RBV', as_string=True)
+                        # when the measurement is all done, reset the file number to 0.
+                        if update_scannumber:
+                            det.filePut('FileNumber', 0)
                     else:
                         fnum = det.FileNumber_RBV
                         fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
@@ -1155,7 +1158,9 @@ class ptyco_main_control(QMainWindow):
             scaninfo = []
             scaninfo.append('#D')
             scaninfo.append(time.ctime())
-        #self.run_stop_issued()
+        # when the measurement is all done, update the scan number.
+        if update_scannumber:
+            self.run_stop_issued()
         self.update_status_scan_time()
 
     def set_det_alignmode(self):
@@ -2228,7 +2233,7 @@ class ptyco_main_control(QMainWindow):
         w.kwargs['update_progress'] = w.signal.progress.emit
         w.kwargs['update_status'] = w.signal.statusmessage.emit
         self.threadpool.start(w)
-        self.run_stop_issued()
+        #self.run_stop_issued()
 
 
     def stepscan2d(self, xmotor=0, ymotor=1, scanname = ""):
@@ -2314,7 +2319,7 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append(time.ctime())
 
         w = Worker(self.stepscan2d0, xmotor, ymotor, update_progress=None, update_status=None)
-        w.signal.finished.connect(self.flydone2d)
+        w.signal.finished.connect(self.scandone)
         w.signal.progress.connect(self.updateprogressbar)
         w.signal.statusmessage.connect(self.update_status_bar)
         w.kwargs['update_progress'] = w.signal.progress.emit
@@ -2418,7 +2423,7 @@ class ptyco_main_control(QMainWindow):
             self.shutterC.open()
         w = Worker(self.stepscan3d0, xmotor, ymotor, phimotor, scanname=scanname, 
             update_progress=None, update_status=None)
-        w.signal.finished.connect(self.flydone3d)
+        w.signal.finished.connect(self.scandone)
         w.signal.progress.connect(self.updateprogressbar)
         w.signal.statusmessage.connect(self.update_status_bar)
         w.kwargs['update_progress'] = w.signal.progress.emit
@@ -2703,6 +2708,7 @@ class ptyco_main_control(QMainWindow):
                     det.filePut('FileNumber', 1)  #JD
                     det.FileTemplate = '%s%s_%5.5d_00001.tif'
                     det.FileNumber = 1
+                    
 #                if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
 #                    det.filePut('FileNumber', i+1) 
                 det.step_ready(expt, Nline)
@@ -2792,7 +2798,7 @@ class ptyco_main_control(QMainWindow):
             if update_status:
                 update_status(msg)
 
-        self.run_stop_issued()
+        #self.run_stop_issued()
         return 1
 
 
@@ -2837,7 +2843,7 @@ class ptyco_main_control(QMainWindow):
 
             self.pts.mv(axis, value)
             # fly here
-            scan="%s%0.3d"%(scanname, i)
+            #scan="%s%0.3d"%(scanname, i)
             self.progress_3d = (i, len(pos))
             retval = self.stepscan2d0(xmotor=xmotor, ymotor=ymotor, update_progress=update_progress, update_status=update_status)
             if retval == -1:

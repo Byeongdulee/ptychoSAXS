@@ -217,7 +217,7 @@ class dante(AD_Dante):
 			else:
 				self.Arm()
 	
-	def step_ready(self, expt, N_image, fn=""):
+	def step_ready(self, expt, N_image, fn="", number=-1):
 		self.SetExposureTime(expt)
 		self.setArrayCounter(0)
 		self.setFileTemplate('%s%s_%5.5d.h5')
@@ -227,7 +227,8 @@ class dante(AD_Dante):
 			self.setFileName("%s"%fn)
         # set filesaver
 		self.filePut('NumCapture',   1)
-		self.filePut('FileNumber',    1)
+		if number>-1:
+			self.filePut('FileNumber', number)
 		self.StartCapture() # Arm the detector
 		self.Arm()
 
