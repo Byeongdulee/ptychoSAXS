@@ -1,5 +1,5 @@
 import py12inifunc
-import gui.client_json as client_json
+import client_json as client_json
 import time
 
 inifilename = "pty-co-saxs.ini"

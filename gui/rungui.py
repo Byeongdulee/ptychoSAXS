@@ -2269,13 +2269,12 @@ class ptyco_main_control(QMainWindow):
         #self.run_stop_issued()
 
 
-    def stepscan2d(self, xmotor=0, ymotor=1, scanname = ""):
+    def stepscan2d(self, xmotor=0, ymotor=1):
         self.update_scanname()
         self.write_motor_scan_range()
         self.isStopScanIssued = False
         motor = [xmotor, ymotor]
-        if len(scanname)==0:
-            scan_name = "stepscan2d"
+        scan_name = "stepscan2d"
         print(f'\n\n{scan_name}:{xmotor=}; {ymotor=}')
 
         # logging
@@ -2364,7 +2363,7 @@ class ptyco_main_control(QMainWindow):
         self.threadpool.start(w)
 
 
-    def stepscan3d(self, xmotor=0, ymotor=1, phimotor=6, scanname=""):
+    def stepscan3d(self, xmotor=0, ymotor=1, phimotor=6):
         self.switch_SGstream(False)
 
         if self.isStruckCountNeeded:
@@ -2454,8 +2453,7 @@ class ptyco_main_control(QMainWindow):
         self.isscan = True
         if self.monitor_beamline_status:
             self.shutterC.open()
-        w = Worker(self.stepscan3d0, xmotor, ymotor, phimotor, scanname=scanname, 
-            update_progress=None, update_status=None)
+        w = Worker(self.stepscan3d0, xmotor, ymotor, phimotor, update_progress=None, update_status=None)
         w.signal.finished.connect(self.scandone)
         w.signal.progress.connect(self.updateprogressbar)
         w.signal.statusmessage.connect(self.update_status_bar)
@@ -2849,7 +2847,7 @@ class ptyco_main_control(QMainWindow):
         return 1
 
 
-    def stepscan3d0(self, xmotor=0, ymotor=-1, phimotor=-1, scanname = "", update_progress=None, update_status=None):
+    def stepscan3d0(self, xmotor=0, ymotor=-1, phimotor=-1, update_progress=None, update_status=None):
         axis = self.motornames[phimotor]
         self.signalmotor3 = axis
         self.signalmotorunit3 = self.motorunits[phimotor]
@@ -2867,10 +2865,10 @@ class ptyco_main_control(QMainWindow):
         # revsere scan disabled: always scan from start to final regardless of the initial position.
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step/2, step)
-        if len(scanname):
-            scanname=axis
-        else:
-            scanname=f"{scanname}{axis}"
+        # if len(scanname):
+        #     scanname=axis
+        # else:
+        #     scanname=f"{scanname}{axis}"
         
         i=0
         while i<len(pos):
@@ -4217,11 +4215,18 @@ class ptyco_main_control(QMainWindow):
             for axis, pos in data.items():
                 motornumber = self.motornames.index(axis)
                 self.mvr(motornumber=motornumber, val=float(pos))
+        
         elif cmd == 'run2d':
             self.fly2d(xmotor=xmotor,ymotor=ymotor,scanname=scanname)
             
         elif cmd == 'run3d':
             self.fly3d(xmotor=xmotor,ymotor=ymotor,phimotor=phimotor,scanname=scanname)
+
+        elif cmd == 'stepscan3d':
+            self.stepscan3d(xmotor=xmotor,ymotor=ymotor,phimotor=phimotor)
+        
+        elif cmd == 'stepscan2d':
+            self.stepscan2d(xmotor=xmotor,ymotor=ymotor)
 
         elif cmd == 'none':
             self.runRequested.emit(0)
