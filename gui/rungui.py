@@ -2829,6 +2829,7 @@ class ptyco_main_control(QMainWindow):
                 time.sleep(0.01)
             timeelapsed = time.time()-t0
             self.mpos.append(timeelapsed)
+            msg = ""
             if update_progress:
                 #print("Updating progress bar in 2d step scan")
                 # if this is a part of 3d scan
@@ -2838,16 +2839,18 @@ class ptyco_main_control(QMainWindow):
                     #print(c3d, all3d, " current 3d pos")
                     #print((Nline*c3d+(i+1))/(Nline*all3d)*100)
                     progress_fraction = (Nline * c3d + (i + 1)) / (Nline * all3d)
-                    time_per_pos = timeelapsed / (i + 1)
-                    update_progress(int((Nline*c3d+(i+1))/(Nline*all3d)*100))
-                    msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
-                    msg2 = f"; Remaining time for the current 3D scan is {np.round((1-progress_fraction)*Nline*all3d*time_per_pos,2)}s\n"
+                    timeelapsed = time.time()-self.time_scanstart
+                    #time_per_pos = timeelapsed / (i + 1)
+                    update_progress(int(progress_fraction*100))
+                    msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+                    msg2 = f"; Remaining time for the current 3D scan is {np.round(timeelapsed/progress_fraction,2)}s\n"
                 else:
                     #print("2d scan progress update")
-                    update_progress(int((i+1)/Nline*100))
-                msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
-                msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(Nline-i-1),2)}s\n"
-            msg = "%s%s"%(msg1, msg2)
+                    progress_fraction = (i+1)/Nline
+                    update_progress(int(progress_fraction*100))
+                    msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+                    msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed/progress_fraction,2)}s\n"
+                msg = "%s%s"%(msg1, msg2)
             if update_status:
                 update_status(msg)
 
