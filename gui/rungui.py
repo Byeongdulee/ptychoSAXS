@@ -2837,6 +2837,7 @@ class ptyco_main_control(QMainWindow):
                     c3d, all3d = self.progress_3d
                     update_progress(int((Nline*c3d+(i+1))/(Nline*all3d)*100))
                 else:
+                    print("2d scan progress update")
                     update_progress(int((i+1)/Nline*100))
             msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
             msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(Nline-i-1),2)}s\n"
@@ -2872,7 +2873,8 @@ class ptyco_main_control(QMainWindow):
         #     scanname=f"{scanname}{axis}"
         
         i=0
-        while i<len(pos):
+        Npos = len(pos)
+        while i<Npos:
             value = pos[i]
 #        for i, value in enumerate(pos):
             if self.isStopScanIssued:
@@ -2890,7 +2892,7 @@ class ptyco_main_control(QMainWindow):
             self.pts.mv(axis, value)
             # fly here
             #scan="%s%0.3d"%(scanname, i)
-            self.progress_3d = (i, len(pos))
+            self.progress_3d = (i, Npos)
             retval = self.stepscan2d0(xmotor=xmotor, ymotor=ymotor, update_progress=update_progress, update_status=update_status)
             if retval == -1:
                 msg = f'Detector refresh failed .'
