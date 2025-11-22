@@ -1126,6 +1126,7 @@ class ptyco_main_control(QMainWindow):
         if len(self.parameters.logfilename)>0:
             pos = np.asarray(self.mpos)
             r = np.asarray(self.rpos)
+            print(pos.shape, r.shape, " scan done shapes")
             self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
             scaninfo = []
             scaninfo.append('#I detector_filename')
