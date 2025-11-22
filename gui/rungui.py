@@ -13,7 +13,7 @@ from asyncqt import QEventLoop
 from server_json import UDPserver, create_server
 import json
 import epics
-from tools import detectors
+#from tools import detectors
 SCAN_NUMBER_IOC = epics.PV("12idc:data:fileIndex")
 
 from PyQt5 import uic, QtCore, QtGui
