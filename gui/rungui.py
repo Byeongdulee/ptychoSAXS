@@ -2830,8 +2830,10 @@ class ptyco_main_control(QMainWindow):
             timeelapsed = time.time()-t0
             self.mpos.append(timeelapsed)
             if update_progress:
+                print("Updating progress bar in 2d step scan")
                 # if this is a part of 3d scan
                 if self.stepscan3d_p0 is not None: # 3d scan
+                    print("3d scan progress update")
                     c3d, all3d = self.progress_3d
                     update_progress(int((Nline*c3d+(i+1))/(Nline*all3d)*100))
                 else:
