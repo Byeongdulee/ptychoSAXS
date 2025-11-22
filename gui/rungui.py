@@ -2769,20 +2769,20 @@ class ptyco_main_control(QMainWindow):
                     while det.Acquire_RBV == 0:
                         time.sleep(0.1)
 
-            # Update progress bar and status message.
-            timeelapsed = time.time()-t0
-            prog = float(i+1)/float(Nline)
-            if update_progress:
-                update_progress(int(prog*100))
-            msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-            if prog>0:
-                remainingtime = timeelapsed/prog - timeelapsed
-            else:
-                remainingtime = 999
-            msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime,2)}s\n"
-            msg = "%s%s"%(msg1, msg2)
-            if update_status:
-                update_status(msg)
+            # # Update progress bar and status message.
+            # timeelapsed = time.time()-t0
+            # prog = float(i+1)/float(Nline)
+            # if update_progress:
+            #     update_progress(int(prog*100))
+            # msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+            # if prog>0:
+            #     remainingtime = timeelapsed/prog - timeelapsed
+            # else:
+            #     remainingtime = 999
+            # msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime,2)}s\n"
+            # msg = "%s%s"%(msg1, msg2)
+            # if update_status:
+            #     update_status(msg)
 
             # wait for 1 image collection done.
             val = N_imgcollected
@@ -2830,17 +2830,23 @@ class ptyco_main_control(QMainWindow):
             timeelapsed = time.time()-t0
             self.mpos.append(timeelapsed)
             if update_progress:
-                print("Updating progress bar in 2d step scan")
+                #print("Updating progress bar in 2d step scan")
                 # if this is a part of 3d scan
                 if self.stepscan3d_p0 is not None: # 3d scan
-                    print("3d scan progress update")
+                    #print("3d scan progress update")
                     c3d, all3d = self.progress_3d
+                    #print(c3d, all3d, " current 3d pos")
+                    #print((Nline*c3d+(i+1))/(Nline*all3d)*100)
+                    progress_fraction = (Nline * c3d + (i + 1)) / (Nline * all3d)
+                    time_per_pos = timeelapsed / (i + 1)
                     update_progress(int((Nline*c3d+(i+1))/(Nline*all3d)*100))
+                    msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
+                    msg2 = f"; Remaining time for the current 3D scan is {np.round((1-progress_fraction)*Nline*all3d*time_per_pos,2)}s\n"
                 else:
-                    print("2d scan progress update")
+                    #print("2d scan progress update")
                     update_progress(int((i+1)/Nline*100))
-            msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
-            msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(Nline-i-1),2)}s\n"
+                msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
+                msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(Nline-i-1),2)}s\n"
             msg = "%s%s"%(msg1, msg2)
             if update_status:
                 update_status(msg)
