@@ -1737,7 +1737,6 @@ class ptyco_main_control(QMainWindow):
             except Exception:
                 p0_float = p0
                 p0_original_float = p0_original
-            print(p0_float, p0_original_float)
             if round(p0_float, 4) != round(p0_original_float, 4):
                 msg = (
                     f"Original position ({p0_original_float:.4f}) and new position ({p0_float:.4f}) differ.\n"
@@ -2832,7 +2831,7 @@ class ptyco_main_control(QMainWindow):
             self.mpos.append(timeelapsed)
             if update_progress:
                 # if this is a part of 3d scan
-                if self.stepscan3d_p0: # 3d scan
+                if self.stepscan3d_p0 is not None: # 3d scan
                     c3d, all3d = self.progress_3d
                     update_progress(int((Nline*c3d+(i+1))/(Nline*all3d)*100))
                 else:
