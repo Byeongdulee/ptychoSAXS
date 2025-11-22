@@ -226,7 +226,7 @@ class dante(AD_Dante):
 		if len(fn)>0:
 			self.setFileName("%s"%fn)
         # set filesaver
-		self.filePut('NumCapture',   1)
+		#self.filePut('NumCapture',   1)
 		if number>-1:
 			self.filePut('FileNumber', number)
 		self.StartCapture() # Arm the detector
