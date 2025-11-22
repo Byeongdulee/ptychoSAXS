@@ -2843,13 +2843,13 @@ class ptyco_main_control(QMainWindow):
                     #time_per_pos = timeelapsed / (i + 1)
                     update_progress(int(progress_fraction*100))
                     msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-                    msg2 = f"; Remaining time for the current 3D scan is {np.round(timeelapsed/progress_fraction,2)}s\n"
+                    msg2 = f"; Remaining time for the current 3D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
                 else:
                     #print("2d scan progress update")
                     progress_fraction = (i+1)/Nline
                     update_progress(int(progress_fraction*100))
                     msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-                    msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed/progress_fraction,2)}s\n"
+                    msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
                 msg = "%s%s"%(msg1, msg2)
             if update_status:
                 update_status(msg)
@@ -3124,16 +3124,24 @@ class ptyco_main_control(QMainWindow):
             t1 = time.time()
             while (time.time()-t1 < self.parameters._waittime_between_scans):
                 time.sleep(0.01)
+            msg = ""
             timeelapsed = time.time()-t0
             if update_progress:
                 if self.fly3d_p0: # 3d scan
                     c3d, all3d = self.progress_3d
-                    update_progress(int((Nline*c3d+(i+1))/(Nline*all3d)*100))
+                    progress_fraction = (Nline * c3d + (i + 1)) / (Nline * all3d)
+                    timeelapsed = time.time()-self.time_scanstart
+                    #time_per_pos = timeelapsed / (i + 1)
+                    update_progress(int(progress_fraction*100))
+                    msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+                    msg2 = f"; Remaining time for the current 3D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
                 else:
-                    update_progress(int((i+1)/len(pos)*100))
-            msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
-            msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(Nline-i-1),2)}s\n"
-            msg = "%s%s"%(msg1, msg2)
+                    #print("2d scan progress update")
+                    progress_fraction = (i+1)/Nline
+                    update_progress(int(progress_fraction*100))
+                    msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+                    msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
+                msg = "%s%s"%(msg1, msg2)
             if update_status:
                 update_status(msg)
 
@@ -3375,36 +3383,31 @@ class ptyco_main_control(QMainWindow):
                 else:
                     isdone = True
                 time.sleep(0.1)
-
+                msg = ""
                 timeelapsed = time.time()-t0
-                prog = float(struck.strk.CurrentChannel)/float(struck.strk.NuseAll)
+                progress_fraction = float(struck.strk.CurrentChannel)/float(struck.strk.NuseAll)
+                if progress_fraction==0:
+                    progress_fraction=0.0001
                 if update_progress:
                     if self.fly3d_p0: # 3d scan
                         c3d, all3d = self.progress_3d
-                        update_progress(int(prog*c3d/all3d*100))
+                        #update_progress(int(prog*c3d/all3d*100))
+                        progress_fraction = progress_fraction*c3d/all3d
+                        timeelapsed = time.time()-self.time_scanstart
+                        #time_per_pos = timeelapsed / (i + 1)
+                        update_progress(int(progress_fraction*100))
+                        msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+                        msg2 = f"; Remaining time for the current 3D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
                     else:
-                        update_progress(int(prog*100))
-                msg1 = f'Elapsed time = {int(time.time()-self.time_scanstart)}s since the start.'
-                if prog>0:
-                    remainingtime = timeelapsed/prog - timeelapsed
-                else:
-                    remainingtime = 999
-                msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime,2)}s\n"
-                msg = "%s%s"%(msg1, msg2)
+                        #print("2d scan progress update")
+                        #progress_fraction = (i+1)/Nline
+                        update_progress(int(progress_fraction*100))
+                        msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+                        msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
+
+                    msg = "%s%s"%(msg1, msg2)
                 if update_status:
                     update_status(msg)
-
-
-
-#         isattarget = False
-#         while not isattarget:
-#             try:
-#                 isattarget = self.pts.hexapod.isattarget(axes[0])
-#             except:
-#                 isattarget = False
-#             #self.updatepos()
-# #                    print("Waiting to be done...")
-#             time.sleep(0.05)
         if self.isStruckCountNeeded:
             struck.strk.stop()
         else:
