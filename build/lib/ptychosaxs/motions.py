@@ -159,7 +159,16 @@ class motors(object):
             ch = self.gonio.channel_names.index(axis)
             pos = self.gonio.get_pos(ch)
             return pos
-        
+    
+    def mv_hex(self, *args, wait=True):
+        self.hexapod.mv(*args)
+        if wait:
+            time.sleep(0.01)
+            while True:
+                if self.hexapod.isattarget():
+                    break
+                time.sleep(0.01)
+
     def mv(self, axis, target, wait=True):
         self.signals.AxisNameSignal.emit(axis)
         t0 = time.time()

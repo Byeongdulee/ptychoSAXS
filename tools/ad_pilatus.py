@@ -309,15 +309,6 @@ class AD_Dante(Device):
             self.add_pv(pvname, attr='File_'+p)
             
     def Arm(self, nimg = 0):
-        if self.MCAAcquiring == 1:
-            t = time.time()
-            self.EraseStart = 0 # stop acquire
-            while self.MCAAcquiring == 1:
-                self.EraseStart = 0
-                time.sleep(0.1)
-                if abs(time.time()-t)>10:
-                    print("DANTE still running timeout.")
-                    raise TimeoutError        
         self.CollectMode = 1 # MCA Mapping 
         if nimg>0:
             self.MappingPoints = nimg

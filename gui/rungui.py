@@ -405,7 +405,7 @@ class ptyco_main_control(QMainWindow):
         self.shutter_close_after_scan = False
         self.ui.actionflyX_and_stepY.triggered.connect(lambda: self.fly2d(xm, ym))
         self.ui.actionsnake.triggered.connect(lambda: self.fly2d(xm, ym, snake=True))
-        self.ui.actionstepscan.triggered.connect(self.stepscan2d(xm, ym))
+        self.ui.actionstepscan.triggered.connect(lambda : self.stepscan2d(xm, ym))
         self.ui.actionnormal_2D.triggered.connect(lambda: self.fly3d(xm, ym, phim))
         self.ui.actionsnake_2D.triggered.connect(lambda: self.fly3d(xm, ym, phim, snake=True))
         self.ui.actionstep_2D.triggered.connect(lambda: self.stepscan3d(xm, ym, phim))
@@ -743,6 +743,7 @@ class ptyco_main_control(QMainWindow):
             self.parameters.writeini()
         else:
             self.ui.ed_workingfolder.setText(self.parameters.working_folder)
+        self.update_scanname(update_detector=True)
 
     def update_scanname(self, update_detector = True):
         txt = self.ui.ed_scanname.text()
@@ -2277,9 +2278,6 @@ class ptyco_main_control(QMainWindow):
                 self.stepscan2d_tm = tm
                 self.stepscan2d_step = step
 
-
-
-
         # signal for qds
         axis = self.motornames[xmotor]
         self.signalmotor = axis
@@ -2307,8 +2305,7 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append('#D')
         scaninfo.append(time.ctime())
 
-        w = Worker(self.stepscan2d0, xmotor, ymotor, scanname=scanname, 
-                update_progress=None, update_status=None)
+        w = Worker(self.stepscan2d0, xmotor, ymotor, update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone2d)
         w.signal.progress.connect(self.updateprogressbar)
         w.signal.statusmessage.connect(self.update_status_bar)
@@ -2619,7 +2616,7 @@ class ptyco_main_control(QMainWindow):
         self.pts.mv(axis, pos0)
 
 
-    def stepscan2d0(self, xmotor=0, ymotor=-1, scanname = "", update_progress=None, update_status=None):
+    def stepscan2d0(self, xmotor=0, ymotor=-1, update_progress=None, update_status=None):
         self.update_scanname()
         yaxis = self.motornames[ymotor]
         xaxis = self.motornames[xmotor]
@@ -2684,6 +2681,7 @@ class ptyco_main_control(QMainWindow):
 
         # Nx2 numpy array of (x, y)
         pos = np.asarray(coords)
+        print(pos)
         Nline = len(pos)
         # keep for later use if needed
         self.stepscan2d_positions = pos
@@ -2698,15 +2696,20 @@ class ptyco_main_control(QMainWindow):
                     det.FileNumber = 1
                 if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
                     det.filePut('FileNumber', i+1) 
-                    det.step_ready(expt, Nline)
+                det.step_ready(expt, Nline)
 
         N_imgcollected = 0
         t0 = time.time()
+        self.isStopScanIssued = False
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 break
-            
-            self.pts.mv_hex(xaxis, pos[i,0], yaxis, pos[i,1])
+            print(pos[i,0], pos[i,1], " Moving to this position...............")
+            pos_status = False
+            self.pts.hexapod.mv(xaxis, pos[i,0], yaxis, pos[i,1])
+            while not pos_status:
+                time.sleep(0.01)
+                pos_status = self.pts.hexapod.isattarget()
 
             if self.isStruckCountNeeded:
                 struck.mcs_counter_count(expt)
@@ -2762,7 +2765,7 @@ class ptyco_main_control(QMainWindow):
                 # self.log_data(data)
             #pos = self.get_motorpos(self.signalmotor)
             #time.sleep(0.1)
-            self.mpos.append(value)
+            self.mpos.append(pos[i,:])
             t1 = time.time()
             while (time.time()-t1 < self.parameters._waittime_between_scans):
                 time.sleep(0.01)
@@ -2827,8 +2830,7 @@ class ptyco_main_control(QMainWindow):
             # fly here
             scan="%s%0.3d"%(scanname, i)
             self.progress_3d = (i, len(pos))
-            retval = self.stepscan2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
-                    update_progress=update_progress, update_status=update_status)
+            retval = self.stepscan2d0(xmotor=xmotor, ymotor=ymotor, update_progress=update_progress, update_status=update_status)
             if retval == -1:
                 msg = f'Detector refresh failed .'
                 update_status(msg)
