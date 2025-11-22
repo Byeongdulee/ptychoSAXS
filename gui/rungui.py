@@ -4064,7 +4064,10 @@ class ptyco_main_control(QMainWindow):
         else:
             r = np.asarray(self.rpos)
             pos = np.asarray(self.mpos)
-        if len(pos) != len(r[:,0]):
+        try:
+            if len(pos) != len(r[:,0]):
+                return
+        except:
             return
         try:
             xl = f"{self.signalmotor} ({self.signalmotorunit})"
@@ -4168,6 +4171,7 @@ class ptyco_main_control(QMainWindow):
             # if scanname is provided, set it.
             if len(scanname)>0:
                 try:
+                    print(f"Setting scanname to {scanname}")
                     self.ui.ed_scanname.setText(scanname)
                     self.update_scanname()
                 except:
