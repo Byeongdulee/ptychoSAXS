@@ -1151,6 +1151,8 @@ class ptyco_main_control(QMainWindow):
                         # when the measurement is all done, reset the file number to 0.
                         if update_scannumber:
                             det.filePut('FileNumber', 0)
+                            if i<2: # tiff file number 0
+                                det.FileNumber = 0
                     else:
                         fnum = det.FileNumber_RBV
                         fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
@@ -2712,7 +2714,7 @@ class ptyco_main_control(QMainWindow):
                 if i<2:
                     det.filePut('FileNumber', 1)  #JD
                     det.FileTemplate = '%s%s_%5.5d_00001.tif'
-                    det.FileNumber = 1
+                    #det.FileNumber = 1   # this needs to be turned off.....
 #                if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
 #                    det.filePut('FileNumber', i+1) 
                 det.step_ready(expt, Nline)
