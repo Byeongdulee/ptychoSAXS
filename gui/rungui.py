@@ -2686,7 +2686,7 @@ class ptyco_main_control(QMainWindow):
         # keep for later use if needed
         self.stepscan2d_positions = pos
         dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
-        
+
         isreshreshed = 1
         ## prepre detectors ............
         for i, det in enumerate(self.detector): #JD
@@ -2766,11 +2766,11 @@ class ptyco_main_control(QMainWindow):
                 # self.log_data(data)
             #pos = self.get_motorpos(self.signalmotor)
             #time.sleep(0.1)
-            self.mpos.append(pos[i,:])
             t1 = time.time()
             while (time.time()-t1 < self.parameters._waittime_between_scans):
                 time.sleep(0.01)
             timeelapsed = time.time()-t0
+            self.mpos.append(timeelapsed)
             if update_progress:
                 # if this is a part of 3d scan
                 if self.stepscan3d_p0: # 3d scan
