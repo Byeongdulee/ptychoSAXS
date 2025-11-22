@@ -4151,11 +4151,11 @@ class ptyco_main_control(QMainWindow):
         except:
             phimotor = DEFAULTS['phimotor']
         try:
-            scanname = int(data['scanname'])
+            scanname = data['scanname']
         except:
             scanname = ""
         try:
-            folder = int(data['folder'])
+            folder = data['folder']
         except:
             folder = ""
         try:
@@ -4168,6 +4168,17 @@ class ptyco_main_control(QMainWindow):
             testmode = False
 
         if cmd == 'set':
+
+            if saxsmode:
+                self.set_hdf_plugin_use(True)
+                self.select_detector_mode(False)
+                self.select_hdf_multiframecapture(True)
+                self.set_basepaths('/net/s12data/export/12id-c/')
+        
+            if testmode:
+                self.set_monitor_beamline_status(False)
+                self.set_shutter_close_after_scan(False)
+
             # if scanname is provided, set it.
             if len(scanname)>0:
                 try:
@@ -4188,16 +4199,6 @@ class ptyco_main_control(QMainWindow):
                             self.select_detectors(N, value=False)
                         except:
                             pass
-
-            if saxsmode:
-                self.set_hdf_plugin_use(True)
-                self.select_detector_mode(False)
-                self.select_hdf_multiframecapture(True)
-                self.set_basepaths('/net/s12data/export/12id-c/')
-        
-            if testmode:
-                self.set_monitor_beamline_status(False)
-                self.set_shutter_close_after_scan(False)
 
         elif cmd == 'setrange':
             motornumber = self.motornames.index(data['axis'])
