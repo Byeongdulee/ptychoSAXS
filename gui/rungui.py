@@ -13,6 +13,7 @@ from asyncqt import QEventLoop
 from server_json import UDPserver, create_server
 import json
 import epics
+from tools import detectors
 SCAN_NUMBER_IOC = epics.PV("12idc:data:fileIndex")
 
 from PyQt5 import uic, QtCore, QtGui
@@ -603,8 +604,10 @@ class ptyco_main_control(QMainWindow):
             except:
                 pass
             
-    def set_hdf_plugin_use(self):
-        if self.ui.actionUse_hdf_plugin.isChecked():
+    def set_hdf_plugin_use(self, value=None):
+        if value is None:
+            value = self.ui.actionUse_hdf_plugin.isChecked()
+        if value:
             self.ui.actionUse_hdf_plugin.setChecked(True)
             self.ui.actionCapture_multi_frames.setEnabled(True)
             self.use_hdf_plugin = True
@@ -614,8 +617,10 @@ class ptyco_main_control(QMainWindow):
             self.ui.actionCapture_multi_frames.setEnabled(False)
             self.use_hdf_plugin = False
 
-    def select_detector_mode(self):
-        if self.ui.actionPtychography_mode.isChecked():
+    def select_detector_mode(self, value=None):
+        if value is None:
+            value = self.ui.actionPtychography_mode.isChecked()
+        if value:
             self.ui.actionPtychography_mode.setChecked(True)
             self.is_ptychomode = True
             # if both detectors are chosen..
@@ -648,8 +653,10 @@ class ptyco_main_control(QMainWindow):
             if self.ui.actionWAXS.isChecked():
                 self.detector_mode[1] = 'scattering'            
 
-    def select_hdf_multiframecapture(self):
-        if self.ui.actionCapture_multi_frames.isChecked():
+    def select_hdf_multiframecapture(self, value=None):
+        if value is None:
+            value = self.ui.actionCapture_multi_frames.isChecked()
+        if value:
             self.ui.actionCapture_multi_frames.setChecked(True)
             if self.ui.actionSG.isChecked():
                 self.hdf_plugin_savemode = 2
@@ -661,16 +668,20 @@ class ptyco_main_control(QMainWindow):
             self.hdf_plugin_savemode = 0
 #        print(self.hdf_plugin_savemode, " This is hdf plugin save mode...")
 
-    def set_monitor_beamline_status(self):
-        if self.ui.actionMonitor_Beamline_Status.isChecked():
+    def set_monitor_beamline_status(self, value=None):
+        if value is None:
+            value = self.ui.actionMonitor_Beamline_Status.isChecked()
+        if value:
             self.ui.actionMonitor_Beamline_Status.setChecked(True)
             self.monitor_beamline_status = True
         else:
             self.ui.actionMonitor_Beamline_Status.setChecked(False)
             self.monitor_beamline_status = False
 
-    def set_shutter_close_after_scan(self):
-        if self.ui.actionShutter_Close_Afterscan.isChecked():
+    def set_shutter_close_after_scan(self, value=None):
+        if value is None:
+            value = self.ui.actionShutter_Close_Afterscan.isChecked()
+        if value:
             self.ui.actionShutter_Close_Afterscan.setChecked(True)
             self.shutter_close_after_scan = True
         else:
@@ -1176,22 +1187,27 @@ class ptyco_main_control(QMainWindow):
                 det.filePut('AutoSave', 0)
                 det.TriggerMode = 4
 
-    def set_basepaths(self):
+    def set_basepaths(self, text=""):
         # Prompt user for base path for detectors
 #        default_basepath = '/net/micdata/data2'
         default_basepath = '/net/s12data/export/12id-c/'
-        if len(self.det_basepath)>0:
-            default_basepath = self.det_basepath
-        text, ok = QInputDialog.getText(self, "Set Detector Base Path", "Base path for detectors:", QLineEdit.Normal, default_basepath)
+        if len(text)==0:
+            if len(self.det_basepath)>0:
+                default_basepath = self.det_basepath
+            text, ok = QInputDialog.getText(self, "Set Detector Base Path", "Base path for detectors:", QLineEdit.Normal, default_basepath)
+        else:
+            ok = True
         if ok and text:
             self.det_basepath = text
         else:
             self.det_basepath = default_basepath
 
-    def select_detectors(self, N):
+    def select_detectors(self, N, value=None):
         if N==1:
             basename = 'S12-PILATUS1:'
-            if self.ui.actionSAXS.isChecked():
+            if value is None:
+                value = self.ui.actionSAXS.isChecked()
+            if value:
                 self.ui.actionSAXS.setChecked(True)
                 self.detector[0] = pilatus(basename)
                 #self.detector[0].basepath = self.det_basepath
@@ -1201,7 +1217,9 @@ class ptyco_main_control(QMainWindow):
                 self.detector[0] = None
         if N==2:
             basename = '12idcPIL:'
-            if self.ui.actionWAXS.isChecked():
+            if value is None:
+                value = self.ui.actionWAXS.isChecked()
+            if value:
                 self.ui.actionWAXS.setChecked(True)
                 self.detector[1] = pilatus(basename)
                 #self.detector[1].basepath = self.det_basepath
@@ -1211,19 +1229,25 @@ class ptyco_main_control(QMainWindow):
                 self.detector[1] = None
 #        print("base path of the detector %i is %s" % (N, self.detector[N-1].basepath))
         if N==3:
-            if self.ui.actionStruck.isChecked():
+            if value is None:
+                value = self.ui.actionStruck.isChecked()
+            if value:
                 self.switch_MCS(True)
 #                self.detector[1] = pilatus('12idcPIL:')
             else:
                 self.switch_MCS(False)
         if N==4:
-            if self.ui.actionSG.isChecked():
+            if value is None:
+                value = self.ui.actionSG.isChecked()
+            if value:
                 self.switch_SGstream(True)
             else:
                 self.switch_SGstream(False)
         if N==5:
             basename = '12idcDAN:'
-            if self.ui.actionDante.isChecked():
+            if value is None:
+                value = self.ui.actionDante.isChecked()
+            if value:
                 self.ui.actionDante.setChecked(True)
                 self.ui.actionXSP3.setChecked(False)
                 self.detector[4] = dante(basename)
@@ -1233,7 +1257,9 @@ class ptyco_main_control(QMainWindow):
                 self.detector[4] = None
         if N==6:
             basename = 'XSP3_4Chan:'
-            if self.ui.actionXSP3.isChecked():
+            if value is None:
+                value = self.ui.actionXSP3.isChecked()
+            if value:
                 self.ui.actionXSP3.setChecked(True)
                 self.ui.actionDante.setChecked(False)
                 self.detector[4] = dante(basename)
@@ -4112,6 +4138,10 @@ class ptyco_main_control(QMainWindow):
         except:
             xmotor = DEFAULTS['xmotor']
         try:
+            detectors = data['detector']
+        except:
+            detectors = ''
+        try:
             ymotor = int(data['ymotor'])
         except:
             ymotor = DEFAULTS['ymotor']
@@ -4127,6 +4157,40 @@ class ptyco_main_control(QMainWindow):
             folder = int(data['folder'])
         except:
             folder = ""
+        try:
+            saxsmode = bool(data['saxsmode'])
+        except:
+            saxsmode = False
+        try:
+            testmode = bool(data['testmode'])
+        except:
+            testmode = False
+
+        if cmd == 'set':
+            # if scanname is provided, set it.
+            if len(scanname)>0:
+                try:
+                    self.ui.ed_scanname.setText(scanname)
+                    self.update_scanname()
+                except:
+                    pass
+            if len(detectors)>0:
+                for N in range(1, 7):
+                    if str(N) in detectors:
+                        try:
+                            self.select_detectors(self, N, value=True)
+                        except:
+                            pass
+            
+            if saxsmode:
+                self.set_hdf_plugin_use(True)
+                self.select_detector_mode(False)
+                self.select_hdf_multiframecapture(True)
+                self.set_basepaths('/net/s12data/export/12id-c/')
+        
+            if testmode:
+                self.set_monitor_beamline_status(False)
+                self.set_shutter_close_after_scan(False)
 
         if cmd == 'setrange':
             motornumber = self.motornames.index(data['axis'])
@@ -4136,6 +4200,7 @@ class ptyco_main_control(QMainWindow):
                     pass
                 else:
                     self.ui.findChild(QLineEdit, "ed_lup_%i_%s"%(n, key)).setText(val)
+        
         elif cmd == 'mv':
             for axis, pos in data.items():
                 #self.set_mv(self, axis, float(pos))
@@ -4152,8 +4217,10 @@ class ptyco_main_control(QMainWindow):
             
         elif cmd == 'run3d':
             self.fly3d(xmotor=xmotor,ymotor=ymotor,phimotor=phimotor,scanname=scanname)
+
         elif cmd == 'none':
             self.runRequested.emit(0)
+
         elif cmd == "toggle":
             try:
                 val = data['controllerfly']
@@ -4163,6 +4230,7 @@ class ptyco_main_control(QMainWindow):
                     self.ui.actionEnable_fly_with_controller.setChecked(False)
             except:
                 pass
+
             try:
                 val = data['keepprevscan']
                 if val == "on":
@@ -4171,6 +4239,7 @@ class ptyco_main_control(QMainWindow):
                     self.ui.cb_keepprevscan.setChecked(False)
             except:
                 pass
+            
             try:
                 val = data['reversescan']
                 if val == "on":
@@ -4179,6 +4248,7 @@ class ptyco_main_control(QMainWindow):
                     self.ui.cb_reversescandir.setChecked(False)
             except:
                 pass
+
         elif cmd == "setfolder":
             self.parameters.working_folder = folder
             self.update_workingfolder(self.parameters.working_folder)

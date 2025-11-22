@@ -8,6 +8,7 @@ macrofilename = 'examplescan.txt'
 iscommandsent = False
 
 while 1:
+    #check every 5 seconds for status
     parameters.readini()
     if parameters.scan_time == -1:
         if len(macrofilename) > 0:
