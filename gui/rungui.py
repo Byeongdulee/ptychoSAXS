@@ -1126,8 +1126,10 @@ class ptyco_main_control(QMainWindow):
         if len(self.parameters.logfilename)>0:
             pos = np.asarray(self.mpos)
             r = np.asarray(self.rpos)
-            print(pos.shape, r.shape, " scan done shapes")
+            #print(pos.shape, r.shape, " scan done shapes")
             self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
+            self.mpos = []
+            self.rpos = []
             scaninfo = []
             scaninfo.append('#I detector_filename')
             fn = ""
@@ -1153,7 +1155,7 @@ class ptyco_main_control(QMainWindow):
             scaninfo = []
             scaninfo.append('#D')
             scaninfo.append(time.ctime())
-        self.run_stop_issued()
+        #self.run_stop_issued()
         self.update_status_scan_time()
 
     def set_det_alignmode(self):
@@ -2226,6 +2228,7 @@ class ptyco_main_control(QMainWindow):
         w.kwargs['update_progress'] = w.signal.progress.emit
         w.kwargs['update_status'] = w.signal.statusmessage.emit
         self.threadpool.start(w)
+        self.run_stop_issued()
 
 
     def stepscan2d(self, xmotor=0, ymotor=1, scanname = ""):
@@ -2686,7 +2689,7 @@ class ptyco_main_control(QMainWindow):
 
         # Nx2 numpy array of (x, y)
         pos = np.asarray(coords)
-        print(pos)
+#        print(pos)
         Nline = len(pos)
         # keep for later use if needed
         self.stepscan2d_positions = pos
@@ -2700,8 +2703,8 @@ class ptyco_main_control(QMainWindow):
                     det.filePut('FileNumber', 1)  #JD
                     det.FileTemplate = '%s%s_%5.5d_00001.tif'
                     det.FileNumber = 1
-                if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
-                    det.filePut('FileNumber', i+1) 
+#                if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
+#                    det.filePut('FileNumber', i+1) 
                 det.step_ready(expt, Nline)
 
         N_imgcollected = 0
@@ -2710,7 +2713,7 @@ class ptyco_main_control(QMainWindow):
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 break
-            print(pos[i,0], pos[i,1], " Moving to this position...............")
+#            print(pos[i,0], pos[i,1], " Moving to this position...............")
             pos_status = False
             self.pts.hexapod.mv(xaxis, pos[i,0], yaxis, pos[i,1])
             while not pos_status:
