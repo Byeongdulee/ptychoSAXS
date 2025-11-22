@@ -1130,9 +1130,11 @@ class ptyco_main_control(QMainWindow):
             self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
             scaninfo = []
             scaninfo.append('#I detector_filename')
-            for det in self.detector:
+            fn = ""
+            for i, det in enumerate(self.detector):
                 if det is not None:
-                    if self.use_hdf_plugin and (self.hdf_plugin_savemode==1):# capture mode
+                    if self.use_hdf_plugin:
+                    #if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):# capture mode
                         while det.fileGet('WriteFile_RBV'):
                             time.sleep(0.01)
                         fnum = det.fileGet('FileNumber_RBV')
@@ -1142,8 +1144,10 @@ class ptyco_main_control(QMainWindow):
                     else:
                         fnum = det.FileNumber_RBV
                         fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-                    filename = os.path.basename(fn)
-                    scaninfo.append(filename)
+                    if len(fn)>0:
+                        filename = os.path.basename(fn)
+                        scaninfo.append(filename)
+                        break
             if len(scaninfo)>1:
                 self.write_scaninfo_to_logfile(scaninfo)
             scaninfo = []
