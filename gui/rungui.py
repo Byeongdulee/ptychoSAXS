@@ -2685,7 +2685,8 @@ class ptyco_main_control(QMainWindow):
         Nline = len(pos)
         # keep for later use if needed
         self.stepscan2d_positions = pos
-
+        dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
+        
         isreshreshed = 1
         ## prepre detectors ............
         for i, det in enumerate(self.detector): #JD
