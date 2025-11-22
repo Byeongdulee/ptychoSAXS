@@ -88,7 +88,7 @@ class pilatus(AD_Pilatus):
 		self.setArrayCounter(0)
 		self.ImageMode = 1  #  multiple image
 		self.TriggerMode = 3 # external triger mode
-		self.FileNumber = 1
+		#self.FileNumber = 1
 
         # number of images for collection and capture
 		self.NumImages = N_image

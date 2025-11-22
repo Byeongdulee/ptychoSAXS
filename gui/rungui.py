@@ -2763,15 +2763,28 @@ class ptyco_main_control(QMainWindow):
 
             # wait for 1 image collection done.
             val = N_imgcollected
+            TIMEOUT = expt + 3
+            t_start = time.time()
+            timeout_occurred = False
             for ndet, det in enumerate(self.detector):
                 if ndet>1: 
                     continue
                 if det is not None:
                     while val >= N_imgcollected:
-                        N_imgcollected = det.ArrayCounter_RBV
-                        print(N_imgcollected, " Waiting for image collection...............")
+                        try:
+                            N_imgcollected = det.ArrayCounter_RBV
+                        except:
+                            pass
+                        #print(N_imgcollected, " Waiting for image collection...............")
                         time.sleep(0.1)
+                        if (time.time() - t_start) > TIMEOUT:
+                            timeout_occurred = True
+                            break
                     break
+            if timeout_occurred:
+                print(f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish.")
+                self.recent_error_msg = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish."
+                return -1
             # image collection done.
             N_imgcollected = det.ArrayCounter_RBV
 
