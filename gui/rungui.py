@@ -61,7 +61,7 @@ except:
 from tools import struck
 
 # detectors
-from tools.detectors import pilatus, dante, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
+from tools.detectors import pilatus, dante, XSP, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
 import re
 import analysis.planeeqn as eqn
 import py12inifunc
@@ -756,6 +756,11 @@ class ptyco_main_control(QMainWindow):
             self.ui.ed_workingfolder.setText(self.parameters.working_folder)
         self.update_scanname(update_detector=True)
 
+    def get_detectors_ready(self):
+        for i, det in enumerate(self.detector):
+            if det is not None:
+                det.get_detector_ready()
+                
     def update_scanname(self, update_detector = True):
         txt = self.ui.ed_scanname.text()
         self.parameters.scan_number = int(self.ui.le_scannumber.text())
@@ -787,12 +792,8 @@ class ptyco_main_control(QMainWindow):
                     tp = ""
 
                 Windows_workingfolder = self.ui.ed_workingfolder.text()
-
+                
                 if det is not None:
-                    # print(det._prefix, f" will be updated. {i}th detector.")
-
-                    # print(det.basepath, " This is the basepath")
-                    # print(workingfolder, " This is the workingfolder")
                     hdf_path = ""
                     filename = ""
                     if i<2:
@@ -800,31 +801,17 @@ class ptyco_main_control(QMainWindow):
                             folder_type = 'ptycho'
                             if self.detector_mode[i] == "":
                                 self.detector_mode[i] = "ptycho"
-#                            print("")
-#                            print(f"Detector mode is {self.detector_mode[i]}")
-#                            print("")
                             if self.detector_mode[i] == 'ptycho':
                                 tp = ""
                             
                             basepath = det.basepath
-                            #hdf_path = os.path.join(basepath, workingfolder, 'ptycho').replace('\\', '/')
-#                            hdf_path = os.path.join(basepath, workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
-#                            det.FilePath = hdf_path
-                            #tif_path = os.path.join("/ramdisk", workingfolder, 'tifs', self.scannumberstring).replace('\\', '/')
                             tif_path = os.path.join("/ramdisk").replace('\\', '/')
 
                         else: # scattering mode
                             if len(tp)==0:
                                 continue
-                            #basepath = "/mnt/Sector_12/12id-c/"
                             basepath = self.det_basepath
-                            # hdf_path = os.path.join(basepath, workingfolder, tp+'AXS').replace('\\', '/')
-                            # det.FilePath = hdf_path
-                            # tif_path = os.path.join("/ramdisk").replace('\\', '/')
                             folder_type = tp+"AXS"
-                            # basepath = det.basepath
-    #                        det.FilePath = hdf_path
-                            #tif_path = os.path.join("/ramdisk", workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
                             tif_path = ""
                     if "SG" in det._prefix:
                         folder_type = 'positions'
@@ -832,11 +819,6 @@ class ptyco_main_control(QMainWindow):
                             basepath = det.basepath
                         else:
                             basepath = self.det_basepath
-#                            hdf_path = os.path.join(basepath, workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
-                        #print()
-                        #print(f"This is in update_scanname update folder... {hdf_path} ")
-                        #print()
-#                            det.FilePath = hdf_path
                         tif_path = ""
                     if "dante" in det._prefix:
                         folder_type = 'dante'
@@ -844,8 +826,6 @@ class ptyco_main_control(QMainWindow):
                             basepath = det.basepath
                         else:
                             basepath = self.det_basepath
-                        # basepath = det.basepath
-                        #basepath = "/net/micdata/data2/12IDC/"
                         
                     hdfname = tp+txt
                     if i<2:
@@ -855,14 +835,8 @@ class ptyco_main_control(QMainWindow):
                             filename = hdfname
                         if len(tif_path) ==0:
                             tif_path = '/ramdisk'
-                        #if len(filename) == 0:
-                        #    filename = "test"
                         det.FilePath = tif_path
                         det.FileName = filename
-                        #det.FilePath = tif_path
-                        #det.FileName = tp+txt
-#                    print(hdf_path)
-#                    print(tif_path, " This is tif path")
                     Windows_hdf_path = os.path.join(Windows_workingfolder, folder_type, self.scannumberstring).replace('\\', '/')
                     #print(Windows_hdf_path, " This is Windows hdf path")
                     self.make_positions_folder(Windows_hdf_path)
@@ -1263,7 +1237,7 @@ class ptyco_main_control(QMainWindow):
             if value:
                 self.ui.actionXSP3.setChecked(True)
                 self.ui.actionDante.setChecked(False)
-                self.detector[4] = dante(basename)
+                self.detector[4] = XSP(basename)
                 #self.detector[4].basepath = self.det_basepath
             else:
                 self.ui.actionXSP3.setChecked(False)
