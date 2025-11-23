@@ -557,23 +557,22 @@ class AD_Dante(Device):
         #print("Getting my_attribute")
         return self.MCAAcquiring
     
-    @Acquire_RBV.setter
-    def Acquire_RBV(self, new_value):
-        """The setter method for my_attribute."""
-        print(new_value)
-        self.EraseStart = new_value
-
-    @property
-    def Acquire(self):
-        """The getter method for my_attribute."""
-        #print("Getting my_attribute")
-        return self.MCAAcquiring
-
-    @Acquire.setter
-    def Acquire(self, new_value):
-        """The setter method for my_attribute."""
-        print(new_value)
-        self.EraseStart = new_value
+    def __setattr__(self, name, value):
+        """Intercept assignments to Acquire/Acquire_RBV to update EraseStart and log."""
+        if name in ('Acquire', 'Acquire_RBV'):
+            try:
+                print(value)
+            except Exception:
+                pass
+            # update EraseStart via superclass to ensure Device behavior is preserved
+            try:
+                super(AD_Dante, self).__setattr__('EraseStart', value)
+            except Exception:
+                try:
+                    Device.__setattr__(self, 'EraseStart', value)
+                except Exception:
+                    pass
+        return super(AD_Dante, self).__setattr__(name, value)
 
 class AD_XSP(Device):
     camattrs = ('NumImages', 'NumTriggers', 
