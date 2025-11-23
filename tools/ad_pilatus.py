@@ -557,6 +557,12 @@ class AD_Dante(Device):
         #print("Getting my_attribute")
         return self.MCAAcquiring
     
+    @Acquire_RBV.setter
+    def Acquire_RBV(self, new_value):
+        """The setter method for my_attribute."""
+        print(new_value)
+        self.EraseStart = new_value
+
     @property
     def Acquire(self):
         """The getter method for my_attribute."""
