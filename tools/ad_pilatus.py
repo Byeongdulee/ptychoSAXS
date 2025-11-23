@@ -546,7 +546,17 @@ class AD_Dante(Device):
     
     def setNDArrayPort(self, port='DANTE1'):
         self.filePut('NDArrayPort', port)
-
+    
+    # def __getattribute__(self, name):
+    #     if name == 'Acquire_RBV':
+    #         return super().__getattribute__('MCAAcquiring')
+    #     return super().__getattribute__(name)
+    @getattr()
+    def Acquire_RBV(self):
+        return self.MCAAcquiring
+    @setattr()
+    def Acquire(self, val):
+        self.EraseStart = val
 
 class AD_XSP(Device):
     camattrs = ('NumImages', 'NumTriggers', 
