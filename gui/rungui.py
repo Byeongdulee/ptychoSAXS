@@ -1129,8 +1129,8 @@ class ptyco_main_control(QMainWindow):
             scaninfo.append('#I detector_filename')
             fn = ""
             for i, det in enumerate(self.detector):
+                print(det, " this is in scandone for detector ", i)
                 if det is not None:
-                    print(det, " this is in scandone for detector ", i)
                     if 'SG' in det._prefix:
                         det.FileCaptureOff()
                         det.Acquire = 0
