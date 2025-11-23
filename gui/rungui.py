@@ -758,6 +758,7 @@ class ptyco_main_control(QMainWindow):
 
     def get_detectors_ready(self):
         for i, det in enumerate(self.detector):
+            print(det, " Checking detector ", i)
             if det is not None:
                 det.filePut('FileNumber',    1)
                 det.ArrayCounter = 0
@@ -1129,6 +1130,10 @@ class ptyco_main_control(QMainWindow):
             fn = ""
             for i, det in enumerate(self.detector):
                 if det is not None:
+                    if 'SG' in det._prefix:
+                        det.FileCaptureOff()
+                        det.Acquire = 0
+                        success = True
                     if self.use_hdf_plugin:
                     #if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):# capture mode
                         while det.fileGet('WriteFile_RBV'):
