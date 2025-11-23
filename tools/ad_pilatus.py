@@ -566,6 +566,7 @@ class AD_Dante(Device):
     @Acquire.setter
     def Acquire(self, new_value):
         """The setter method for my_attribute."""
+        print(new_value)
         self.EraseStart = new_value
 
 class AD_XSP(Device):
