@@ -1130,6 +1130,7 @@ class ptyco_main_control(QMainWindow):
             fn = ""
             for i, det in enumerate(self.detector):
                 if det is not None:
+                    print(det, " this is in scandone for detector ", i)
                     if 'SG' in det._prefix:
                         det.FileCaptureOff()
                         det.Acquire = 0
@@ -4146,11 +4147,11 @@ class ptyco_main_control(QMainWindow):
                             self.select_detectors(N, value=True)
                         except:
                             pass
-                    else:
-                        try:
-                            self.select_detectors(N, value=False)
-                        except:
-                            pass
+                    # else:
+                    #     try:
+                    #         self.select_detectors(N, value=False)
+                    #     except:
+                    #         pass
 
         elif cmd == 'setrange':
             motornumber = self.motornames.index(data['axis'])
