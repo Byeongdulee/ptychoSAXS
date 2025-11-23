@@ -180,7 +180,7 @@ class dante(AD_Dante):
 #		self.AutoIncrement = 1
 #		self.FileNumber = 1
 #		self.FilePath = '/net/s12data/export/12id-c/2025_Data/2025_3/'
-		self.filePut('FilePath', '//net/s12data/export/12id-c/2025_Data/2025_3/')
+		#self.filePut('FilePath', '//net/s12data/export/12id-c/2025_Data/2025_3/')
 		self.filePut('AutoIncrement', 1)
 		self.filePut('AutoSave', 1)
 		self.filePut('FileWriteMode', 1)
@@ -280,6 +280,9 @@ class dante(AD_Dante):
 		self.Acquire = 0
 		self.change2multitrigger_mode()
 		return 1 # scuccessfully refreshed
+	@property
+	def Acquire(self):
+		return self.Acquire_RBV
 		
 class XSP(AD_XSP):
 	mode = ""
@@ -311,7 +314,7 @@ class XSP(AD_XSP):
 	def set_fly_configuration(self):
 #		self.AutoIncrement = 1
 #		self.FileNumber = 1
-		self.filePut('FilePath', '//net/s12data/export/12id-c/2025_Data/2025_3/')
+		#self.filePut('FilePath', '//net/s12data/export/12id-c/2025_Data/2025_3/')
 		self.filePut('AutoIncrement', 1)
 		self.filePut('AutoSave', 1)
 		self.filePut('FileWriteMode', 1)
@@ -410,5 +413,49 @@ class XSP(AD_XSP):
 		self.Acquire = 0
 		self.change2multitrigger_mode()
 		return 1 # scuccessfully refreshed
-		
+
+class SGstream(AD_SG):
+	mode = ""
+	def __init__(self, basename="12idSGSocket:"):
+		super().__init__(basename)
+		self.setNDArrayPort()
+
+	def SetNumImages(self, n):
+		pass
+		#self.putfile('NumImages', n)
+
+	def wait_trigDone(self):
+		while self.Acquire_RBV:
+			if self.getCapture()==0:
+				if (self.fileGet("AutoSave")==0):
+					self.FileWrite()
+
+	def wait_capturedone(self):
+		self.CCD_waitCaptureDone()
+		if (self.fileGet("AutoSave")==0):
+			self.FileWrite()
+		self.CCD_waitFileWriting()
+
+	def set_fly_configuration(self):
+#		self.AutoIncrement = 1
+#		self.FileNumber = 1
+#		self.filePut('FilePath', '//net/s12data/export/12id-c/2025_Data/2025_3/')
+		self.filePut('AutoIncrement', 1)
+		self.filePut('AutoSave', 1)
+		self.filePut('FileWriteMode', 1)
+	
+	def step_ready(self, *args, **kwargs):
+		self.StartStreaming()
+    
+	def fly_ready(self, *args, **kwargs):
+		self.StartStreaming()
+
+	def set_scanNumberAsfilename(self):
+		fw_dir = caget(f"{beamlinePV}data:userDir")
+		self.setFilePath(fw_dir)
+		self.setFileName('scan{:03d}'.format(caget(f'{beamlinePV}saveData_scanNumber')))
+
+	def refresh(self):
+		self.Acquire = 0
+		return 1 # scuccessfully refreshed		
 

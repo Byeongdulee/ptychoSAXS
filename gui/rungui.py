@@ -46,7 +46,7 @@ import numpy as np
 #sys.path.append('../tools')
 
 #from tools.panda import get_pandadata
-from tools.softglue import sgz_pty, SG, SOFTGLUE_Setup_Error
+from tools.softglue import sgz_pty, SOFTGLUE_Setup_Error
 s12softglue = sgz_pty()
 
 #Delay generator
@@ -61,7 +61,7 @@ except:
 from tools import struck
 
 # detectors
-from tools.detectors import pilatus, dante, XSP, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
+from tools.detectors import pilatus, dante, SGstream, XSP, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
 import re
 import analysis.planeeqn as eqn
 import py12inifunc
@@ -759,8 +759,12 @@ class ptyco_main_control(QMainWindow):
     def get_detectors_ready(self):
         for i, det in enumerate(self.detector):
             if det is not None:
-                det.get_detector_ready()
-                
+                det.filePut('FileNumber',    1)
+                det.ArrayCounter = 0
+                det.set_fly_configuration()
+                if i<2:
+                    det.FileNumber = 1                
+
     def update_scanname(self, update_detector = True):
         txt = self.ui.ed_scanname.text()
         self.parameters.scan_number = int(self.ui.le_scannumber.text())
@@ -1248,7 +1252,7 @@ class ptyco_main_control(QMainWindow):
         basename = '12idSGSocket:'
         if status:
             self.ui.actionSG.setChecked(True)
-            self.detector[3] = SG(basename)
+            self.detector[3] = SGstream(basename)
             #self.detector[3].basepath = self.det_basepath
             #self.detector[3].basename = basename
             if self.ui.actionCapture_multi_frames.isChecked():
@@ -1320,61 +1324,6 @@ class ptyco_main_control(QMainWindow):
     
     def softglue_savingdone(self):
         self.is_softglue_savingdone = True
-
-    def save_softglue_original(self):
-        # read softglue data
-            #foldername = os.getcwd()
-        try:
-            s12softglue.flush()
-            time.sleep(0.1)
-        except:
-            self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
-            print(self.recent_error_msg)            
-        N_cnt = 0
-        if hasattr(self.pts.hexapod, "pulse_number"):
-            N_cnt = self.pts.hexapod.pulse_number
-        t = []
-#        ct0 = time.time()
-        count = 0
-        len_t = 0
-        self.softglue_data = []
-        #s12softglue.PROC=1
-        t0 = time.time()
-
-        while len_t<N_cnt:
-            t, dt = s12softglue.get_sliced_arrays(self.parameters.softglue_channels)
-            print(f"Time required to get arrays is {time.time()-t0}")
-            # if softglue data does not get updated on time, flush.
-            if len(t)>=N_cnt:
-                break
-            if (len_t == len(t)) or (len(t)<N_cnt):
-                print("flushed")
-                s12softglue.flush()
-                time.sleep(0.1)
-            len_t = len(t)
-            count = count+1
-            if count>10:
-                self.recent_error_msg = "Timeout error in softglue data reading........."
-                print(self.recent_error_msg)
-                break
-        print(f"Time required to read softglue is {time.time()-t0}")
-        self.softglue_data = (t, dt)
-        self.softglue_N_cnt = N_cnt
-        foldername, filename = self.get_softglue_filename()
-        if len(foldername) == 0:
-            return
-        foldername = os.path.join(foldername, 'positions', self.scannumberstring)
-        self.softglue_folder = foldername
-        self.softglue_filename =filename
-
-        while self.is_softglue_savingdone is False:
-            print("Previous soft glue has not been done. Waiting for done.")
-            time.sleep(0.025)
-        self.is_softglue_savingdone = False
-        w = Worker(self.save2disk_softglue)
-        w.signal.finished.connect(self.softglue_savingdone)
-        self.threadpool.start(w)
-        #self.save2disk_softglue()
 
     def save_softglue(self):
         # read softglue data
@@ -1519,16 +1468,14 @@ class ptyco_main_control(QMainWindow):
 
         print("fly done.......")
         ct0 = time.time()
-#        pos = self.pts.get_pos('X')
-#        print(f'X position is at {pos} in flydone.')
+
         isTestRun = self.ui.actionTestFly.isChecked()
         if isTestRun:
             return
+
         self.isscan = False
-        #if self.signalmotor not in self.pts.hexapod.axes:        
-        #    self.pts.set_speed(self.signalmotor, self._prev_vel, self._prev_acc)
-#        print(f"elapsed time since done = {time.time()-ct0}")
         self.isfly = False
+
         if len(self.parameters.logfilename)>0:
             if self.isStruckCountNeeded:
                 # save struck data.
@@ -1553,12 +1500,7 @@ class ptyco_main_control(QMainWindow):
             scaninfo.append(time.ctime())
             self.write_scaninfo_to_logfile(scaninfo)
         success=False
-        timeout = 5
-        cnt = 0
-#        self.save_softglue()
-#        success=True
 
-#        print(self.hdf_plugin_savemode,  " This is plugin savemode....")
         if self.is_ptychomode:
             try:
                 s12softglue.flush()
@@ -1573,6 +1515,7 @@ class ptyco_main_control(QMainWindow):
                 except:
                     pass
             print(f"Elapsed time to save softglue data since flydone = {time.time()-ct0}")
+
         # if read softglue failed...
         scaninfo = []
         scaninfo.append('#I detector_filename')
@@ -1595,13 +1538,13 @@ class ptyco_main_control(QMainWindow):
                     fnum = det.fileGet('FileNumber_RBV')
                     if str(fnum-1) not in fn:
                         fn = det.fileGet('FullFileName_RBV', as_string=True)
-                    if update_scannumber:
+                    if reset_scannumber:
                         det.filePut('FileNumber', 1)
                 else:
                     if 'SG' not in det._prefix:
                         fnum = det.FileNumber_RBV
                         fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-                        if update_scannumber:
+                        if reset_scannumber:
                             det.FileNumber = 1
                 if len(fn)>0:
                     print("===============================")
@@ -1743,6 +1686,7 @@ class ptyco_main_control(QMainWindow):
         return p0
 
     def fly2d(self, xmotor=0, ymotor=1, scanname = "", snake=False):
+        self.get_detectors_ready()
         if snake:
             # if snake scan chosen, softglue socket stream and MCS will be on automatically.            
             self.switch_SGstream(True)
@@ -1968,6 +1912,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.statusbar.showMessage(message)
 
     def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname="", snake=False):
+        self.get_detectors_ready()
         if snake:
             # if snake scan chosen, softglue socket stream and MCS will be on automatically.            
             self.switch_SGstream(True)
@@ -2079,6 +2024,7 @@ class ptyco_main_control(QMainWindow):
         self.threadpool.start(w)
 
     def fly(self, motornumber=-1):
+        self.get_detectors_ready()
         self.update_scanname()
         if self.isStruckCountNeeded:
             struck.mcs_init()
@@ -2175,6 +2121,7 @@ class ptyco_main_control(QMainWindow):
             f.write("%s\n"%strv)
 
     def stepscan(self, motornumber=-1):
+        self.get_detectors_ready()
         self.update_scanname()
         self.write_motor_scan_range()
         self.isStopScanIssued = False
@@ -2248,6 +2195,7 @@ class ptyco_main_control(QMainWindow):
 
 
     def stepscan2d(self, xmotor=0, ymotor=1):
+        self.get_detectors_ready()
         self.update_scanname()
         self.write_motor_scan_range()
         self.isStopScanIssued = False
@@ -2342,7 +2290,8 @@ class ptyco_main_control(QMainWindow):
 
 
     def stepscan3d(self, xmotor=0, ymotor=1, phimotor=6):
-        self.switch_SGstream(False)
+        self.get_detectors_ready()
+#        self.switch_SGstream(False)
 
         if self.isStruckCountNeeded:
             struck.mcs_init()
@@ -3319,13 +3268,14 @@ class ptyco_main_control(QMainWindow):
         movestep = self.fly1d_step*1000*self.parameters._ratio_exp_period
         print(f"Actual exposure time: {expt:0.3e} s. In distance: {movestep:.3e} um.")
 #                print("During the exposure, the motor moves %0.3f um." % movestep)
-        if s12softglue.isConnected:
-            N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
-            self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
-            print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a shot.")
-            #if N_counts>100000: # No need to check for SNAKE
-            #    self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
-            #    raise SOFTGLUE_Setup_Error(self.recent_error_msg)
+        if self.detector[3] is None: 
+            if s12softglue.isConnected:
+                N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
+                self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
+                print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a shot.")
+                #if N_counts>100000: # No need to check for SNAKE
+                #    self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                #    raise SOFTGLUE_Setup_Error(self.recent_error_msg)
 
         if isTestRun:
             return
@@ -3521,13 +3471,15 @@ class ptyco_main_control(QMainWindow):
                 movestep = abs(fe-st)/self.pts.hexapod.pulse_number*1000*self.parameters._ratio_exp_period
                 print(f"Actual exposure time: {expt:0.3e} s, during which {axis} will move {movestep:.3e} um.")
 #                print("During the exposure, the motor moves %0.3f um." % movestep)
-                if s12softglue.isConnected:
-                    N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
-                    self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
-                    print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a DET image.")
-                    if N_counts>100000:
-                        self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
-                        raise SOFTGLUE_Setup_Error(self.recent_error_msg)
+    
+                if self.detector[3] is None: 
+                    if s12softglue.isConnected:
+                        N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
+                        self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
+                        print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a DET image.")
+                        if N_counts>100000:
+                            self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                            raise SOFTGLUE_Setup_Error(self.recent_error_msg)
 
                 if isTestRun:
                     return
@@ -3648,11 +3600,12 @@ class ptyco_main_control(QMainWindow):
             
             # softglue ready
             if self.is_ptychomode:
-                if s12softglue.isConnected:
-                    N_counts = s12softglue.number_acquisition(expt, Nstep)
-                    if N_counts>100000:
-                        self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
-                        raise SOFTGLUE_Setup_Error(self.recent_error_msg)
+                if self.detector[3] is None: 
+                    if s12softglue.isConnected:
+                        N_counts = s12softglue.number_acquisition(expt, Nstep)
+                        if N_counts>100000:
+                            self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                            raise SOFTGLUE_Setup_Error(self.recent_error_msg)
 
             if self.ui.cb_reversescandir.isChecked():
                 if abs(st-pos)>abs(fe-pos):

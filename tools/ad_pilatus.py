@@ -981,7 +981,13 @@ class AD_SG(Device):
                 Ncapr = self.getNumCaptured()
             else:
                 break
-        
+    
+    def step_ready(self, *args, **kwargs):
+        self.StartStreaming()
+    
+    def fly_ready(self, *args, **kwargs):
+        self.StartStreaming()
+
     def StartStreaming(self):
         """start streamed acquisition to save with
         file saving plugin, and start acquisition
