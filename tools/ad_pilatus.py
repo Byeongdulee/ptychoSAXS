@@ -551,12 +551,22 @@ class AD_Dante(Device):
     #     if name == 'Acquire_RBV':
     #         return super().__getattribute__('MCAAcquiring')
     #     return super().__getattribute__(name)
-    @getattr()
+    @property
     def Acquire_RBV(self):
+        """The getter method for my_attribute."""
+        #print("Getting my_attribute")
         return self.MCAAcquiring
-    @setattr()
-    def Acquire(self, val):
-        self.EraseStart = val
+    
+    @property
+    def Acquire(self):
+        """The getter method for my_attribute."""
+        #print("Getting my_attribute")
+        return self.MCAAcquiring
+
+    @Acquire.setter
+    def Acquire(self, new_value):
+        """The setter method for my_attribute."""
+        self.EraseStart = new_value
 
 class AD_XSP(Device):
     camattrs = ('NumImages', 'NumTriggers', 
