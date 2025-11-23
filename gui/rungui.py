@@ -849,7 +849,7 @@ class ptyco_main_control(QMainWindow):
                     #print(hdf_path, " This is ptycho path")
                     det.filePut('FilePath', hdf_path)
 #                    print(f"txt is {txt}")
-                    print(f"Setting detector {i} path to {hdf_path}, filename to {hdfname}")
+                    #print(f"Setting detector {i} path to {hdf_path}, filename to {hdfname}")
                     det.filePut('FileName', hdfname)
                     #print(f"Detector {i} path set to {hdf_path}, filename set to {hdfname}")
                     self.hdf_plugin_name[i] = hdfname
@@ -1118,49 +1118,52 @@ class ptyco_main_control(QMainWindow):
         self.isscan = False
         self.updatepos()
         self.plot()
+
+        fn = ""
+        for i, det in enumerate(self.detector):
+            print(det, " this is in scandone for detector ", i)
+            if det is not None:
+                if 'SG' in det._prefix:
+                    det.FileCaptureOff()
+                    det.Acquire = 0
+                    success = True
+                if self.use_hdf_plugin:
+                    while det.fileGet('WriteFile_RBV'):
+                        time.sleep(0.01)
+                    if len(fn)==0:
+                        fnum = det.fileGet('FileNumber_RBV')
+                        fn = det.fileGet('FullFileName_RBV', as_string=True)
+                        if str(fnum-1) not in fn:
+                            fn = det.fileGet('FullFileName_RBV', as_string=True)
+                    
+                    # when the measurement is all done, reset the file number to 0.
+                    if update_scannumber:
+                        det.filePut('FileNumber', 1)
+                        print(f"Resetting file number of detector {i} to 0.")
+                        if i<2: # tiff file number 0
+                            det.FileNumber = 0
+                else:
+                    if len(fn)==0:
+                        fnum = det.FileNumber_RBV
+                        fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
+
         if len(self.parameters.logfilename)>0:
             pos = np.asarray(self.mpos)
             r = np.asarray(self.rpos)
-            #print(pos.shape, r.shape, " scan done shapes")
             self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
             self.mpos = []
             self.rpos = []
             scaninfo = []
             scaninfo.append('#I detector_filename')
-            fn = ""
-            for i, det in enumerate(self.detector):
-                print(det, " this is in scandone for detector ", i)
-                if det is not None:
-                    if 'SG' in det._prefix:
-                        det.FileCaptureOff()
-                        det.Acquire = 0
-                        success = True
-                    if self.use_hdf_plugin:
-                    #if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):# capture mode
-                        while det.fileGet('WriteFile_RBV'):
-                            time.sleep(0.01)
-                        fnum = det.fileGet('FileNumber_RBV')
-                        fn = det.fileGet('FullFileName_RBV', as_string=True)
-                        if str(fnum-1) not in fn:
-                            fn = det.fileGet('FullFileName_RBV', as_string=True)
-                        # when the measurement is all done, reset the file number to 0.
-                        if update_scannumber:
-                            det.filePut('FileNumber', 1)
-                            print(f"Resetting file number of detector {i} to 0.")
-                            if i<2: # tiff file number 0
-                                det.FileNumber = 0
-                    else:
-                        fnum = det.FileNumber_RBV
-                        fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
-                    if len(fn)>0:
-                        filename = os.path.basename(fn)
-                        scaninfo.append(filename)
-                        break
+            if len(fn)>0:
+                filename = os.path.basename(fn)
+                scaninfo.append(filename)
             if len(scaninfo)>1:
                 self.write_scaninfo_to_logfile(scaninfo)
             scaninfo = []
             scaninfo.append('#D')
             scaninfo.append(time.ctime())
+
         # when the measurement is all done, update the scan number.
         if update_scannumber:
             self.run_stop_issued()
