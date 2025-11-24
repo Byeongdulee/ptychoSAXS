@@ -758,13 +758,13 @@ class ptyco_main_control(QMainWindow):
 
     def get_detectors_ready(self):
         for i, det in enumerate(self.detector):
-            print(det, " Checking detector ", i)
+            #print(det, " Checking detector ", i)
             if det is not None:
                 det.filePut('FileNumber',    1)
                 det.ArrayCounter = 0
                 det.set_fly_configuration()
-                if i<2:
-                    det.FileNumber = 1                
+                #if i<2:
+                #    det.FileNumber = 1                
 
     def update_scanname(self, update_detector = True):
         txt = self.ui.ed_scanname.text()
@@ -1121,7 +1121,7 @@ class ptyco_main_control(QMainWindow):
 
         fn = ""
         for i, det in enumerate(self.detector):
-            print(det, " this is in scandone for detector ", i)
+            #print(det, " this is in scandone for detector ", i)
             if det is not None:
                 if 'SG' in det._prefix:
                     det.FileCaptureOff()
@@ -1139,9 +1139,9 @@ class ptyco_main_control(QMainWindow):
                     # when the measurement is all done, reset the file number to 0.
                     if update_scannumber:
                         det.filePut('FileNumber', 1)
-                        print(f"Resetting file number of detector {i} to 0.")
+                        #print(f"Resetting file number of detector {i} to 0.")
                         if i<2: # tiff file number 0
-                            det.FileNumber = 0
+                            det.FileNumber = 1
                 else:
                     if len(fn)==0:
                         fnum = det.FileNumber_RBV

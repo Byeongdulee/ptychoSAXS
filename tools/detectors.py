@@ -45,6 +45,8 @@ class pilatus(AD_Pilatus):
 		self.AutoIncrement = 1
 		self.FileNumber = 1
 		self.FilePath = '/ramdisk/'
+		self.TriggerMode = 3 # external triger mode
+		self.ImageMode = 1  #  multiple image
 		self.filePut('FilePath', '/ramdisk/')
 		self.filePut('AutoIncrement', 1)
 		self.filePut('AutoSave', 1)
@@ -318,6 +320,7 @@ class XSP(AD_XSP):
 		self.filePut('AutoIncrement', 1)
 		self.filePut('AutoSave', 1)
 		self.filePut('FileWriteMode', 1)
+		self.TriggerMode = 3 # TTL Veto only, which is external triger mode using gate signals.
 
 	def fly_ready(self, expt, x_points, y_points=1, wait=False, period=0, isTest=False, capture=(True, 1), fn=""):
 		Npoints = x_points*y_points
@@ -360,7 +363,7 @@ class XSP(AD_XSP):
 		if len(fn)>0:
 			self.setFileName("%s"%fn)
         # set filesaver
-		self.filePut('NumCapture',   1)
+		#self.filePut('NumCapture',   1)
 		self.filePut('FileNumber',    1)
 		self.StartCapture() # Arm the detector
 		self.Arm()
@@ -442,7 +445,7 @@ class SGstream(AD_SG):
 #		self.filePut('FilePath', '//net/s12data/export/12id-c/2025_Data/2025_3/')
 		self.filePut('AutoIncrement', 1)
 		self.filePut('AutoSave', 1)
-		self.filePut('FileWriteMode', 1)
+		self.filePut('FileWriteMode', 2) # stream mode
 	
 	def step_ready(self, *args, **kwargs):
 		self.StartStreaming()
