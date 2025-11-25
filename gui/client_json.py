@@ -1,7 +1,8 @@
 import socket
 import sys
 import json
-UDP_IP = "127.0.0.1"
+#UDP_IP = "127.0.0.1"
+UDP_IP = "10.54.122.103"
 UDP_PORT = 20002
 # python client_json.py command [key value]
 # Input Format: command [key value]

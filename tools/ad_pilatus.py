@@ -312,7 +312,7 @@ class AD_Dante(Device):
         self.CollectMode = 1 # MCA Mapping 
         if nimg>0:
             self.MappingPoints = nimg
-        self.EraseStart = 1
+        self.Acquire = 1
         time.sleep(0.05)
         try:
             self.CCD_waitstarted()
@@ -322,9 +322,9 @@ class AD_Dante(Device):
     def CCD_waitstarted(self):
         t = time.time()
         TIMEOUT = 10
-        while self.MCAAcquiring == 0:
-            self.EraseStart = 1
-            time.sleep(0.1)
+        while self.Acquire_RBV == 0:
+            self.Acquire = 1
+            time.sleep(0.01)
             if abs(time.time()-t)>TIMEOUT:
                 print("CCD Arming timeout.")
                 raise TimeoutError
@@ -560,10 +560,6 @@ class AD_Dante(Device):
     def __setattr__(self, name, value):
         """Intercept assignments to Acquire/Acquire_RBV to update EraseStart and log."""
         if name in ('Acquire', 'Acquire_RBV'):
-            try:
-                print(value)
-            except Exception:
-                pass
             # update EraseStart via superclass to ensure Device behavior is preserved
             try:
                 super(AD_Dante, self).__setattr__('EraseStart', value)

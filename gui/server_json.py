@@ -4,10 +4,12 @@ import asyncio
 
 from PyQt5 import QtCore
 import json
+#IP = "127.0.0.1"
+IP = "10.54.122.103"
 
 async def create_server(loop):
     return await loop.create_datagram_endpoint(
-        lambda: UDPserver(), local_addr=("sec12pc02.xray.aps.anl.gov", 20002)
+        lambda: UDPserver(), local_addr=(IP, 20002)
     )
 
 class UDPserver(QtCore.QObject):
