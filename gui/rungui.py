@@ -1124,6 +1124,8 @@ class ptyco_main_control(QMainWindow):
             #print(det, " this is in scandone for detector ", i)
             if det is not None:
                 if 'SG' in det._prefix:
+                    s12softglue.flush()
+                    time.sleep(5)
                     det.FileCaptureOff()
                     det.Acquire = 0
                     success = True
