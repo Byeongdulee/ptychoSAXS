@@ -329,7 +329,7 @@ class sgz_pty(Device):
         self._flush = '0'
         time.sleep(0.01)
         self._flush = '1'
-        time.sleep(0.05)
+        time.sleep(0.1)
     
     def cleanup(self, arrays):
         # remove data that does not vary with time.

@@ -423,6 +423,12 @@ class SGstream(AD_SG):
 		super().__init__(basename)
 		self.setNDArrayPort()
 
+	def ForceStop(self):
+		self.Acquire = 0
+		while self.getNumCaptured() != self.getArrayCounter():
+			time.sleep(0.02)
+		self.FileCaptureOff()
+
 	def SetNumImages(self, n):
 		pass
 		#self.putfile('NumImages', n)

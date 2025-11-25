@@ -825,7 +825,7 @@ class ptyco_main_control(QMainWindow):
                         else:
                             basepath = self.det_basepath
                         tif_path = ""
-                    if "dante" in det._prefix:
+                    if ("dante" in det._prefix) or ("XSP" in det._prefix):
                         folder_type = 'dante'
                         if self.is_ptychomode:
                             basepath = det.basepath
@@ -1126,8 +1126,7 @@ class ptyco_main_control(QMainWindow):
                 if 'SG' in det._prefix:
                     s12softglue.flush()
                     #time.sleep(5)
-                    det.FileCaptureOff()
-                    det.Acquire = 0
+                    det.ForceStop()
                     success = True
                 if self.use_hdf_plugin:
                     while det.fileGet('WriteFile_RBV'):

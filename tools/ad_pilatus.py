@@ -945,27 +945,27 @@ class AD_SG(Device):
         self.Arm()
         #time.sleep(0.25)
 
-    def ForceStop(self, timeouttime = 2):
-        t0 = time.time()
-        Ncapr = self.getNumCaptured()
-        NcapAll = self.fileGet('NumCapture')
-        timeout = False
-        while (Ncapr<NcapAll):
-            time.sleep(0.01)
-            if self.Acquire_RBV == 1:
-                Ncapr = self.getNumCaptured()
-            else:
-                break
-            if (time.time()-t0) > timeouttime:
-                print(time.time()-t0)
-                timeout = True
-        if timeout:
-            if self.fileGet('Capture_RBV') > 0:
-                self.filePut('Capture', 0)  # start capture
-            self.FileWrite()
-            self.CCD_waitFileWriting()
-            if self.Acquire_RBV > 0:
-                self.Acquire = 0
+    # def ForceStop(self, timeouttime = 2):
+    #     t0 = time.time()
+    #     Ncapr = self.getNumCaptured()
+    #     NcapAll = self.fileGet('NumCapture')
+    #     timeout = False
+    #     while (Ncapr<NcapAll):
+    #         time.sleep(0.01)
+    #         if self.Acquire_RBV == 1:
+    #             Ncapr = self.getNumCaptured()
+    #         else:
+    #             break
+    #         if (time.time()-t0) > timeouttime:
+    #             print(time.time()-t0)
+    #             timeout = True
+    #     if timeout:
+    #         if self.fileGet('Capture_RBV') > 0:
+    #             self.filePut('Capture', 0)  # start capture
+    #         self.FileWrite()
+    #         self.CCD_waitFileWriting()
+    #         if self.Acquire_RBV > 0:
+    #             self.Acquire = 0
 
     def CCD_waitCaptureDone(self):
         #t0 = time.time()
