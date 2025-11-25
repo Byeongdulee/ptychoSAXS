@@ -1125,7 +1125,7 @@ class ptyco_main_control(QMainWindow):
             if det is not None:
                 if 'SG' in det._prefix:
                     s12softglue.flush()
-                    time.sleep(5)
+                    #time.sleep(5)
                     det.FileCaptureOff()
                     det.Acquire = 0
                     success = True
