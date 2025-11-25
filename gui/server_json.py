@@ -7,7 +7,7 @@ import json
 
 async def create_server(loop):
     return await loop.create_datagram_endpoint(
-        lambda: UDPserver(), local_addr=("127.0.0.1", 20002)
+        lambda: UDPserver(), local_addr=("sec12pc02.xray.aps.anl.gov", 20002)
     )
 
 class UDPserver(QtCore.QObject):
