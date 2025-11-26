@@ -1538,8 +1538,8 @@ class ptyco_main_control(QMainWindow):
         for det in self.detector:
             if det is not None:
                 if 'SG' in det._prefix:
-                    det.FileCaptureOff()
-                    det.Acquire = 0
+                    s12softglue.flush()
+                    det.ForceStop()
                     success = True
                 fn = ""
                 if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):# capture mode
