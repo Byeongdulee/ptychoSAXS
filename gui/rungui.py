@@ -1467,6 +1467,7 @@ class ptyco_main_control(QMainWindow):
                 f.write("%i    %s\n"%(i, strv))
 
     def flydone(self, return_motor=True, reset_scannumber=True):
+        print(return_motor, " Returning motors?")
         if return_motor:
             # when 1D scan is done.
             if self.shutter_close_after_scan:
@@ -1511,20 +1512,20 @@ class ptyco_main_control(QMainWindow):
             self.write_scaninfo_to_logfile(scaninfo)
         success=False
 
-        if self.is_ptychomode:
+#        if self.is_ptychomode:
+        try:
+            s12softglue.flush()
+            #time.sleep(0.1)
+        except:
+            self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
+            print(self.recent_error_msg) 
+        if not self.ui.actionSG.isChecked(): # SG streammode is not on.
             try:
-                s12softglue.flush()
-                time.sleep(0.1)
+                self.save_softglue()
+                success = True
             except:
-                self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
-                print(self.recent_error_msg) 
-            if not self.ui.actionSG.isChecked(): # SG streammode is not on.
-                try:
-                    self.save_softglue()
-                    success = True
-                except:
-                    pass
-            print(f"Elapsed time to save softglue data since flydone = {time.time()-ct0}")
+                pass
+        print(f"Elapsed time to save softglue data since flydone = {time.time()-ct0}")
 
         # if read softglue failed...
         scaninfo = []
@@ -3352,10 +3353,10 @@ class ptyco_main_control(QMainWindow):
         else:
             pass
 
-        # check if data collections are all done..
-        for det in self.detector:
-            if det is not None:
-                det.ForceStop(2)
+        # # check if data collections are all done..
+        # for det in self.detector:
+        #     if det is not None:
+        #         det.ForceStop(2)
         self.run_stop_issued()
         return 1
         #print("Time to finish fly0: %0.3f" % (time.time()-t0))

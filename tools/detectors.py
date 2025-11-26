@@ -423,10 +423,14 @@ class SGstream(AD_SG):
 		super().__init__(basename)
 		self.setNDArrayPort()
 
-	def ForceStop(self):
+	def ForceStop(self, val=0):
 		self.Acquire = 0
+		TIMEOUT = 5
+		t0 = time.time()
 		while self.getNumCaptured() != self.getArrayCounter():
 			time.sleep(0.02)
+			if (time.time()-t0) > TIMEOUT:
+				raise TimeoutError
 		self.FileCaptureOff()
 
 	def SetNumImages(self, n):
