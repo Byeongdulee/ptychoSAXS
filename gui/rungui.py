@@ -1119,8 +1119,10 @@ class ptyco_main_control(QMainWindow):
 
     def scandone(self, update_scannumber=True):
         # return to the initial positions
-        for key in self.motor_p0:
-            self.mv(key, self.motor_p0[key])
+        for i, key in enumerate(self.motor_p0):
+            # put only x motors and ymotors back to initial positions
+            if i<2:
+                self.mv(key, self.motor_p0[key])
 
         print("scan done")
         self.isscan = False
