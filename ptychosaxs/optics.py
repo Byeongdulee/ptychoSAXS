@@ -1,7 +1,7 @@
 try:
-    from .epicsmotor import epicsmotor
+    from .epicsmotor import epicsmotor, epicsslit
 except:
-    from epicsmotor import epicsmotor
+    from epicsmotor import epicsmotor, epicsslit
 
 ALL_MOTORS = ["12idcUC8:m2", "12idc:m14", "12idc:m10", "12idc:m11", "12idc:m12", "12idc:m13", "12ideSFT:m4", "12ideSFT:m5", "12idc:m5", "12idc:m6"]
 class ptyoptics(epicsmotor): # all motors
@@ -23,6 +23,12 @@ class camera(epicsmotor): # motors for optical camera
 class beamstop(epicsmotor): # motors for beamstop
     def __init__(self, pvlist=["12ideSFT:m4", "12ideSFT:m5"]):
         super().__init__(pvlist)
+
+class slit(epicsslit): # motors for gentry
+    def __init__(self, pvlist=["12idc:CL_SlitH", "12idc:CL_SlitV"]):
+        names = ["H slit", "V slit"]
+        units = ["mm", "mm"]
+        super().__init__(pvlist, names, units)
 
 class gentry(epicsmotor): # motors for gentry
     def __init__(self, pvlist=["12idc:m5", "12idc:m6"]):

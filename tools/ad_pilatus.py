@@ -39,20 +39,24 @@ class AD_Pilatus(Device):
             self.add_pv(pvname, attr='File_'+p)
             
     def Arm(self, nimg = 0):
-        if self.Acquire == 1:
+        # should be in Acquire mode.
+        if self.Acquire_RBV == 1:
             t = time.time()
             self.Acquire = 0 # stop acquire
-            while self.Acquire == 1:
+            while self.Acquire_RBV == 1:
                 self.Acquire = 0
                 time.sleep(0.1)
                 if abs(time.time()-t)>10:
                     print("CCD still running timeout.")
-                    raise TimeoutError        
+                    raise TimeoutError
+            print(f"{self._prefix} was Armed previously. Arming it again.")
+            time.sleep(15)
         self.ImageMode = 1
         if nimg>0:
             self.NumImages = nimg
         self.Acquire = 1
         time.sleep(0.05)
+        # should be also Armed..
         try:
             self.CCD_waitstarted()
         except TimeoutError:
@@ -60,12 +64,15 @@ class AD_Pilatus(Device):
 
     def CCD_waitstarted(self):
         t = time.time()
-        TIMEOUT = 10
+        TIMEOUT = 30
         while self.Armed == 0:
             self.Acquire = 1
-            time.sleep(0.1)
+            time.sleep(0.01)
+            # if abs(time.time()-t)>1:
+            #     time.sleep(10)
+            #     continue
             if abs(time.time()-t)>TIMEOUT:
-                print("CCD Arming timeout.")
+                print(f"CCD Arming timeout in {TIMEOUT}s.")
                 raise TimeoutError
             
     def CCD_waitFileWriting(self):
@@ -125,6 +132,7 @@ class AD_Pilatus(Device):
         self.filePut('FileWriteMode', 0)  # single frame
         time.sleep(0.025)
         #self.filePut('Capture', 1)  # start capture
+        print("going to be armed")
         self.Arm()
         #time.sleep(0.25)
 
@@ -577,7 +585,7 @@ class AD_XSP(Device):
                 'FileTemplate', 'FileTemplate_RBV', 
                 'FileName', 'FileName_RBV', 'FullFileName_RBV', 
                 'Acquire', 'Acquire_RBV', 'AcquireTime', 'AcquirePeriod',
-                'Armed', 'ArrayCounter', 'ArrayCounter_RBV',
+                'AcquireBusy', 'ArrayCounter', 'ArrayCounter_RBV',
                 'StatusMessage_RBV', 'StringToServer_RBV', 'StringFromServer_RBV')
 
     pathattrs = ('FileNumber', 'FileNumber_RBV', 
@@ -602,10 +610,10 @@ class AD_XSP(Device):
             self.add_pv(pvname, attr='File_'+p)
             
     def Arm(self, nimg = 0):
-        if self.Acquire == 1:
+        if self.Acquire_RBV == 1:
             t = time.time()
             self.Acquire = 0 # stop acquire
-            while self.Acquire == 1:
+            while self.Acquire_RBV == 1:
                 self.Acquire = 0
                 time.sleep(0.1)
                 if abs(time.time()-t)>10:
@@ -624,7 +632,7 @@ class AD_XSP(Device):
     def CCD_waitstarted(self):
         t = time.time()
         TIMEOUT = 10
-        while self.Armed == 0:
+        while self.AcquireBusy == 0:
             self.Acquire = 1
             time.sleep(0.1)
             if abs(time.time()-t)>TIMEOUT:
@@ -862,10 +870,10 @@ class AD_SG(Device):
             self.add_pv(pvname, attr='File_'+p)
             
     def Arm(self, nimg = 0):
-        if self.Acquire == 1:
+        if self.Acquire_RBV == 1:
             t = time.time()
             self.Acquire = 0 # stop acquire
-            while self.Acquire == 1:
+            while self.Acquire_RBV == 1:
                 self.Acquire = 0
                 time.sleep(0.1)
                 if abs(time.time()-t)>10:

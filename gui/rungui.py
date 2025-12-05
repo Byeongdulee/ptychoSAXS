@@ -231,12 +231,20 @@ class shutter():
         self.shutterC_open = epics.PV('12ida2:rShtrC:Open')
         self.shutterC_close = epics.PV('12ida2:rShtrC:Close')
         self.status = epics.PV('PB:12ID:STA_C_SCS_CLSD_PL.VAL')
+    def get_status(self):
+        if self.status.get() == 1:
+            # shutter is in close status
+            return False
+        else:
+            # shutter is in open status
+            return True
     def open(self):
         timout = 5
         self.shutterC_open.put(1)
         t0 = time.time()
-        while self.status.get()==0:
+        while not self.get_status():
             time.sleep(0.1)
+            self.shutterC_open.put(1)
             if time.time()-t0>timout:
                 print("Shutter won't open in timeout (5s).")
                 break
@@ -826,7 +834,7 @@ class ptyco_main_control(QMainWindow):
                             basepath = self.det_basepath
                         tif_path = ""
                     if ("dante" in det._prefix) or ("XSP" in det._prefix):
-                        folder_type = 'dante'
+                        folder_type = 'DANTE'
                         if self.is_ptychomode:
                             basepath = det.basepath
                         else:
@@ -1177,6 +1185,8 @@ class ptyco_main_control(QMainWindow):
                 det.TriggerMode = 4
 
     def set_basepaths(self, text=""):
+        if type(text) == bool:
+            text = ""
         # Prompt user for base path for detectors
 #        default_basepath = '/net/micdata/data2'
         default_basepath = '/net/s12data/export/12id-c/'
@@ -2392,7 +2402,7 @@ class ptyco_main_control(QMainWindow):
         if self.monitor_beamline_status:
             self.shutterC.open()
         w = Worker(self.stepscan3d0, xmotor, ymotor, phimotor, update_progress=None, update_status=None)
-        w.signal.finished.connect(self.scandone)
+        #w.signal.finished.connect(self.scandone)
         w.signal.progress.connect(self.updateprogressbar)
         w.signal.statusmessage.connect(self.update_status_bar)
         w.kwargs['update_progress'] = w.signal.progress.emit
@@ -2530,15 +2540,17 @@ class ptyco_main_control(QMainWindow):
             if self.isStopScanIssued:
                 break
             self.pts.mv(axis, value)
-
+            print("Motor moved...")
             if self.isStruckCountNeeded:
                 struck.mcs_counter_count(expt)
                 dg645_12ID.trigger()
+                print("Trigger sent1")
             # trigger the detector.
             if isDET_selected:
                 #struck.arm_mcs_counter()
                 #struck.mcs_counter_waitstarted()
                 dg645_12ID.trigger()
+                print("Trigger sent2")
                 #while struck.strk.scaler.CNT:
                 #    time.sleep(0.01)
 
@@ -2554,7 +2566,7 @@ class ptyco_main_control(QMainWindow):
                         time.sleep(0.1)
             # Waiting for data collection done.
             val = N_imgcollected
-
+            print("Acquire starated")
             # Update progress bar and status message.
             timeelapsed = time.time()-t0
             prog = float(i+1)/float(len(pos))
@@ -2598,8 +2610,9 @@ class ptyco_main_control(QMainWindow):
         self.pts.mv(axis, pos0)
 
 
-    def stepscan2d0(self, xmotor=0, ymotor=-1, update_progress=None, update_status=None):
+    def stepscan2d0(self, xmotor=0, ymotor=1, update_progress=None, update_status=None):
         self.update_scanname()
+        #print(ymotor, " this is ymortor")
         yaxis = self.motornames[ymotor]
         xaxis = self.motornames[xmotor]
         self.signalmotor2 = yaxis
@@ -2652,8 +2665,8 @@ class ptyco_main_control(QMainWindow):
 
         # build Y range (absolute) from st, fe, step already computed above
         ystep = ystep if ystep != 0 else ((yfe - yst) if (yfe != yst) else 1.0)
-        ystep = -abs(ystep) if st > fe else abs(ystep)
-        y_coords = np.arange(st, fe + 0.5 * ystep, ystep)
+        ystep = -abs(ystep) if yst > yfe else abs(ystep)
+        y_coords = np.arange(yst, yfe + 0.5 * ystep, ystep)
 
         # create zig-zag list of (x,y) pairs: left-to-right on first row, right-to-left on next, etc.
         coords = []
@@ -2668,11 +2681,12 @@ class ptyco_main_control(QMainWindow):
         # keep for later use if needed
         self.stepscan2d_positions = pos
         dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
-
+ #       print("Trigger set")
         isreshreshed = 1
         ## prepre detectors ............
         for i, det in enumerate(self.detector): #JD
             if det is not None:  #JD
+ #               print("det")
                 #if i<2:
                     #det.filePut('FileNumber', 1)  #JD
                     #det.FileTemplate = '%s%s_%5.5d_00001.tif'
@@ -2680,10 +2694,21 @@ class ptyco_main_control(QMainWindow):
 #                if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
 #                    det.filePut('FileNumber', i+1) 
                 det.step_ready(expt, Nline)
+#                print("step _ready")
 
         N_imgcollected = 0
         t0 = time.time()
         self.isStopScanIssued = False
+            # make sure detectors get armed.                
+        for ndet, det in enumerate(self.detector):
+            if ndet>1: 
+                continue
+            if det is not None:
+                while det.Acquire_RBV == 0:
+                    det.Arm()
+                    time.sleep(0.01)
+#        print("Detectors are Armed")
+
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 break
@@ -2694,61 +2719,46 @@ class ptyco_main_control(QMainWindow):
                 time.sleep(0.01)
                 pos_status = self.pts.hexapod.isattarget()
 
+            #print(value[0], " This is the motor position.")
             # trigger the detector.
             dg645_12ID.trigger()
+#            print("Trigger sent out")
 
             if self.isStruckCountNeeded:
                 struck.mcs_counter_count(expt)
+                #print("Is struck working?")
             
-            # make sure trigger done.                
-            for ndet, det in enumerate(self.detector):
-                if ndet>1: 
-                    continue
-                if det is not None:
-                    while det.Acquire_RBV == 0:
-                        time.sleep(0.1)
-
-            # # Update progress bar and status message.
-            # timeelapsed = time.time()-t0
-            # prog = float(i+1)/float(Nline)
-            # if update_progress:
-            #     update_progress(int(prog*100))
-            # msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-            # if prog>0:
-            #     remainingtime = timeelapsed/prog - timeelapsed
-            # else:
-            #     remainingtime = 999
-            # msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime,2)}s\n"
-            # msg = "%s%s"%(msg1, msg2)
-            # if update_status:
-            #     update_status(msg)
 
             # wait for 1 image collection done.
             val = N_imgcollected
+            #print(val, " This is val...")
             TIMEOUT = expt + 3
             t_start = time.time()
             timeout_occurred = False
             for ndet, det in enumerate(self.detector):
-                if ndet>1: 
-                    continue
+#                if ndet>1: 
+#                    continue
+                #print(ndet, "This is the detector")
                 if det is not None:
+                    #print(det._prefix)
                     while val >= N_imgcollected:
                         try:
                             N_imgcollected = det.ArrayCounter_RBV
                         except:
                             pass
-                        #print(N_imgcollected, " Waiting for image collection...............")
+                        #print(N_imgcollected, val, " Waiting for image collection...............")
                         time.sleep(0.1)
                         if (time.time() - t_start) > TIMEOUT:
                             timeout_occurred = True
                             break
-                    break
+#                    break
+#            print("Out now")
             if timeout_occurred:
                 print(f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish.")
                 self.recent_error_msg = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish."
                 return -1
-            # image collection done.
-            N_imgcollected = det.ArrayCounter_RBV
+#            # image collection done.
+#            N_imgcollected = det.ArrayCounter_RBV
 
             # update all relevant data.
             if self.isStruckCountNeeded:
@@ -2850,7 +2860,7 @@ class ptyco_main_control(QMainWindow):
                 msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {(i+1)/len(pos)*100}%.'
                 update_status(msg)
             
-            self.scandone(False)
+            self.scandone(True)
 
             # monitoring the station ready
             if self.monitor_beamline_status:

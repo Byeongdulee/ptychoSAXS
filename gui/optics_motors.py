@@ -7,7 +7,7 @@ from threading import Lock
 import sys
 import re
 import os
-
+from epics import PV
 # try:
 #     import ptychosaxs.tw_galil as gl
 #     MotorControlAvailable = True
@@ -20,7 +20,7 @@ sys.path.append('../ptychosaxs')
 import tw_galil as gl
 MotorControlAvailable = True
 try:
-    from optics import ptyoptics, opticsbox, OSA, camera, beamstop, gentry
+    from optics import ptyoptics, opticsbox, OSA, camera, beamstop, slit, gentry
     from newport_piezo import newport
     MotorControlAvailable = True
 except:
@@ -45,6 +45,7 @@ class motor_control(QMainWindow):
         self.control["OSA"]= OSA()
         self.control["camera"]= camera()
         self.control["beamstop"]= beamstop()
+        self.control["slit"] = slit()
         self.motornames = []
         self.motorunits = []
         self.motorindices = []
@@ -72,6 +73,13 @@ class motor_control(QMainWindow):
             self.motorunits.append(m.EGU)
             self.controller.append('beamstop')
             self.motorindices.append(i)
+        
+        for i, m in enumerate(self.control["slit"].motors):
+            self.motornames.append(m.name)
+            self.motorunits.append(m.units)
+            self.controller.append('slit')
+            self.motorindices.append(i)
+
         print(self.motornames)
         self.lock = Lock()
         self.threadpool = QThreadPool.globalInstance()
@@ -99,6 +107,15 @@ class motor_control(QMainWindow):
         self.ui.actionSmarAct_3.triggered.connect(self.enable_ptyoptics)
         self.ui.actionNewport.triggered.connect(self.enable_galil)
         self.ui.actionNewport_Piezo.triggered.connect(self.enable_newport)
+        self.ui.actionIn.triggered.connect(self.put_xrayeye_in)
+        self.ui.actionOut.triggered.connect(self.put_xrayeye_out)
+        status = PV("usxRIO:Galil2Bo0_STATUS.VAL")
+        if status.get()== 0:
+            self.ui.actionOut.setEnabled(False)
+            self.ui.actionIn.setEnabled(True)
+        else:
+            self.ui.actionOut.setEnabled(True)
+            self.ui.actionIn.setEnabled(False)
 
         if os.name == 'nt':
             self.timer = QTimer()
@@ -106,6 +123,23 @@ class motor_control(QMainWindow):
             self.timer.start(100)        
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
+
+    def put_xrayeye_in(self):
+        self.ui.actionIn.setEnabled(False)
+        self.ui.actionOut.setEnabled(True)
+        self.put_xrayeye(True)
+
+    def put_xrayeye_out(self):
+        self.ui.actionOut.setEnabled(False)
+        self.ui.actionIn.setEnabled(True)
+        self.put_xrayeye(False)
+        
+    def put_xrayeye(self, ins=True):
+        pvs = PV("usxRIO:Galil2Bo0_CMD")
+        if ins:
+            pvs.put(1)
+        else:
+            pvs.put(0)
 
     def enable_motors(self, n, enable):
         self.ui.findChild(QLabel, "lb%i"%n).setEnabled(enable)
