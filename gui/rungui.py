@@ -2747,7 +2747,7 @@ class ptyco_main_control(QMainWindow):
                         except:
                             pass
                         #print(N_imgcollected, val, " Waiting for image collection...............")
-                        time.sleep(0.1)
+                        time.sleep(0.02)
                         if (time.time() - t_start) > TIMEOUT:
                             timeout_occurred = True
                             break
