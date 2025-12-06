@@ -2817,14 +2817,16 @@ class ptyco_main_control(QMainWindow):
                     timeelapsed = time.time()-self.time_scanstart
                     #time_per_pos = timeelapsed / (i + 1)
                     update_progress(int(progress_fraction*100))
+                    remtime= np.round(timeelapsed*(1/progress_fraction-1),2)
                     msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-                    msg2 = f"; Remaining time for the current 3D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
+                    msg2 = f"; Remaining time for the current 3D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
                 else:
                     #print("2d scan progress update")
                     progress_fraction = (i+1)/Nline
                     update_progress(int(progress_fraction*100))
+                    remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
                     msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-                    msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
+                    msg2 = f"; Remaining time for the current 2D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
                 msg = "%s%s"%(msg1, msg2)
             if update_status:
                 update_status(msg)
@@ -3108,14 +3110,16 @@ class ptyco_main_control(QMainWindow):
                     timeelapsed = time.time()-self.time_scanstart
                     #time_per_pos = timeelapsed / (i + 1)
                     update_progress(int(progress_fraction*100))
+                    remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
                     msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-                    msg2 = f"; Remaining time for the current 3D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
+                    msg2 = f"; Remaining time for the current 3D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
                 else:
                     #print("2d scan progress update")
                     progress_fraction = (i+1)/Nline
                     update_progress(int(progress_fraction*100))
+                    remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
                     msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-                    msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
+                    msg2 = f"; Remaining time for the current 2D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
                 msg = "%s%s"%(msg1, msg2)
             if update_status:
                 update_status(msg)
@@ -3372,14 +3376,16 @@ class ptyco_main_control(QMainWindow):
                         timeelapsed = time.time()-self.time_scanstart
                         #time_per_pos = timeelapsed / (i + 1)
                         update_progress(int(progress_fraction*100))
+                        remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
                         msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-                        msg2 = f"; Remaining time for the current 3D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
+                        msg2 = f"; Remaining time for the current 3D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
                     else:
                         #print("2d scan progress update")
                         #progress_fraction = (i+1)/Nline
                         update_progress(int(progress_fraction*100))
+                        remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
                         msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-                        msg2 = f"; Remaining time for the current 2D scan is {np.round(timeelapsed*(1/progress_fraction-1),2)}s\n"
+                        msg2 = f"; Remaining time for the current 2D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
 
                     msg = "%s%s"%(msg1, msg2)
                 if update_status:
