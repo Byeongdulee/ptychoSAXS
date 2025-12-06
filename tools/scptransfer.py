@@ -1,7 +1,7 @@
 import paramiko
 from scp import SCPClient
 import sys
-
+import os
 def scp_file_with_password(hostname, port, username, password, local_path, remote_path):
     """
     Transfers a file to a remote server using SCP with a password.
@@ -52,9 +52,9 @@ def scp_file_with_password(hostname, port, username, password, local_path, remot
 #
 # private key authentication is generated between sec12pc02 and green.xray.aps.anl.gov for s12idc. 
 #
-def scp_file(local_path, remote_path="/home/beams/WEB12IDB/www/userData/"):
+def scp_file(local_path, remote_path="/home/beams/WEB12IDB/www/status/"):
     # Remote server details
-    hostname='green.xray.aps.anl.gov', 
+    hostname='green.xray.aps.anl.gov'
     username = 's12idc'
     private_key_path = f'C:\\Users\\{username}\\.ssh\\id_rsa' # Path to your private key on Windows
 
@@ -89,6 +89,15 @@ def scp_file(local_path, remote_path="/home/beams/WEB12IDB/www/userData/"):
     finally:
         if 'ssh' in locals() and ssh.get_transport() is not None:
             ssh.close()
+
+def scp(local_path, remote_path="/home/beams/WEB12IDB/www/status/"):
+    # Remote server details
+    hostname='green.xray.aps.anl.gov', 
+    username = 's12idc'
+    remote_path = f"{username}@%s:{remote_path}"%hostname
+    cmd = "scp " + local_path + " " + remote_path
+    print("Executing command:", cmd)
+    os.system(cmd)
 
 # Example usage:
 if __name__ == "__main__":
