@@ -204,7 +204,14 @@ class motors(object):
                     time.sleep(0.01)
 
         if axis in self.hexapod.axes:
-            self.hexapod.mv(axis, target)
+            try:
+                self.hexapod.mv(axis, target)
+            except:
+                print("Handling hexapod error and retrying move")
+                self.hexapod.handle_error()
+                print("Servo turned on. Referencing done at %s" % time.ctime())
+                self.hexapod.mv(axis, target)
+                
             prevpos = target-1
 #            print(wait)
             if wait:

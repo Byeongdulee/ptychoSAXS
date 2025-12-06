@@ -2688,13 +2688,6 @@ class ptyco_main_control(QMainWindow):
         ## prepre detectors ............
         for i, det in enumerate(self.detector): #JD
             if det is not None:  #JD
- #               print("det")
-                #if i<2:
-                    #det.filePut('FileNumber', 1)  #JD
-                    #det.FileTemplate = '%s%s_%5.5d_00001.tif'
-                    #det.FileNumber = 1   # this needs to be turned off.....
-#                if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
-#                    det.filePut('FileNumber', i+1) 
                 det.step_ready(expt, Nline)
 #                print("step _ready")
 
@@ -2765,7 +2758,8 @@ class ptyco_main_control(QMainWindow):
             # update all relevant data.
             if self.isStruckCountNeeded:
                 cnts = struck.read_scaler_all()
-                self.rpos.append([cnts[2], cnts[3], cnts[4]])
+                #self.rpos.append([cnts[2], cnts[3], cnts[4]])
+                self.rpos.append([cnts[2], cnts[4], cnts[5]])
                 # data = [value, cnts[2],cnts[3],cnts[4]]
                 # self.log_data(data)
             else:
@@ -2779,7 +2773,8 @@ class ptyco_main_control(QMainWindow):
             while (time.time()-t1 < self.parameters._waittime_between_scans):
                 time.sleep(0.01)
             timeelapsed = time.time()-t0
-            self.mpos.append(timeelapsed)
+            self.mpos.append(value)
+            #self.mpos.append(timeelapsed)
             msg = ""
             if update_progress:
                 #print("Updating progress bar in 2d step scan")
@@ -3811,12 +3806,25 @@ class ptyco_main_control(QMainWindow):
         #self.pts.savedata(filename, self.mpos, self.rpos, col=[0,1,2])
 
     def save_list(self, filename, mpos, rpos, col, option="w"):
-        with open(filename, option) as f:
-            for i, m in enumerate(mpos):
-                strv = ""
-                for cind in col:
-                    strv = "%s    %0.5e"%(strv, rpos[i][cind])
-                f.write("%0.5e%s\n"%(m, strv))
+        mpos = np.asarray(mpos)
+        rpos = np.asarray(rpos)
+        if mpos.ndim ==2:
+            with open(filename, option) as f:
+                for i, m in enumerate(mpos):
+                    strv = ""
+                    for data in m:
+                        strv = "%s    %0.5e"%(strv, data)
+                    for cind in col:
+                        strv = "%s    %0.5e"%(strv, rpos[i][cind])
+                    f.write("%s\n"%(strv))
+        else:    
+            with open(filename, option) as f:
+                for i, m in enumerate(mpos):
+                    strv = ""
+                    for cind in col:
+                        strv = "%s    %0.5e"%(strv, rpos[i][cind])
+                    f.write("%0.5e%s\n"%(m, strv))
+
 
     def save_nparray(self, filename, mpos, rpos, col, option="w"):
         with open(filename, option) as f:
