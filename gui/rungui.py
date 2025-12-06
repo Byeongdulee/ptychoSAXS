@@ -2745,7 +2745,7 @@ class ptyco_main_control(QMainWindow):
 
             # trigger the detector.
             dg645_12ID.trigger()
-            print(f"Trigger sent out for {i}th point..........................")
+            print(f"Trigger sent out for {i}th point..........................\r")
 
             if self.isStruckCountNeeded:
                 struck.mcs_counter_count(expt)
