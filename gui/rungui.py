@@ -260,6 +260,10 @@ class ptyco_main_control(QMainWindow):
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         guiName = "ptycoSAXS.ui"
         self.pts = pts
+
+        if not self.pts.hexapod.is_servo_on():
+            self.handle_hexapod_error()
+
         #self.beamstatus = beamstatus()
         self.ui = uic.loadUi(guiName)
         self.recent_error_msg = ''
@@ -559,6 +563,22 @@ class ptyco_main_control(QMainWindow):
         # Optionally update the label text:
         # self.ui.label_1.setText("0")
 
+    def handle_hexapod_error(self):
+        self.pts.hexapod.handle_error()
+        msg = (
+            f"Hexapod Servos are off, and they are back on.\n"
+            "Do you want to move to references?"
+        )
+        dlg = QMessageBox(self)
+        dlg.setWindowTitle("Referencing Hexapod")
+        dlg.setText(msg)
+        move_btn = dlg.addButton("Referencing", QMessageBox.AcceptRole)
+        cancel_btn = dlg.addButton(QMessageBox.Cancel)
+        dlg.setIcon(QMessageBox.Question)
+        dlg.exec_()
+        clicked = dlg.clickedButton()
+        if clicked == move_btn:
+            self.pts.hexapod.move_ref()
 
     def write_motor_scan_range(self):
         numbers = np.random.rand(len(self.motornames), 6)
@@ -2709,12 +2729,13 @@ class ptyco_main_control(QMainWindow):
                 break
 #            print(pos[i,0], pos[i,1], " Moving to this position...............")
             pos_status = False
-            self.pts.hexapod.mv(xaxis, pos[i,0], yaxis, pos[i,1])
             while not pos_status:
-                time.sleep(0.01)
-                pos_status = self.pts.hexapod.isattarget()
+                pos_status = self.pts.hexapod.mv(xaxis, pos[i,0], yaxis, pos[i,1], wait=True)
+                if not pos_status:
+                    self.pts.hexapod.handle_error()
+                    print("Hexapod move failed, retrying...")
+                    time.sleep(2)
 
-            #print(value[0], " This is the motor position.")
             # trigger the detector.
             dg645_12ID.trigger()
 #            print("Trigger sent out")
