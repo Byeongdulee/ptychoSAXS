@@ -45,7 +45,7 @@ import numpy as np
 #sys.path.append('../..')
 #sys.path.append('../tools')
 
-#from tools.panda import get_pandadata
+from tools.scptransfer import scp_file
 from tools.softglue import sgz_pty, SOFTGLUE_Setup_Error
 s12softglue = sgz_pty()
 
@@ -4306,13 +4306,26 @@ class ptyco_main_control(QMainWindow):
 
 app = QApplication(sys.argv)
 main_panel = ptyco_main_control()
-# if MotorControlAvailable:
-#     motor_panel = motor_control()
+
+def capture_screenshot():
+    """Capture screenshot of main_panel every 10 seconds"""
+    screenshot = main_panel.grab()
+    #timestamp = time.strftime("%Y%m%d_%H%M%S")
+    filename = f"pty-co-SAXS.png"
+    screenshot.save(filename)
+    scp_file(filename)
+    #print(f"Screenshot saved: {filename}")
 
 def main():
-#    run gui with server option
+    # Run gui with server option
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
+    
+    # Create a timer for periodic screenshots
+    screenshot_timer = QTimer()
+    screenshot_timer.timeout.connect(capture_screenshot)
+    screenshot_timer.start(10000)  # 10 seconds in milliseconds
+    
     with loop:
         _, protocol = loop.run_until_complete(create_server(loop))
         protocol.rangeChanged.connect(main_panel.set_data)
@@ -4322,11 +4335,11 @@ def main():
         loop.run_forever()
 
 def main_no_server():
-    # non-server option
+    # Non-server option
     app = QApplication(sys.argv)
     a = ptyco_main_control()
     sys.exit(app.exec_())
 
 if __name__ == "__main__":
-    # server option included..
+    # Server option included
     main()
