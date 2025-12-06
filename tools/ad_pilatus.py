@@ -132,7 +132,7 @@ class AD_Pilatus(Device):
         self.filePut('FileWriteMode', 0)  # single frame
         time.sleep(0.025)
         #self.filePut('Capture', 1)  # start capture
-        print("going to be armed")
+        #print("going to be armed")
         self.Arm()
         #time.sleep(0.25)
 
