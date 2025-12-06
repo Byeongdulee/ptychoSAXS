@@ -1158,6 +1158,8 @@ class ptyco_main_control(QMainWindow):
                     #time.sleep(5)
                     det.ForceStop()
                     success = True
+                if det.Armed == 1:
+                    print(f"Detector {i} is still armed. Disarming it now.")
                 if self.use_hdf_plugin:
                     while det.fileGet('WriteFile_RBV'):
                         time.sleep(0.01)
@@ -2722,7 +2724,7 @@ class ptyco_main_control(QMainWindow):
                 while det.Acquire_RBV == 0:
                     det.Arm()
                     time.sleep(0.01)
-#        print("Detectors are Armed")
+                print(f"Detector {ndet} is Armed again.................")
 
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
