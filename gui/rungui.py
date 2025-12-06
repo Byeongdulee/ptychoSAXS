@@ -4313,7 +4313,7 @@ def capture_screenshot():
     #timestamp = time.strftime("%Y%m%d_%H%M%S")
     filename = f"pty-co-SAXS.png"
     screenshot.save(filename)
-    scp_file(filename)
+    #scp_file(filename)
     #print(f"Screenshot saved: {filename}")
 
 def main():
