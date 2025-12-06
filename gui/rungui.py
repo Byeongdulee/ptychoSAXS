@@ -260,9 +260,11 @@ class ptyco_main_control(QMainWindow):
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         guiName = "ptycoSAXS.ui"
         self.pts = pts
-
-        if not self.pts.hexapod.is_servo_on():
+        print("Connecting to PTS...")
+        if not self.pts.hexapod.is_servo_on('X'):
+            print("Hexapod servo is off. Trying to turn it on...")
             self.handle_hexapod_error()
+            print("Hexapod servo is now on.")
 
         #self.beamstatus = beamstatus()
         self.ui = uic.loadUi(guiName)
@@ -302,6 +304,8 @@ class ptyco_main_control(QMainWindow):
             self.parameters.scan_number = 0
             self.parameters._ratio_exp_period = FRACTION_EXPOSURE_PERIOD
             self.parameters.scan_time = -1
+            self.parameters.saxsmode = 1  # 0 for ptychography, 1 for SAXS
+            self.parameters.base_datafolder = "/net/s12data/export/12id-c/"
 
         self.isscan = False
         self.isfly = False
@@ -1213,7 +1217,7 @@ class ptyco_main_control(QMainWindow):
             text = ""
         # Prompt user for base path for detectors
 #        default_basepath = '/net/micdata/data2'
-        default_basepath = '/net/s12data/export/12id-c/'
+        default_basepath = self.parameters.base_datafolder
         if len(text)==0:
             if len(self.det_basepath)>0:
                 default_basepath = self.det_basepath
@@ -2711,7 +2715,7 @@ class ptyco_main_control(QMainWindow):
         for i, det in enumerate(self.detector): #JD
             if det is not None:  #JD
                 det.step_ready(expt, Nline)
-#                print("step _ready")
+                print(f"step _ready, detector {i}'s status: {det.Armed}")  #JD
 
         N_imgcollected = 0
         t0 = time.time()
@@ -2721,11 +2725,11 @@ class ptyco_main_control(QMainWindow):
             if ndet>1: 
                 continue
             if det is not None:
-                while det.Acquire_RBV == 0:
+                while det.Armed == 0:
                     det.Arm()
-                    time.sleep(0.01)
-                print(f"Detector {ndet} is Armed again.................")
-
+                    time.sleep(0.5)
+                    print(f"Detector {ndet} is Armed again.................")
+        print("Starting 2D step scan now...........................")
         for i, value in enumerate(pos):
             if self.isStopScanIssued:
                 break
@@ -2733,6 +2737,7 @@ class ptyco_main_control(QMainWindow):
             pos_status = False
             while not pos_status:
                 pos_status = self.pts.hexapod.mv(xaxis, pos[i,0], yaxis, pos[i,1], wait=True)
+                #print(pos_status, " Hexapod move status")
                 if not pos_status:
                     self.pts.hexapod.handle_error()
                     print("Hexapod move failed, retrying...")
@@ -2740,7 +2745,7 @@ class ptyco_main_control(QMainWindow):
 
             # trigger the detector.
             dg645_12ID.trigger()
-#            print("Trigger sent out")
+            print(f"Trigger sent out for {i}th point..........................")
 
             if self.isStruckCountNeeded:
                 struck.mcs_counter_count(expt)
@@ -2754,9 +2759,6 @@ class ptyco_main_control(QMainWindow):
             t_start = time.time()
             timeout_occurred = False
             for ndet, det in enumerate(self.detector):
-#                if ndet>1: 
-#                    continue
-                #print(ndet, "This is the detector")
                 if det is not None:
                     #print(det._prefix)
                     while val >= N_imgcollected:
@@ -2768,7 +2770,11 @@ class ptyco_main_control(QMainWindow):
                         time.sleep(0.02)
                         if (time.time() - t_start) > TIMEOUT:
                             timeout_occurred = True
+                            print(f"Timeout occurred for detector {det._prefix} after {TIMEOUT} seconds.")
                             break
+                    if timeout_occurred:  
+                        print("Breaking out of detector loop due to timeout.") 
+                        break
 #                    break
 #            print("Out now")
             if timeout_occurred:
@@ -4160,11 +4166,11 @@ class ptyco_main_control(QMainWindow):
         except:
             folder = ""
         try:
-            saxsmode = bool(data['saxsmode'])
+            saxsmode = bool(int(data['saxsmode']))
         except:
             saxsmode = False
         try:
-            testmode = bool(data['testmode'])
+            testmode = bool(int(data['testmode']))
         except:
             testmode = False
 
@@ -4173,13 +4179,17 @@ class ptyco_main_control(QMainWindow):
             if saxsmode:
                 self.set_hdf_plugin_use(True)
                 self.select_detector_mode(False)
-                self.select_hdf_multiframecapture(True)
-                self.set_basepaths('/net/s12data/export/12id-c/')
+                self.set_hdf_plugin_use(True)
+                #self.set_basepaths('/net/s12data/export/12id-c/')
         
             if testmode:
+                print("Testmode is on.")
                 self.set_monitor_beamline_status(False)
                 self.set_shutter_close_after_scan(False)
-
+            else:
+                print("Testmode is off.")
+                self.set_monitor_beamline_status(True)
+                self.set_shutter_close_after_scan(True)
             # if scanname is provided, set it.
             if len(scanname)>0:
                 try:

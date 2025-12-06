@@ -13,14 +13,14 @@ strk.add_pv('%sReadAll.SCAN'%strkPV, attr = 'SCAN')
 strk.add_pv('%sSoftwareChannelAdvance'%strkPV, attr = 'SoftwareChannelAdvance')
 
 def read_mcs(ch):
-    strk.DoReadAll = 1
-    if type(ch) == int:
-        return strk.mcas[ch].VAL
-    if type(ch) == list:
-        retarr = []
-        for n in ch:
-            retarr.append(strk.mcas[n].VAL)
-        return retarr
+	strk.DoReadAll = 1
+	if type(ch) == int:
+		return strk.mcas[ch].VAL
+	if type(ch) == list:
+		retarr = []
+		for n in ch:
+			retarr.append(strk.mcas[n].VAL)
+		return retarr
 
 def read_scaler_all(lastch=8):
 	valarr = []
@@ -48,22 +48,22 @@ def mcs_getready():
 	strk.scaler.CNT = 0
 	
 def mcs_init():
-    strk.stop()
-    strk.ChannelAdvance = 1
-    strk.scaler.CONT = 0
-    strk.SCAN = 2
-    strk.CountOnStart = 1
-    strk.Channel1Source = 0
-    strk.UserLED = 0
-    strk.Prescale = 1
-    strk.InputMode = 2
-    strk.OutputMode = 0
-    strk.OutputPolarity = 0
-    mcs_wait()
-    strk.EraseAll = 1
-    if strk.AcquireMode == "Scaler":
-        mcs_getready()
-    return 1
+	strk.stop()
+	strk.ChannelAdvance = 1
+	strk.scaler.CONT = 0
+	strk.SCAN = 2
+	strk.CountOnStart = 1
+	strk.Channel1Source = 0
+	strk.UserLED = 0
+	strk.Prescale = 1
+	strk.InputMode = 2
+	strk.OutputMode = 0
+	strk.OutputPolarity = 0
+	strk.Acquring = 0
+	strk.EraseAll = 1
+	if strk.AcquireMode == "Scaler":
+		mcs_getready()
+	return 1
 
 def arm_mcs():
 	strk.EraseStart = 1
@@ -73,20 +73,30 @@ def channelAdvance_mcs():
 	strk.SoftwareChannelAdvance = 1
 	
 def mcs_wait():
-    while strk.Acquiring:
-        strk.Acquring = 0
-        time.sleep(0.01)
+	while strk.Acquiring:
+		strk.Acquring = 0
+		time.sleep(0.01)
 		
 def mcs_waitstarted():
-    while not strk.Acquiring:
-        time.sleep(0.01)
+	TIMEOUT = 2.0
+	t_start = time.time()
+	while not strk.Acquiring:
+		time.sleep(0.01)
+		if (time.time() - t_start) > TIMEOUT:
+			print("Timeout occurred in mcs_waitstarted")
+			break
 		
 def mcs_counter_count(expt):
 	strk.scaler.CountTime(expt)
 	strk.scaler.Count()
 	mcs_counter_waitstarted()
+	TIMEOUT = expt + 1.0
+	t_start = time.time()
 	while strk.scaler.CNT:
 		time.sleep(0.01)
+		if (time.time() - t_start) > TIMEOUT:
+			print("Timeout occurred in mcs_counter_count")
+			break
 	
 def mcs_counter_init():
 	strk.ChannelAdvance = 1
@@ -101,9 +111,9 @@ def mcs_counter_ready(expt):
 	strk.scaler.TP = expt + 20
 
 def arm_mcs_counter():
-    strk.scaler.CNT = 1
-    mcs_counter_waitstarted()
-    time.sleep(0.1)     
+	strk.scaler.CNT = 1
+	mcs_counter_waitstarted()
+	time.sleep(0.1)     
 	
 def mcs_counter_wait(timeExp):
 	wait_time = timeExp + 1
@@ -145,5 +155,10 @@ def mcs_counter_waitcountingstarted():
 		time.sleep(0.01)
 		
 def mcs_counter_waitstarted():
+	TIMEOUT = 2.0
+	t_start = time.time()
 	while not strk.scaler.CNT:
 		time.sleep(0.01)
+		if (time.time() - t_start) > TIMEOUT:
+			print("Timeout occurred in mcs_counter_waitstarted")
+			break

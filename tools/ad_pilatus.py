@@ -54,6 +54,7 @@ class AD_Pilatus(Device):
         self.ImageMode = 1
         if nimg>0:
             self.NumImages = nimg
+        print("DET acquire set to 1")
         self.Acquire = 1
         time.sleep(0.05)
         # should be also Armed..
@@ -64,10 +65,10 @@ class AD_Pilatus(Device):
 
     def CCD_waitstarted(self):
         t = time.time()
-        TIMEOUT = 30
+        TIMEOUT = 10
         while self.Armed == 0:
             self.Acquire = 1
-            time.sleep(0.01)
+            time.sleep(0.1)
             # if abs(time.time()-t)>1:
             #     time.sleep(10)
             #     continue
@@ -132,7 +133,7 @@ class AD_Pilatus(Device):
         self.filePut('FileWriteMode', 0)  # single frame
         time.sleep(0.025)
         #self.filePut('Capture', 1)  # start capture
-        #print("going to be armed")
+        print("going to be armed")
         self.Arm()
         #time.sleep(0.25)
 
@@ -564,7 +565,13 @@ class AD_Dante(Device):
         """The getter method for my_attribute."""
         #print("Getting my_attribute")
         return self.MCAAcquiring
-    
+
+    @property
+    def Armed(self):
+        """The getter method for my_attribute."""
+        #print("Getting my_attribute")
+        return self.MCAAcquiring
+
     def __setattr__(self, name, value):
         """Intercept assignments to Acquire/Acquire_RBV to update EraseStart and log."""
         if name in ('Acquire', 'Acquire_RBV'):
@@ -843,6 +850,12 @@ class AD_XSP(Device):
     def setNDArrayPort(self, port='XSP3'):
         self.filePut('NDArrayPort', port)
 
+    @property
+    def Armed(self):
+        """The getter method for my_attribute."""
+        #print("Getting my_attribute")
+        return self.AcquireBusy
+
 
 class AD_SG(Device):
     camattrs = ('Acquire', 'Acquire_RBV', 'Armed', 'ArrayCounter', 'ArrayCounter_RBV')
@@ -1073,3 +1086,9 @@ class AD_SG(Device):
     
     def setNDArrayPort(self, port='SG'):
         self.filePut('NDArrayPort', port)
+
+    @property
+    def Armed(self):
+        """The getter method for my_attribute."""
+        #print("Getting my_attribute")
+        return self.Acquire_RBV
