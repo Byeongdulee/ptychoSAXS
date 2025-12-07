@@ -2741,8 +2741,9 @@ class ptyco_main_control(QMainWindow):
                 pos_status = self.pts.hexapod.mv(xaxis, pos[i,0], yaxis, pos[i,1], wait=True)
                 #print(pos_status, " Hexapod move status")
                 if not pos_status:
+                    print("Hexapod move failed, trying to handle the error...")
                     pos_status = self.pts.hexapod.handle_error()
-                    print("Hexapod move failed, retrying...")
+                    print("Hexapod error is fixed....")
 
             # trigger the detector.
             dg645_12ID.trigger()
