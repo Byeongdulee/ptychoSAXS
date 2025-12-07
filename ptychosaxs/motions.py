@@ -208,9 +208,8 @@ class motors(object):
             while not status:
                 status = self.hexapod.mv(axis, target)
                 if not status:
-                    self.hexapod.handle_error()
+                    status = self.hexapod.handle_error()
                     print("Hexapod error, trying to servo back on.")
-                    time.sleep(2)
                     
             prevpos = target-1
 #            print(wait)

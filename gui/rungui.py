@@ -45,7 +45,7 @@ import numpy as np
 #sys.path.append('../..')
 #sys.path.append('../tools')
 
-from tools.scptransfer import scp_file
+from tools.scptransfer import scp
 from tools.softglue import sgz_pty, SOFTGLUE_Setup_Error
 s12softglue = sgz_pty()
 
@@ -461,7 +461,7 @@ class ptyco_main_control(QMainWindow):
 #        self.ui.ed_scanname.returnPressed.connect(self.update_scannumber)
         self.use_hdf_plugin = False
         self.hdf_plugin_savemode = 0 # single frame mode, 1 for capture, 2 for streaming
-        self.det_basepath = ''
+        #self.det_basepath = ''
         if os.name != 'nt':
             self.ui.menuQDS.setDisabled(True)
 
@@ -569,20 +569,22 @@ class ptyco_main_control(QMainWindow):
 
     def handle_hexapod_error(self):
         self.pts.hexapod.handle_error()
-        msg = (
-            f"Hexapod Servos are off, and they are back on.\n"
-            "Do you want to move to references?"
-        )
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("Referencing Hexapod")
-        dlg.setText(msg)
-        move_btn = dlg.addButton("Referencing", QMessageBox.AcceptRole)
-        cancel_btn = dlg.addButton(QMessageBox.Cancel)
-        dlg.setIcon(QMessageBox.Question)
-        dlg.exec_()
-        clicked = dlg.clickedButton()
-        if clicked == move_btn:
-            self.pts.hexapod.move_ref()
+        # msg = (
+        #     f"Hexapod Servos are off, and they are back on.\n"
+        #     "Do you want to move to references?"
+        # )
+        # dlg = QMessageBox(self)
+        # dlg.setWindowTitle("Referencing Hexapod")
+        # dlg.setText(msg)
+        # move_btn = dlg.addButton("Referencing", QMessageBox.AcceptRole)
+        # cancel_btn = dlg.addButton(QMessageBox.Cancel)
+        # dlg.setIcon(QMessageBox.Question)
+        # dlg.exec_()
+        # clicked = dlg.clickedButton()
+        # if clicked == move_btn:
+        #     pos = self.pts.hexapod.get_pos()
+        #     self.pts.hexapod.move_ref()
+        #     self.pts.hexapod.mv_pos(pos)
 
     def write_motor_scan_range(self):
         numbers = np.random.rand(len(self.motornames), 6)
@@ -847,7 +849,7 @@ class ptyco_main_control(QMainWindow):
                         else: # scattering mode
                             if len(tp)==0:
                                 continue
-                            basepath = self.det_basepath
+                            basepath = self.parameters.base_datafolder
                             folder_type = tp+"AXS"
                             tif_path = ""
                     if "SG" in det._prefix:
@@ -855,14 +857,14 @@ class ptyco_main_control(QMainWindow):
                         if self.is_ptychomode:
                             basepath = det.basepath
                         else:
-                            basepath = self.det_basepath
+                            basepath = self.parameters.base_datafolder
                         tif_path = ""
                     if ("dante" in det._prefix) or ("XSP" in det._prefix):
                         folder_type = 'DANTE'
                         if self.is_ptychomode:
                             basepath = det.basepath
                         else:
-                            basepath = self.det_basepath
+                            basepath = self.parameters.base_datafolder
                         
                     hdfname = tp+txt
                     if i<2:
@@ -1219,15 +1221,15 @@ class ptyco_main_control(QMainWindow):
 #        default_basepath = '/net/micdata/data2'
         default_basepath = self.parameters.base_datafolder
         if len(text)==0:
-            if len(self.det_basepath)>0:
-                default_basepath = self.det_basepath
+            if len(self.parameters.base_datafolder)>0:
+                default_basepath = self.parameters.base_datafolder
             text, ok = QInputDialog.getText(self, "Set Detector Base Path", "Base path for detectors:", QLineEdit.Normal, default_basepath)
         else:
             ok = True
         if ok and text:
-            self.det_basepath = text
+            self.parameters.base_datafolder = text
         else:
-            self.det_basepath = default_basepath
+            self.parameters.base_datafolder = default_basepath
 
     def select_detectors(self, N, value=None):
         if N==1:
@@ -2739,9 +2741,8 @@ class ptyco_main_control(QMainWindow):
                 pos_status = self.pts.hexapod.mv(xaxis, pos[i,0], yaxis, pos[i,1], wait=True)
                 #print(pos_status, " Hexapod move status")
                 if not pos_status:
-                    self.pts.hexapod.handle_error()
+                    pos_status = self.pts.hexapod.handle_error()
                     print("Hexapod move failed, retrying...")
-                    time.sleep(2)
 
             # trigger the detector.
             dg645_12ID.trigger()
@@ -4313,13 +4314,16 @@ class ptyco_main_control(QMainWindow):
 app = QApplication(sys.argv)
 main_panel = ptyco_main_control()
 
+#import pygetwindow as gw
+
 def capture_screenshot():
     """Capture screenshot of main_panel every 10 seconds"""
-    screenshot = main_panel.grab()
+    screenshot = app.primaryScreen().grabWindow(0)
     #timestamp = time.strftime("%Y%m%d_%H%M%S")
     filename = f"pty-co-SAXS.png"
     screenshot.save(filename)
-    #scp(filename)
+    scp(filename)
+    #pass
     #print(f"Screenshot saved: {filename}")
 
 def main():
@@ -4330,7 +4334,7 @@ def main():
     # Create a timer for periodic screenshots
     screenshot_timer = QTimer()
     screenshot_timer.timeout.connect(capture_screenshot)
-    screenshot_timer.start(10000)  # 10 seconds in milliseconds
+    screenshot_timer.start(30000)  # 30 seconds in milliseconds
     
     with loop:
         _, protocol = loop.run_until_complete(create_server(loop))

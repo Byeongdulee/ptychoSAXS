@@ -430,7 +430,7 @@ class SGstream(AD_SG):
 		while self.getNumCaptured() != self.getArrayCounter():
 			time.sleep(0.02)
 			if (time.time()-t0) > TIMEOUT:
-				raise TimeoutError
+				break
 		self.FileCaptureOff()
 
 	def SetNumImages(self, n):
