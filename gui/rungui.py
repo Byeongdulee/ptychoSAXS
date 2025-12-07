@@ -302,11 +302,12 @@ class ptyco_main_control(QMainWindow):
             self.parameters.softglue_channels = ['B', 'C', 'D']
             self.parameters.logfilename = ""
             self.parameters.scan_number = 0
+            self.parameters.scan_name = ""
             self.parameters._ratio_exp_period = FRACTION_EXPOSURE_PERIOD
             self.parameters.scan_time = -1
             self.parameters.saxsmode = 1  # 0 for ptychography, 1 for SAXS
             self.parameters.base_datafolder = "/net/s12data/export/12id-c/"
-
+        
         self.isscan = False
         self.isfly = False
 
@@ -801,10 +802,10 @@ class ptyco_main_control(QMainWindow):
                 #    det.FileNumber = 1                
 
     def update_scanname(self, update_detector = True):
-        txt = self.ui.ed_scanname.text()
+        self.parameters.scan_name = self.ui.ed_scanname.text()
         self.parameters.scan_number = int(self.ui.le_scannumber.text())
         self.scannumberstring = '%0.3i'%self.parameters.scan_number
-        txt = "%s%0.3i"%(txt,self.parameters.scan_number)
+        txt = "%s%0.3i"%(self.parameters.scan_name,self.parameters.scan_number)
         self.ui.lb_scanname.setText(txt)
         #wf_temp = self.ui.ed_workingfolder.text().split(':')
         p = pathlib.Path(self.ui.ed_workingfolder.text())
@@ -2820,15 +2821,15 @@ class ptyco_main_control(QMainWindow):
                     #time_per_pos = timeelapsed / (i + 1)
                     update_progress(int(progress_fraction*100))
                     remtime= np.round(timeelapsed*(1/progress_fraction-1),2)
-                    msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-                    msg2 = f"; Remaining time for the current 3D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
+                    msg1 = f'Updated at {time.time()} : {int(timeelapsed)}s since the start.'
+                    msg2 = f"; Remaining time for the current 3D scan is {remtime}s, or {time.ctime(time.time()+remtime)}\n"
                 else:
                     #print("2d scan progress update")
                     progress_fraction = (i+1)/Nline
                     update_progress(int(progress_fraction*100))
                     remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
-                    msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-                    msg2 = f"; Remaining time for the current 2D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
+                    msg1 = f'Updated at {time.time()} : {int(timeelapsed)}s since the start.'
+                    msg2 = f"; Remaining time for the current 2D scan is {remtime}s, or {time.ctime(time.time()+remtime)}\n"
                 msg = "%s%s"%(msg1, msg2)
             if update_status:
                 update_status(msg)
@@ -3379,14 +3380,14 @@ class ptyco_main_control(QMainWindow):
                         #time_per_pos = timeelapsed / (i + 1)
                         update_progress(int(progress_fraction*100))
                         remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
-                        msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+                        msg1 = f'Updated at {time.time()} : {int(timeelapsed)}s since the start.'
                         msg2 = f"; Remaining time for the current 3D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
                     else:
                         #print("2d scan progress update")
                         #progress_fraction = (i+1)/Nline
                         update_progress(int(progress_fraction*100))
                         remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
-                        msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+                        msg1 = f'Updated at {time.time()} : {int(timeelapsed)}s since the start.'
                         msg2 = f"; Remaining time for the current 2D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
 
                     msg = "%s%s"%(msg1, msg2)
