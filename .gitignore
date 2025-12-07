@@ -410,3 +410,4 @@ ptychoSAXS.egg-info/dependency_links.txt
 gui/_numbers.npy
 *.npy
 *.npy
+*.png
