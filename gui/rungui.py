@@ -4221,11 +4221,11 @@ class ptyco_main_control(QMainWindow):
         # except:
         #     xl = ""
 
-        # if not hasattr(self, 'plotlabels'):
-        #     self.plotlabels = ['']
-        #     self.plotlabels.append('')
-        #     self.plotlabels.append('')
-
+        if not hasattr(self, 'plotlabels'):
+            self.plotlabels = ['']
+            self.plotlabels.append('')
+            self.plotlabels.append('')
+        print(r)
         try:
             self.ax.clear()
             self.ax2.clear()
