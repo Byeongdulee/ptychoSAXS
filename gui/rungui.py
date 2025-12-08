@@ -546,7 +546,7 @@ class ptyco_main_control(QMainWindow):
         if os.name == 'nt':
             self.timer = QTimer()
             self.timer.timeout.connect(self.update_qds)
-            self.timer.start(1000)        
+            self.timer.start(100)        
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
 
@@ -4191,7 +4191,7 @@ class ptyco_main_control(QMainWindow):
                 self.ui.z3_2.setText(txt)
 
     def plot(self):
-        pos = np.arange(len(self.qds_array))
+        pos = np.arange(len(self.qds_array))*0.1  # assuming 0.1s interval
         r = np.asarray(self.qds_array)
         xl = 'Time (s)'        
 #        return
