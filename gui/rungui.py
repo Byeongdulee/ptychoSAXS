@@ -4110,7 +4110,9 @@ class ptyco_main_control(QMainWindow):
             print(self.recent_error_msg)
             return
         self.qds_array.append(r)
-
+        self.ui.lcd_X.display("%0.3f" % (r[0]))     
+        self.ui.lcd_Z.display("%0.3f" % (r[1]))
+        self.ui.lcd_Z_2.display("%0.3f" % (r[2]))
         # Keep only the latest 500 points
         if len(self.qds_array) > 500:
             self.qds_array = self.qds_array[-500:]
@@ -4125,9 +4127,7 @@ class ptyco_main_control(QMainWindow):
 #             print(self.recent_error_msg)
 #             return
 # #        print(r)
-#         self.ui.lcd_X.display("%0.3f" % (r[0]))     
-#         self.ui.lcd_Z.display("%0.3f" % (r[1]))
-#         self.ui.lcd_Z_2.display("%0.3f" % (r[2]))
+
 #         #self.rpos = []
 #         #self.mpos = []
 #         if self.isscan:
@@ -4225,7 +4225,7 @@ class ptyco_main_control(QMainWindow):
             self.plotlabels = ['']
             self.plotlabels.append('')
             self.plotlabels.append('')
-        print(r)
+        #print(r)
         try:
             self.ax.clear()
             self.ax2.clear()
@@ -4450,25 +4450,25 @@ main_panel = ptyco_main_control()
 
 #import pygetwindow as gw
 
-def capture_screenshot():
-    """Capture screenshot of main_panel every 10 seconds"""
-    screenshot = app.primaryScreen().grabWindow(0)
-    #timestamp = time.strftime("%Y%m%d_%H%M%S")
-    filename = f"pty-co-SAXS.png"
-    screenshot.save(filename)
-    scp(filename)
-    #pass
-    #print(f"Screenshot saved: {filename}")
+# def capture_screenshot():
+#     """Capture screenshot of main_panel every 10 seconds"""
+#     screenshot = app.primaryScreen().grabWindow(0)
+#     #timestamp = time.strftime("%Y%m%d_%H%M%S")
+#     filename = f"pty-co-SAXS.png"
+#     screenshot.save(filename)
+#     scp(filename)
+#     #pass
+#     #print(f"Screenshot saved: {filename}")
 
 def main():
     # Run gui with server option
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
     
-    # Create a timer for periodic screenshots
-    screenshot_timer = QTimer()
-    screenshot_timer.timeout.connect(capture_screenshot)
-    screenshot_timer.start(30000)  # 30 seconds in milliseconds
+    # # Create a timer for periodic screenshots
+    # screenshot_timer = QTimer()
+    # screenshot_timer.timeout.connect(capture_screenshot)
+    # screenshot_timer.start(30000)  # 30 seconds in milliseconds
     
     with loop:
         _, protocol = loop.run_until_complete(create_server(loop))
