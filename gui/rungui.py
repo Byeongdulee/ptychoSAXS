@@ -4186,7 +4186,7 @@ class ptyco_main_control(QMainWindow):
 
     def plot(self):
         pos = np.arange(len(self.qds_array))
-        r = self.qds_array
+        r = np.asarray(self.qds_array)
         xl = 'Time (s)'        
 #        return
         # if self.isStruckCountNeeded:
