@@ -58,7 +58,7 @@ except:
     print("failed to connect DG645. Will not be able to collect detector images")
 
 # struck
-from tools import struck
+from tools.struck import struck
 
 # detectors
 from tools.detectors import pilatus, dante, SGstream, XSP, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
@@ -176,28 +176,28 @@ class mover(QRunnable):
         self.signal.finished.emit(True)
 
 
-# Step 1: Create a move class
-class runstruck(QRunnable):
+# # Step 1: Create a move class
+# class runstruck(QRunnable):
 
-    def __init__(self, pulseN, tm):
-        super(mover, self).__init__()
-        self.pulseN = pulseN
-        self.tm = tm
-        self.signal = workerSignals()
+#     def __init__(self, pulseN, tm):
+#         super(mover, self).__init__()
+#         self.pulseN = pulseN
+#         self.tm = tm
+#         self.signal = workerSignals()
     
-    @pyqtSlot()
-    def run(self):
-        struck.mcs_init()
-        struck.mcs_ready(self.pulseN, self.tm)
-        struck.arm_mcs()
-        self.signal.finished.emit(True)
+#     @pyqtSlot()
+#     def run(self):
+#         struck.mcs_init()
+#         struck.mcs_ready(self.pulseN, self.tm)
+#         struck.arm_mcs()
+#         self.signal.finished.emit(True)
 
 ## shutter stuff.. Could be eventually separated out.
 def open_shutter(self):
     epics.caput('12ida2:rShtrC:Open', 1)
 
 def close_shutter(self):
-    epics.caput('12ida2:rShtrC:Open', 0)
+    epics.caput('12ida2:rShtrC:Close', 1)
 
 class beamstatus(QObject):
     onChange = QtCore.pyqtSignal()
@@ -795,7 +795,10 @@ class ptyco_main_control(QMainWindow):
         for i, det in enumerate(self.detector):
             #print(det, " Checking detector ", i)
             if det is not None:
-                det.filePut('FileNumber',    1)
+                try:
+                    det.filePut('FileNumber',    1)
+                except:
+                    continue
                 det.ArrayCounter = 0
                 det.set_fly_configuration()
                 #if i<2:
@@ -853,6 +856,8 @@ class ptyco_main_control(QMainWindow):
                             basepath = self.parameters.base_datafolder
                             folder_type = tp+"AXS"
                             tif_path = ""
+                    if "3820" in det._prefix:
+                        continue
                     if "SG" in det._prefix:
                         folder_type = 'positions'
                         if self.is_ptychomode:
@@ -1150,6 +1155,8 @@ class ptyco_main_control(QMainWindow):
             # put only x motors and ymotors back to initial positions
             if i<2:
                 self.mv(key, self.motor_p0[key])
+        if self.shutter_close_after_scan:
+            self.shutterC.close()        
 
         print("scan done")
         self.isscan = False
@@ -1165,6 +1172,10 @@ class ptyco_main_control(QMainWindow):
                     #time.sleep(5)
                     det.ForceStop()
                     success = True
+                if '3820' in det._prefix:
+                    det.stop()
+                    self.rpos = det.read_mcs([2,4,5])
+                    continue
                 if det.Armed == 1:
                     print(f"Detector {i} is still armed. Disarming it now.")
                 if self.use_hdf_plugin:
@@ -1190,7 +1201,8 @@ class ptyco_main_control(QMainWindow):
         if len(self.parameters.logfilename)>0:
             pos = np.asarray(self.mpos)
             r = np.asarray(self.rpos)
-            self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
+            if len(r) > 0:
+                self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
             self.mpos = []
             self.rpos = []
             scaninfo = []
@@ -1209,11 +1221,22 @@ class ptyco_main_control(QMainWindow):
             self.run_stop_issued()
         self.update_status_scan_time()
 
-    def set_det_alignmode(self):
-        for det in self.detector:
-            if det is not None:
-                det.filePut('AutoSave', 0)
-                det.TriggerMode = 4
+    def set_det_alignmode(self, value=None):
+        if value is None:
+            value = self.ui.actionPut_DET_alignmode.isChecked()
+        print("Setting detector align mode to ", value)
+        if value:
+            self.ui.actionPut_DET_alignmode.setChecked(True)
+            for det in self.detector:
+                if det is not None:
+                    det.filePut('AutoSave', 0)
+                    det.TriggerMode = 4
+        else:
+            self.ui.actionPut_DET_alignmode.setChecked(False)
+            for det in self.detector:
+                if det is not None:
+                    det.filePut('AutoSave', 1)
+                    det.TriggerMode = 3
 
     def set_basepaths(self, text=""):
         if type(text) == bool:
@@ -1263,7 +1286,7 @@ class ptyco_main_control(QMainWindow):
                 value = self.ui.actionStruck.isChecked()
             if value:
                 self.switch_MCS(True)
-#                self.detector[1] = pilatus('12idcPIL:')
+                self.detector[2] = struck('12idc:')
             else:
                 self.switch_MCS(False)
         if N==4:
@@ -1519,6 +1542,8 @@ class ptyco_main_control(QMainWindow):
                 self.mv(key, self.motor_p0[key])
 
         print("fly done.......")
+        if self.shutter_close_after_scan:
+            self.shutterC.close()        
         ct0 = time.time()
 
         isTestRun = self.ui.actionTestFly.isChecked()
@@ -2172,11 +2197,95 @@ class ptyco_main_control(QMainWindow):
                     strv = "%s    %0.8f"%(strv, m)
             f.write("%s\n"%strv)
 
+    # def stepscan(self, motornumber=-1):
+    #     self.get_detectors_ready()
+    #     self.update_scanname()
+    #     self.write_motor_scan_range()
+    #     self.isStopScanIssued = False
+    #     if motornumber<0:
+    #         pb = self.sender()
+    #         objname = pb.objectName()
+    #         n = int(re.findall(r'\d+', objname)[0])
+    #         motornumber = n-1
+    #     else:
+    #         n = motornumber + 1
+        
+    #     try:
+    #         p0 = self.check_start_position(n)
+    #         p0 = float(p0)
+    #         self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%p0)
+    #         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
+    #         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
+    #         tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
+    #         step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
+    #     except:
+    #         showerror("Check scan parameters.")
+    #         return 0
+        
+    #     self.stepscan_p0 = p0
+    #     self.stepscan_st = st
+    #     self.stepscan_fe = fe
+    #     self.stepscan_expt = tm
+    #     self.stepscan_step = step
+        
+    #     # logging
+    #     scaninfo = []
+    #     scaninfo.append('\n#S')
+    #     scaninfo.append(self.parameters.scan_number)
+    #     scaninfo.append('step_scan')
+    #     scaninfo.append(self.motornames[motornumber])
+    #     scaninfo.append(st+p0)
+    #     scaninfo.append(fe+p0)
+    #     scaninfo.append(tm)
+    #     scaninfo.append(step)
+    #     self.write_scaninfo_to_logfile(scaninfo)
+    #     scaninfo = []
+    #     scaninfo.append('#D')
+    #     scaninfo.append(time.ctime())
+    #     self.write_scaninfo_to_logfile(scaninfo)
+    #     # logging datatype
+    #     scaninfo = []
+    #     scaninfo.append('#H')
+    #     if self.isStruckCountNeeded:
+    #         scaninfo.append(self.motornames[motornumber])
+    #         scaninfo.append(struck.strk.scaler.NM2)
+    #         scaninfo.append(struck.strk.scaler.NM3)
+    #         scaninfo.append(struck.strk.scaler.NM4)
+    #     else:
+    #         scaninfo.append(self.motornames[motornumber])
+    #         scaninfo.append('QDS1')
+    #         scaninfo.append('QDS2')
+    #         scaninfo.append('QDS3')
+    #     self.write_scaninfo_to_logfile(scaninfo)    
+    #     # start the scan
+    #     self.isscan = True
+    #     if self.monitor_beamline_status:
+    #         self.shutterC.open()        
+    #     w = Worker(self.stepscan0, motornumber, update_progress=None, update_status=None)
+    #     w.signal.finished.connect(self.scandone)
+    #     w.signal.progress.connect(self.updateprogressbar)
+    #     w.signal.statusmessage.connect(self.update_status_bar)
+    #     w.kwargs['update_progress'] = w.signal.progress.emit
+    #     w.kwargs['update_status'] = w.signal.statusmessage.emit
+    #     self.threadpool.start(w)
+    #     #self.run_stop_issued()
+
+
     def stepscan(self, motornumber=-1):
         self.get_detectors_ready()
         self.update_scanname()
         self.write_motor_scan_range()
         self.isStopScanIssued = False
+        motor = motornumber
+        scan_name = "stepscan2d"
+        print(f'\n\n{scan_name}:{motor=}')
+
+        # logging
+        scaninfo = []
+        scaninfo.append('\n#S')
+        scaninfo.append(self.parameters.scan_number)
+        scaninfo.append(scan_name)
+        initial_motorpos = {}
         if motornumber<0:
             pb = self.sender()
             objname = pb.objectName()
@@ -2196,54 +2305,44 @@ class ptyco_main_control(QMainWindow):
         except:
             showerror("Check scan parameters.")
             return 0
-        
+
+        # signal for qds
+        axis = self.motornames[motornumber]
+        self.signalmotor = axis
+        self.signalmotorunit = self.motorunits[motornumber]
+
+        self.time_scanstart = time.time()
         self.stepscan_p0 = p0
         self.stepscan_st = st
         self.stepscan_fe = fe
         self.stepscan_expt = tm
         self.stepscan_step = step
-        
-        # logging
-        scaninfo = []
-        scaninfo.append('\n#S')
-        scaninfo.append(self.parameters.scan_number)
-        scaninfo.append('step_scan')
-        scaninfo.append(self.motornames[motornumber])
-        scaninfo.append(st+p0)
-        scaninfo.append(fe+p0)
-        scaninfo.append(tm)
-        scaninfo.append(step)
+        self.motor_p0 = initial_motorpos
+
+        scaninfo.append('\n#Motor Information\n')
+        m = self.get_pos_all()
+        for name in self.motornames:
+            scaninfo.append(name)
+        scaninfo.append('\n')
+        for key in m:
+            scaninfo.append(m[key])
+
         self.write_scaninfo_to_logfile(scaninfo)
         scaninfo = []
         scaninfo.append('#D')
         scaninfo.append(time.ctime())
-        self.write_scaninfo_to_logfile(scaninfo)
-        # logging datatype
-        scaninfo = []
-        scaninfo.append('#H')
-        if self.isStruckCountNeeded:
-            scaninfo.append(self.motornames[motornumber])
-            scaninfo.append(struck.strk.scaler.NM2)
-            scaninfo.append(struck.strk.scaler.NM3)
-            scaninfo.append(struck.strk.scaler.NM4)
-        else:
-            scaninfo.append(self.motornames[motornumber])
-            scaninfo.append('QDS1')
-            scaninfo.append('QDS2')
-            scaninfo.append('QDS3')
-        self.write_scaninfo_to_logfile(scaninfo)    
-        # start the scan
-        self.isscan = True
-        if self.monitor_beamline_status:
-            self.shutterC.open()        
-        w = Worker(self.stepscan0, motornumber, update_progress=None, update_status=None)
+
+        w = Worker(self.stepscan0, motornumber,update_progress=None, update_status=None)
         w.signal.finished.connect(self.scandone)
         w.signal.progress.connect(self.updateprogressbar)
         w.signal.statusmessage.connect(self.update_status_bar)
         w.kwargs['update_progress'] = w.signal.progress.emit
         w.kwargs['update_status'] = w.signal.statusmessage.emit
+
+        self.isscan = True
+        if self.monitor_beamline_status:
+            self.shutterC.open()        
         self.threadpool.start(w)
-        #self.run_stop_issued()
 
 
     def stepscan2d(self, xmotor=0, ymotor=1):
@@ -2558,8 +2657,8 @@ class ptyco_main_control(QMainWindow):
         # each time it will send a pulse
         dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
         
-        if self.isStruckCountNeeded:
-            struck.mcs_counter_init()
+        # if self.isStruckCountNeeded:
+        #     struck.mcs_counter_init()
 
         self.plotlabels = []
         
@@ -2572,10 +2671,10 @@ class ptyco_main_control(QMainWindow):
                 break
             self.pts.mv(axis, value)
             print("Motor moved...")
-            if self.isStruckCountNeeded:
-                struck.mcs_counter_count(expt)
-                dg645_12ID.trigger()
-                print("Trigger sent1")
+            # if self.isStruckCountNeeded:
+            #     struck.mcs_counter_count(expt)
+            #     dg645_12ID.trigger()
+            #     print("Trigger sent1")
             # trigger the detector.
             if isDET_selected:
                 #struck.arm_mcs_counter()
@@ -2590,10 +2689,10 @@ class ptyco_main_control(QMainWindow):
 
             # make sure trigger done.                
             for ndet, det in enumerate(self.detector):
-                if ndet>1: 
+                if ndet>2: 
                     continue
                 if det is not None:
-                    while det.Acquire_RBV == 0:
+                    while det.Armed == 0:
                         time.sleep(0.1)
             # Waiting for data collection done.
             val = N_imgcollected
@@ -2623,17 +2722,17 @@ class ptyco_main_control(QMainWindow):
             # image collection done.
             N_imgcollected = val
 
-            # update all relevant data.
-            if self.isStruckCountNeeded:
-                cnts = struck.read_scaler_all()
-                self.rpos.append([cnts[2], cnts[3], cnts[4]])
-                # data = [value, cnts[2],cnts[3],cnts[4]]
-                # self.log_data(data)
-            else:
-                r = self.get_qds_pos()
-                self.rpos.append([r[0], r[1], r[2]])
-                # data = [value, [r[0], r[1], r[2]]]
-                # self.log_data(data)
+            # # update all relevant data.
+            # if self.isStruckCountNeeded:
+            #     cnts = struck.read_scaler_all()
+            #     self.rpos.append([cnts[2], cnts[3], cnts[4]])
+            #     # data = [value, cnts[2],cnts[3],cnts[4]]
+            #     # self.log_data(data)
+            # else:
+            #     r = self.get_qds_pos()
+            #     self.rpos.append([r[0], r[1], r[2]])
+            #     # data = [value, [r[0], r[1], r[2]]]
+            #     # self.log_data(data)
             #pos = self.get_motorpos(self.signalmotor)
             #time.sleep(0.1)
             self.mpos.append(value)
@@ -2725,7 +2824,7 @@ class ptyco_main_control(QMainWindow):
         self.isStopScanIssued = False
             # make sure detectors get armed.                
         for ndet, det in enumerate(self.detector):
-            if ndet>1: 
+            if ndet>2: 
                 continue
             if det is not None:
                 while det.Armed == 0:
@@ -2750,9 +2849,9 @@ class ptyco_main_control(QMainWindow):
             dg645_12ID.trigger()
             print(f"Trigger sent out for {i}th point..........................\r")
 
-            if self.isStruckCountNeeded:
-                struck.mcs_counter_count(expt)
-                #print("Is struck working?")
+            # if self.isStruckCountNeeded:
+            #     struck.mcs_counter_count(expt)
+            #     #print("Is struck working?")
             
 
             # wait for 1 image collection done.
@@ -2787,18 +2886,18 @@ class ptyco_main_control(QMainWindow):
 #            # image collection done.
 #            N_imgcollected = det.ArrayCounter_RBV
 
-            # update all relevant data.
-            if self.isStruckCountNeeded:
-                cnts = struck.read_scaler_all()
-                #self.rpos.append([cnts[2], cnts[3], cnts[4]])
-                self.rpos.append([cnts[2], cnts[4], cnts[5]])
-                # data = [value, cnts[2],cnts[3],cnts[4]]
-                # self.log_data(data)
-            else:
-                r = self.get_qds_pos()
-                self.rpos.append([r[0], r[1], r[2]])
-                # data = [value, [r[0], r[1], r[2]]]
-                # self.log_data(data)
+            # # update all relevant data.
+            # if self.isStruckCountNeeded:
+            #     cnts = struck.read_scaler_all()
+            #     #self.rpos.append([cnts[2], cnts[3], cnts[4]])
+            #     self.rpos.append([cnts[2], cnts[4], cnts[5]])
+            #     # data = [value, cnts[2],cnts[3],cnts[4]]
+            #     # self.log_data(data)
+            # else:
+            #     r = self.get_qds_pos()
+            #     self.rpos.append([r[0], r[1], r[2]])
+            #     # data = [value, [r[0], r[1], r[2]]]
+            #     # self.log_data(data)
             #pos = self.get_motorpos(self.signalmotor)
             #time.sleep(0.1)
             t1 = time.time()
@@ -3505,16 +3604,16 @@ class ptyco_main_control(QMainWindow):
 #                    print("******* Cannot run.")
                     raise DET_OVER_READOUT_SPEED_Error(self.recent_error_msg)
 
-                if not isTestRun:
-                    if self.isStruckCountNeeded:
-                        #struck.mcs_init()
-                        if not self.isMCS_ready:
-                            struck.mcs_ready(self.pts.hexapod.pulse_number, tm+10)
-                            self.isMCS_ready = True
-                            print(f"Struck is ready for {self.pts.hexapod.pulse_number} counts.")
-                        struck.arm_mcs()
-                    else:
-                        pass
+                # if not isTestRun:
+                #     if self.isStruckCountNeeded:
+                #         #struck.mcs_init()
+                #         if not self.isMCS_ready:
+                #             struck.mcs_ready(self.pts.hexapod.pulse_number, tm+10)
+                #             self.isMCS_ready = True
+                #             print(f"Struck is ready for {self.pts.hexapod.pulse_number} counts.")
+                #         struck.arm_mcs()
+                #     else:
+                #         pass
                 # set the delay generator
                 if expt != dg645_12ID._exposuretime:
                     try:
@@ -3545,6 +3644,8 @@ class ptyco_main_control(QMainWindow):
                 self.pts.hexapod.goto_start_pos(axis) # took 0.4 second
                 #print("Time to finish line 2184: %0.3f" % (time.time()-t0))
                 for detN, det in enumerate(self.detector):
+                    if detN > 2:
+                        continue
                     if det is not None:
                         det.FileTemplate = "%s%s_%5.5d_00001.tif"
                         try:
@@ -3596,10 +3697,10 @@ class ptyco_main_control(QMainWindow):
                     time.sleep(0.05)
                     if self.isStopScanIssued:
                         break
-                if self.isStruckCountNeeded:
-                    struck.strk.stop()
-                else:
-                    pass
+                # if self.isStruckCountNeeded:
+                #     struck.strk.stop()
+                # else:
+                #     pass
 #                    epics.caput('12idc:scaler1.CNT', 0)
                 pos = self.pts.get_pos(axis)
                 print(f"pos is {pos:.3e} after the traj run done.")
@@ -3624,6 +3725,8 @@ class ptyco_main_control(QMainWindow):
             
             # Need to make detectors ready
             for detN, det in enumerate(self.detector):
+                if detN > 2:
+                    continue
                 if det is not None:
                     try:
                         det.fly_ready(expt, Nstep, period=step, 
@@ -3635,17 +3738,17 @@ class ptyco_main_control(QMainWindow):
                         self.ui.statusbar.showMessage(self.recent_error_msg)
                         #showerror("Detector timeout.")
                         return            
-            # MCS ready
-            if not isTestRun:
-                if self.isStruckCountNeeded:
-                    #struck.mcs_init()
-                    if not self.isMCS_ready:
-                        struck.mcs_ready(Nstep, tm+10)
-                        self.isMCS_ready = True
-                        print(Nstep, " MCS Ncouts updated.")
-                    struck.arm_mcs()
-                else:
-                    pass
+            # # MCS ready
+            # if not isTestRun:
+            #     if self.isStruckCountNeeded:
+            #         #struck.mcs_init()
+            #         if not self.isMCS_ready:
+            #             struck.mcs_ready(Nstep, tm+10)
+            #             self.isMCS_ready = True
+            #             print(Nstep, " MCS Ncouts updated.")
+            #         struck.arm_mcs()
+            #     else:
+            #         pass
 
             # set the delay generator
             if expt != dg645_12ID._exposuretime:
@@ -3846,21 +3949,25 @@ class ptyco_main_control(QMainWindow):
     def save_list(self, filename, mpos, rpos, col, option="w"):
         mpos = np.asarray(mpos)
         rpos = np.asarray(rpos)
+        print(rpos)
+        print(mpos)
+        if len(rpos) == 0:
+            return
         if mpos.ndim ==2:
             with open(filename, option) as f:
                 for i, m in enumerate(mpos):
                     strv = ""
                     for data in m:
                         strv = "%s    %0.5e"%(strv, data)
-                    for cind in col:
-                        strv = "%s    %0.5e"%(strv, rpos[i][cind])
+                    for cind in range(len(col)):
+                        strv = "%s    %0.5e"%(strv, rpos[cind][i])
                     f.write("%s\n"%(strv))
         else:    
             with open(filename, option) as f:
                 for i, m in enumerate(mpos):
                     strv = ""
-                    for cind in col:
-                        strv = "%s    %0.5e"%(strv, rpos[i][cind])
+                    for cind in range(3):
+                        strv = "%s    %0.5e"%(strv, rpos[cind][i])
                     f.write("%0.5e%s\n"%(m, strv))
 
 
@@ -4004,12 +4111,12 @@ class ptyco_main_control(QMainWindow):
         #self.mpos = []
         if self.isscan:
             self.updatepos()
-            if self.isfly:
-                self.rpos.append([r[0], r[1], r[2]])
-                #self.mpos.append(self.pts.get_pos(self.signalmotor))
-                if not hasattr(self, 'signalmotor'):
-                    self.signalmotor = self.motornames[0]
-                self.mpos.append(self.get_motorpos(self.signalmotor))
+            # if self.isfly:
+            #     self.rpos.append([r[0], r[1], r[2]])
+            #     #self.mpos.append(self.pts.get_pos(self.signalmotor))
+            #     if not hasattr(self, 'signalmotor'):
+            #         self.signalmotor = self.motornames[0]
+            #     self.mpos.append(self.get_motorpos(self.signalmotor))
             try:
                 self.plot()
             except:

@@ -2646,6 +2646,9 @@
    </property>
   </action>
   <action name="actionPut_DET_alignmode">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
    <property name="text">
     <string>Put DET alignmode</string>
    </property>
