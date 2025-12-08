@@ -214,7 +214,11 @@ class motor_control(QMainWindow):
         
         controller = self.control[self.controller[motornumber]]
         axis = controller.motornames[self.motorindices[motornumber]]
-        val = int(val_text)
+        try:
+            val = int(val_text)
+        except ValueError:
+            print("Invalid input for reset value.")
+            return
         with self.lock:
             controller.set_pos(axis, val)
 

@@ -546,7 +546,7 @@ class ptyco_main_control(QMainWindow):
         if os.name == 'nt':
             self.timer = QTimer()
             self.timer.timeout.connect(self.update_qds)
-            self.timer.start(100)        
+            self.timer.start(1000)        
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
 
@@ -1161,7 +1161,7 @@ class ptyco_main_control(QMainWindow):
         print("scan done")
         self.isscan = False
         self.updatepos()
-        self.plot()
+        #self.plot()
 
         fn = ""
         for i, det in enumerate(self.detector):
@@ -3966,7 +3966,7 @@ class ptyco_main_control(QMainWindow):
             with open(filename, option) as f:
                 for i, m in enumerate(mpos):
                     strv = ""
-                    for cind in range(3):
+                    for cind in range(len(col)):
                         strv = "%s    %0.5e"%(strv, rpos[cind][i])
                     f.write("%0.5e%s\n"%(m, strv))
 
@@ -4095,34 +4095,49 @@ class ptyco_main_control(QMainWindow):
         self.updatepos(axis)
     
     def update_qds(self):
-        #if self.isfly:
-        #    return
+        if not hasattr(self, 'qds_array'):
+            self.qds_array = []
         try:
             r = self.get_qds_pos()
         except:
             self.recent_error_msg = "QDS does not work."
             print(self.recent_error_msg)
             return
-#        print(r)
-        self.ui.lcd_X.display("%0.3f" % (r[0]))     
-        self.ui.lcd_Z.display("%0.3f" % (r[1]))
-        self.ui.lcd_Z_2.display("%0.3f" % (r[2]))
-        #self.rpos = []
-        #self.mpos = []
-        if self.isscan:
-            self.updatepos()
-            # if self.isfly:
-            #     self.rpos.append([r[0], r[1], r[2]])
-            #     #self.mpos.append(self.pts.get_pos(self.signalmotor))
-            #     if not hasattr(self, 'signalmotor'):
-            #         self.signalmotor = self.motornames[0]
-            #     self.mpos.append(self.get_motorpos(self.signalmotor))
-            try:
-                self.plot()
-            except:
-                pass
-        else:
-            self.updatepos()
+        self.qds_array.append(r)
+
+        # Keep only the latest 500 points
+        if len(self.qds_array) > 500:
+            self.qds_array = self.qds_array[-500:]
+        self.plot(self.qds_array)
+        self.updatepos()
+#         #if self.isfly:
+#         #    return
+#         try:
+#             r = self.get_qds_pos()
+#         except:
+#             self.recent_error_msg = "QDS does not work."
+#             print(self.recent_error_msg)
+#             return
+# #        print(r)
+#         self.ui.lcd_X.display("%0.3f" % (r[0]))     
+#         self.ui.lcd_Z.display("%0.3f" % (r[1]))
+#         self.ui.lcd_Z_2.display("%0.3f" % (r[2]))
+#         #self.rpos = []
+#         #self.mpos = []
+#         if self.isscan:
+#             self.updatepos()
+#             # if self.isfly:
+#             #     self.rpos.append([r[0], r[1], r[2]])
+#             #     #self.mpos.append(self.pts.get_pos(self.signalmotor))
+#             #     if not hasattr(self, 'signalmotor'):
+#             #         self.signalmotor = self.motornames[0]
+#             #     self.mpos.append(self.get_motorpos(self.signalmotor))
+#             try:
+#                 self.plot()
+#             except:
+#                 pass
+#         else:
+#             self.updatepos()
 
     def reset_qdsX(self):
         r = self.get_qds_pos(False)
@@ -4170,37 +4185,41 @@ class ptyco_main_control(QMainWindow):
                 self.ui.z3_2.setText(txt)
 
     def plot(self):
+        pos = np.arange(len(self.qds_array))
+        r = self.qds_array
+        xl = 'Time (s)'        
 #        return
-        if self.isStruckCountNeeded:
-            if self.isfly:
-                #print("this is fly in plot")
-                #pos = np.asarray(self.mpos)
-                r = struck.read_mcs(STRUCK_CHANNELS)
-                pos = np.arange(len(r[0]))
-                r = np.stack(r).T
-                r = np.asarray(r)
-                xl = "N"
-            else:
-                #print("this is scan in plot")
-                r = np.asarray(self.rpos)
-                pos = np.asarray(self.mpos)
-        else:
-            r = np.asarray(self.rpos)
-            pos = np.asarray(self.mpos)
-        try:
-            if len(pos) != len(r[:,0]):
-                return
-        except:
-            return
-        try:
-            xl = f"{self.signalmotor} ({self.signalmotorunit})"
-        except:
-            xl = ""
+        # if self.isStruckCountNeeded:
+        #     if self.isfly:
+        #         #print("this is fly in plot")
+        #         #pos = np.asarray(self.mpos)
+        #         r = struck.read_mcs(STRUCK_CHANNELS)
+        #         pos = np.arange(len(r[0]))
+        #         r = np.stack(r).T
+        #         r = np.asarray(r)
+        #         xl = "N"
+        #     else:
+        #         #print("this is scan in plot")
+        #         r = np.asarray(self.rpos)
+        #         pos = np.asarray(self.mpos)
+        # else:
+        #     r = np.asarray(self.rpos)
+        #     pos = np.asarray(self.mpos)
+        # try:
+        #     if len(pos) != len(r[:,0]):
+        #         return
+        # except:
+        #     return
+        # try:
+        #     xl = f"{self.signalmotor} ({self.signalmotorunit})"
+        # except:
+        #     xl = ""
 
-        if not hasattr(self, 'plotlabels'):
-            self.plotlabels = ['']
-            self.plotlabels.append('')
-            self.plotlabels.append('')
+        # if not hasattr(self, 'plotlabels'):
+        #     self.plotlabels = ['']
+        #     self.plotlabels.append('')
+        #     self.plotlabels.append('')
+
         try:
             self.ax.clear()
             self.ax2.clear()
