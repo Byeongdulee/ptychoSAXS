@@ -81,7 +81,7 @@ QDS_UNIT_MM = 2
 QDS_UNIT_DEFAULT = QDS_UNIT_UM  # default QDS output is um
 DEFAULTS = {'xmotor':0, 'ymotor':2, 'phimotor':6}  #vertical stage is Z in the scan_gui, change 'ymotor' from 1 to 2, JD
 inifilename = "pty-co-saxs.ini"
-STRUCK_CHANNELS = [0, 3, 4]
+STRUCK_CHANNELS = [2,4,5]
 def rstrip_from_char(string, char):
     """Removes characters from the right of the string starting from the first occurrence of 'char'."""
 #    print(f'{string=}')
@@ -1174,7 +1174,7 @@ class ptyco_main_control(QMainWindow):
                     success = True
                 if '3820' in det._prefix:
                     det.stop()
-                    self.rpos = det.read_mcs([2,4,5])
+                    self.rpos = det.read_mcs(STRUCK_CHANNELS)
                     continue
                 if det.Armed == 1:
                     print(f"Detector {i} is still armed. Disarming it now.")
@@ -2926,14 +2926,14 @@ class ptyco_main_control(QMainWindow):
                     #time_per_pos = timeelapsed / (i + 1)
                     update_progress(int(progress_fraction*100))
                     remtime= np.round(timeelapsed*(1/progress_fraction-1),2)
-                    msg1 = f'Updated at {time.time()} : {int(timeelapsed)}s since the start.'
+                    msg1 = f'Updated at {time.ctime()} : {int(timeelapsed)}s since the start.'
                     msg2 = f"; Remaining time for the current 3D scan is {remtime}s, or {time.ctime(time.time()+remtime)}\n"
                 else:
                     #print("2d scan progress update")
                     progress_fraction = (i+1)/Nline
                     update_progress(int(progress_fraction*100))
                     remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
-                    msg1 = f'Updated at {time.time()} : {int(timeelapsed)}s since the start.'
+                    msg1 = f'Updated at {time.ctime()} : {int(timeelapsed)}s since the start.'
                     msg2 = f"; Remaining time for the current 2D scan is {remtime}s, or {time.ctime(time.time()+remtime)}\n"
                 msg = "%s%s"%(msg1, msg2)
             if update_status:
@@ -3485,14 +3485,14 @@ class ptyco_main_control(QMainWindow):
                         #time_per_pos = timeelapsed / (i + 1)
                         update_progress(int(progress_fraction*100))
                         remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
-                        msg1 = f'Updated at {time.time()} : {int(timeelapsed)}s since the start.'
+                        msg1 = f'Updated at {time.ctime()} : {int(timeelapsed)}s since the start.'
                         msg2 = f"; Remaining time for the current 3D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
                     else:
                         #print("2d scan progress update")
                         #progress_fraction = (i+1)/Nline
                         update_progress(int(progress_fraction*100))
                         remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
-                        msg1 = f'Updated at {time.time()} : {int(timeelapsed)}s since the start.'
+                        msg1 = f'Updated at {time.ctime()} : {int(timeelapsed)}s since the start.'
                         msg2 = f"; Remaining time for the current 2D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
 
                     msg = "%s%s"%(msg1, msg2)
@@ -3955,8 +3955,7 @@ class ptyco_main_control(QMainWindow):
     def save_list(self, filename, mpos, rpos, col, option="w"):
         mpos = np.asarray(mpos)
         rpos = np.asarray(rpos)
-        print(rpos)
-        print(mpos)
+
         if len(rpos) == 0:
             return
         if mpos.ndim ==2:
@@ -3975,7 +3974,6 @@ class ptyco_main_control(QMainWindow):
                     for cind in range(len(col)):
                         strv = "%s    %0.5e"%(strv, rpos[cind][i])
                     f.write("%0.5e%s\n"%(m, strv))
-
 
     def save_nparray(self, filename, mpos, rpos, col, option="w"):
         with open(filename, option) as f:
