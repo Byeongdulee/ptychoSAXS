@@ -1227,16 +1227,22 @@ class ptyco_main_control(QMainWindow):
         print("Setting detector align mode to ", value)
         if value:
             self.ui.actionPut_DET_alignmode.setChecked(True)
-            for det in self.detector:
+            for i, det in enumerate(self.detector):
+                if i>1:
+                    continue
                 if det is not None:
                     det.filePut('AutoSave', 0)
                     det.TriggerMode = 4
+                    det.Acquire = 1
         else:
             self.ui.actionPut_DET_alignmode.setChecked(False)
-            for det in self.detector:
+            for i, det in enumerate(self.detector):
+                if i>1:
+                    continue
                 if det is not None:
                     det.filePut('AutoSave', 1)
                     det.TriggerMode = 3
+                    det.Acquire = 0
 
     def set_basepaths(self, text=""):
         if type(text) == bool:
@@ -4108,7 +4114,7 @@ class ptyco_main_control(QMainWindow):
         # Keep only the latest 500 points
         if len(self.qds_array) > 500:
             self.qds_array = self.qds_array[-500:]
-        self.plot(self.qds_array)
+        self.plot()
         self.updatepos()
 #         #if self.isfly:
 #         #    return
