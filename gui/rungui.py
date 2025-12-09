@@ -545,6 +545,8 @@ class ptyco_main_control(QMainWindow):
         self.detector_mode = ['', '', '', '', 'XRF']
         self.hdf_plugin_name = ['','','','', '']
 
+        self.ui.ed_scanname.setText(self.parameters.scan_name)
+
         if os.name == 'nt':
             self.timer = QTimer()
             self.timer.timeout.connect(self.update_qds)
@@ -1779,6 +1781,31 @@ class ptyco_main_control(QMainWindow):
                     return None
         return p0
 
+    def detectortime_error_question(self, expt, period):
+        msg = (
+            f"Exposure time {expt:.4f} and period {period:.4f} requires the readout time {period-expt},\n"
+            "which is too short."
+        )
+        dlg = QMessageBox(self)
+        dlg.setWindowTitle("Scanparameter Error")
+        dlg.setText(msg)
+        #move_btn = dlg.addButton("Move to original position", QMessageBox.AcceptRole)
+        #update_btn = dlg.addButton("Update the original position", QMessageBox.DestructiveRole)
+        cancel_btn = dlg.addButton(QMessageBox.Cancel)
+        dlg.setIcon(QMessageBox.Question)
+        dlg.exec_()
+        clicked = dlg.clickedButton()
+        return None
+        #if clicked == move_btn:
+        #    # Move to p0_original
+        #    p0 = p0_original
+        #    self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%float(p0))
+        #elif clicked == update_btn:
+        #    # Update the roginal position to current (new)
+        #    p0_original = p0
+        #    self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.6f"%float(p0_original))
+        #elif clicked == cancel_btn:
+        #    return None
     def fly2d(self, xmotor=0, ymotor=1, scanname = "", snake=False):
         self.get_detectors_ready()
         if snake:
@@ -2655,7 +2682,7 @@ class ptyco_main_control(QMainWindow):
 
         # prepare to collect Detector images
         isDET_selected = False
-        print(pos, " This is the phi angle to be measured...............")
+#        print(pos, " This is the phi angle to be measured...............")
         if len(self.detector)>0:
             for detN, det in enumerate(self.detector):
                 if det is not None:
@@ -2702,8 +2729,10 @@ class ptyco_main_control(QMainWindow):
             if self.parameters._pulses_per_step>1:
                 for detN, det in enumerate(self.detector):
                     if det is not None:
-                        #det.nextFileNumber()
-                        det.StartCapture()
+                        while det.Armed == 0 or det.getCapture() == 0:
+                            det.StartCapture()
+                            time.sleep(0.1)
+                            print("Start capture ....")
                 #while struck.strk.scaler.CNT:
                 #    time.sleep(0.01)
 
@@ -2715,8 +2744,12 @@ class ptyco_main_control(QMainWindow):
                 if ndet>2: 
                     continue
                 if det is not None:
-                    while det.Armed == 0 or det.getCapture() == 0:
-                        time.sleep(0.1)
+                    if self.parameters._pulses_per_step>1:
+                        while det.Armed == 0 or det.getCapture() == 0:
+                            time.sleep(0.1)
+                    else:
+                        while det.Armed == 0:
+                            time.sleep(0.1)
             if isDET_selected:
                 #struck.arm_mcs_counter()
                 #struck.mcs_counter_waitstarted()
@@ -2856,12 +2889,11 @@ class ptyco_main_control(QMainWindow):
  # print("Trigger set")
         isreshreshed = 1
         ## prepre detectors ............
-        for i, det in enumerate(self.detector): #JD
+        for detN, det in enumerate(self.detector): #JD
             if det is not None:  #JD
                 #det.step_ready(expt, Nline)
                 det.step_ready(expt, Nline, pulsespershot = self.parameters._pulses_per_step, fn=self.hdf_plugin_name[detN])  # Arm detector for multiple data.
-
-                print(f"step _ready, detector {i}'s status: {det.Armed}")  #JD
+                print(f"step _ready, detector {detN}'s status: {det.Armed}")  #JD
 
         N_imgcollected = 0
         t0 = time.time()
@@ -2892,8 +2924,10 @@ class ptyco_main_control(QMainWindow):
             if self.parameters._pulses_per_step>1:
                 for detN, det in enumerate(self.detector):
                     if det is not None:
-                        #det.nextFileNumber()
-                        det.StartCapture()
+                        while det.Armed == 0 or det.getCapture() == 0:
+                            det.StartCapture()
+                            time.sleep(0.1)
+                            print("Start capture ....")
                 #while struck.strk.scaler.CNT:
                 #    time.sleep(0.01)
 
@@ -2901,13 +2935,13 @@ class ptyco_main_control(QMainWindow):
                     #    time.sleep(0.01)
 
             # make sure trigger done.                
-            for ndet, det in enumerate(self.detector):
-                if ndet>2: 
-                    continue
-                if det is not None:
+            if det is not None:
+                if self.parameters._pulses_per_step>1:
                     while det.Armed == 0 or det.getCapture() == 0:
                         time.sleep(0.1)
- 
+                else:
+                    while det.Armed == 0:
+                        time.sleep(0.1)
 
             # trigger the detector.
             dg645_12ID.trigger()
@@ -3446,9 +3480,9 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append('#H')
         if self.isStruckCountNeeded:
             scaninfo.append(self.Xaxis)
-            scaninfo.append(struck.strk.scaler.NM2)
-            scaninfo.append(struck.strk.scaler.NM3)
-            scaninfo.append(struck.strk.scaler.NM4)
+            scaninfo.append(struck.scaler.NM2)
+            scaninfo.append(struck.scaler.NM3)
+            scaninfo.append(struck.scaler.NM4)
         else:
             scaninfo.append(self.Xaxis)
             scaninfo.append('QDS1')
@@ -3536,14 +3570,14 @@ class ptyco_main_control(QMainWindow):
         if self.isStruckCountNeeded:
             isdone = False
             while not isdone:
-                if struck.strk.Acquiring:
+                if struck.Armed:
                     isdone = False
                 else:
                     isdone = True
                 time.sleep(0.1)
                 msg = ""
                 timeelapsed = time.time()-t0
-                progress_fraction = float(struck.strk.CurrentChannel)/float(struck.strk.NuseAll)
+                progress_fraction = float(struck.CurrentChannel)/float(struck.NuseAll)
                 if progress_fraction==0:
                     progress_fraction=0.0001
                 if update_progress:
@@ -3569,7 +3603,7 @@ class ptyco_main_control(QMainWindow):
                 if update_status:
                     update_status(msg)
         if self.isStruckCountNeeded:
-            struck.strk.stop()
+            struck.stop()
         else:
             pass
 
@@ -3620,9 +3654,9 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append('#H')
         if self.isStruckCountNeeded:
             scaninfo.append(self.motornames[motornumber])
-            scaninfo.append(struck.strk.scaler.NM2)
-            scaninfo.append(struck.strk.scaler.NM3)
-            scaninfo.append(struck.strk.scaler.NM4)
+            scaninfo.append(struck.scaler.NM2)
+            scaninfo.append(struck.scaler.NM3)
+            scaninfo.append(struck.scaler.NM4)
         else:
             scaninfo.append(self.motornames[motornumber])
             scaninfo.append('QDS1')
@@ -3666,7 +3700,22 @@ class ptyco_main_control(QMainWindow):
                     print(f"{self.pts.hexapod.pulse_number} images will be collected every {period}s with exposure time of {expt}s.")
                 
                 if period-expt < DETECTOR_READOUTTIME:
-                    raise RuntimeError("Not enough time left for reading out DET images. Make the X step time longer or make the ratio_exp_period smaller.")
+                    self.recent_error_msg = (
+                        f"Exposure time {expt:.4f} and period {period:.4f} requires the readout time {period-expt}, which is too short."
+                    )
+                    print(self.recent_error_msg)
+                    self.ui.statusbar.showMessage(self.recent_error_msg)
+                    # dlg = QMessageBox(self)
+                    # dlg.setWindowTitle("Scanparameter Error")
+                    # dlg.setText(msg)
+                    # #move_btn = dlg.addButton("Move to original position", QMessageBox.AcceptRole)
+                    # #update_btn = dlg.addButton("Update the original position", QMessageBox.DestructiveRole)
+                    # cancel_btn = dlg.addButton(QMessageBox.Cancel)
+                    # dlg.setIcon(QMessageBox.Question)
+                    # dlg.exec_()
+                    # clicked = dlg.clickedButton()
+                    return None
+                    #raise RuntimeError("Not enough time left for reading out DET images. Make the X step time longer or make the ratio_exp_period smaller.")
 
                 if expt <= 0:
                     self.recent_error_msg = f"Note that after subtracting the detector readout time {self.det_readout_time:.3e} s, the exposure time becomes equal or less than 0."
@@ -3723,7 +3772,6 @@ class ptyco_main_control(QMainWindow):
                     if detN > 2:
                         continue
                     if det is not None:
-                        det.FileTemplate = "%s%s_%5.5d_00001.tif"
                         try:
 #                            print(self.use_hdf_plugin, " This is use_hdf_plugin")
 #                            print(self.hdf_plugin_savemode, " This is use_hdf_plugin")
@@ -4307,9 +4355,9 @@ class ptyco_main_control(QMainWindow):
             
             if len(self.plotlabels) == 0:
                 if self.isStruckCountNeeded:
-                    yl = struck.strk.scaler.NM2
-                    yl2 = struck.strk.scaler.NM3
-                    yl3 = struck.strk.scaler.NM4
+                    yl = struck.scaler.NM2
+                    yl2 = struck.scaler.NM3
+                    yl3 = struck.scaler.NM4
                 else:
                     yl = 'X position (um)'
                     yl2 = 'Z position (um)'

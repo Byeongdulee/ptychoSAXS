@@ -95,16 +95,14 @@ class pilatus(AD_Pilatus):
 
         # number of images for collection and capture
 		if pulsespershot==1:
-			
 			self.NumImages = N_image
 			# set filesaver
 			self.filePut('NumCapture',   1)
 			self.filePut('FileNumber',    1)
 			self.StartSingleFrame(fn=fn) # Arm the detector
 		else:
-			self.NumImages = N_image*pulsespershot
 			# set filesaver
-			self.SetMultiFrames(self.NumImages, pulsespershot)
+			self.SetMultiFrames(N_image, pulsespershot)
 			self.StartCapture()
 
 	def set_scanNumberAsfilename(self):
@@ -229,7 +227,7 @@ class dante(AD_Dante):
 		self.SetExposureTime(expt)
 		self.setArrayCounter(0)
 		self.setFileTemplate('%s%s_%5.5d.h5')
-
+		self.FileNumber = 1
 		self.SetMultiFrames(N_image, pulsespershot)
 		if len(fn)>0:
 			self.setFileName("%s"%fn)
@@ -335,6 +333,7 @@ class XSP(AD_XSP):
 			self.SetExposurePeriod(period)
 		self.setArrayCounter(0)
 		self.setFileTemplate('%s%s_%5.5d.h5')
+		self.FileTemplate ='%s%s_%5.5d_00001.h5'
 		
 		isHDFMode = capture[0]; #use hdf plugin?
 
@@ -364,6 +363,7 @@ class XSP(AD_XSP):
 		self.SetExposureTime(expt)
 		self.setArrayCounter(0)
 		self.setFileTemplate('%s%s_%5.5d.h5')
+		self.FileTemplate ='%s%s_%5.5d.h5'
 
 		self.SetMultiFrames(N_image, pulsespershot)
 		if len(fn)>0:

@@ -39,18 +39,18 @@ class AD_Pilatus(Device):
             self.add_pv(pvname, attr='File_'+p)
             
     def Arm(self, nimg = 0):
-        # should be in Acquire mode.
-        if self.Acquire_RBV == 1:
-            t = time.time()
-            self.Acquire = 0 # stop acquire
-            while self.Acquire_RBV == 1:
-                self.Acquire = 0
-                time.sleep(0.1)
-                if abs(time.time()-t)>10:
-                    print("CCD still running timeout.")
-                    raise TimeoutError
-            print(f"{self._prefix} was Armed previously. Arming it again.")
-            time.sleep(15)
+        # # should be in Acquire mode.
+        # if self.Acquire_RBV == 1:
+        #     t = time.time()
+        #     self.Acquire = 0 # stop acquire
+        #     while self.Acquire_RBV == 1:
+        #         self.Acquire = 0
+        #         time.sleep(0.1)
+        #         if abs(time.time()-t)>10:
+        #             print("CCD still running timeout.")
+        #             raise TimeoutError
+        #     print(f"{self._prefix} was Armed previously. Arming it again.")
+        #     time.sleep(15)
         self.ImageMode = 1
         if nimg>0:
             self.NumImages = nimg
