@@ -17,11 +17,11 @@ from epics import PV
 
 #MotorControlAvailable = False
 sys.path.append('../ptychosaxs')
-import tw_galil as gl
+#import tw_galil as gl
 MotorControlAvailable = True
 try:
     from optics import ptyoptics, opticsbox, OSA, camera, beamstop, slit, gentry
-    from newport_piezo import newport
+    #from newport_piezo import newport
     MotorControlAvailable = True
 except:
     MotorControlAvailable = False
