@@ -2145,7 +2145,7 @@
      <x>0</x>
      <y>0</y>
      <width>1300</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -2229,6 +2229,7 @@
     <addaction name="separator"/>
     <addaction name="actionRatio_of_exptime_period_for_Flyscan"/>
     <addaction name="actionSet_waittime_between_scans"/>
+    <addaction name="actionSet_shot_number_per_a_step"/>
     <addaction name="menu2D_XY_scan"/>
     <addaction name="menu3D_XYphi_scan"/>
     <addaction name="separator"/>
@@ -2685,6 +2686,11 @@
    </property>
    <property name="text">
     <string>Shutter Close Afterscan</string>
+   </property>
+  </action>
+  <action name="actionSet_shot_number_per_a_step">
+   <property name="text">
+    <string>Set shot number per a step</string>
    </property>
   </action>
  </widget>

@@ -85,21 +85,27 @@ class pilatus(AD_Pilatus):
 			else:
 				self.Arm()
 	
-	def step_ready(self, expt, N_image, fn=""):
+	def step_ready(self, expt, N_image, pulsespershot=1, fn=""):
 		self.SetExposureTime(expt)
 		self.setArrayCounter(0)
 		self.ImageMode = 1  #  multiple image
 		self.TriggerMode = 3 # external triger mode
 		#self.FileNumber = 1
+		self.filePut('FileNumber',    1)
 
         # number of images for collection and capture
-		self.NumImages = N_image
-
-        # set filesaver
-		self.filePut('NumCapture',   1)
-		self.filePut('FileNumber',    1)
-		self.StartSingleFrame(fn=fn) # Arm the detector
-
+		if pulsespershot==1:
+			
+			self.NumImages = N_image
+			# set filesaver
+			self.filePut('NumCapture',   1)
+			self.filePut('FileNumber',    1)
+			self.StartSingleFrame(fn=fn) # Arm the detector
+		else:
+			self.NumImages = N_image*pulsespershot
+			# set filesaver
+			self.SetMultiFrames(self.NumImages, pulsespershot)
+			self.StartCapture()
 
 	def set_scanNumberAsfilename(self):
 		fw_dir = caget(f"{beamlinePV}data:userDir")
@@ -219,12 +225,12 @@ class dante(AD_Dante):
 			else:
 				self.Arm()
 	
-	def step_ready(self, expt, N_image, fn="", number=-1):
+	def step_ready(self, expt, N_image, pulsespershot=1, fn="", number=-1):
 		self.SetExposureTime(expt)
 		self.setArrayCounter(0)
 		self.setFileTemplate('%s%s_%5.5d.h5')
 
-		self.SetMultiFrames(N_image)
+		self.SetMultiFrames(N_image, pulsespershot)
 		if len(fn)>0:
 			self.setFileName("%s"%fn)
         # set filesaver
@@ -354,12 +360,12 @@ class XSP(AD_XSP):
 			else:
 				self.Arm()
 	
-	def step_ready(self, expt, N_image, fn=""):
+	def step_ready(self, expt, N_image, pulsespershot = 1,fn=""):
 		self.SetExposureTime(expt)
 		self.setArrayCounter(0)
 		self.setFileTemplate('%s%s_%5.5d.h5')
 
-		self.SetMultiFrames(N_image)
+		self.SetMultiFrames(N_image, pulsespershot)
 		if len(fn)>0:
 			self.setFileName("%s"%fn)
         # set filesaver

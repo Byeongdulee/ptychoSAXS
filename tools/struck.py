@@ -4,7 +4,7 @@ import time
 
 class struck(Struck):
 	_nonpvs  = ('_prefix', '_pvs', '_delim', '_nchan',
-               'clockrate', 'scaler', 'mcas', 'basepath')
+               'clockrate', 'scaler', 'mcas', 'basepath', 'FileNumber')
 	def __init__(self, prefix='12idc:'):
 		Struck.__init__(self, prefix+'3820:', scaler='%sscaler1' % prefix, nchan=12)
 		self.basepath = "/net/micdata/data2/"
@@ -18,7 +18,14 @@ class struck(Struck):
 	def Armed(self):
 		return self.Acquiring
 	
+	def nextFileNumber(self):
+		current_fn = self.FileNumber
+		self.FileNumber = current_fn + 1
+
 	def step_ready(self, expt, imagN, **kwargs):
+		if 'pulsespershot' in kwargs:
+			pulsespershot = kwargs['pulsespershot']
+			imagN = imagN * pulsespershot
 		TotalMeasurementTime = expt*imagN + 10000
 		self.mcs_ready(imagN, TotalMeasurementTime)
 		self.Arm()

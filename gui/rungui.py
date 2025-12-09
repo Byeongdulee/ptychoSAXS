@@ -305,6 +305,7 @@ class ptyco_main_control(QMainWindow):
             self.parameters.scan_name = ""
             self.parameters._ratio_exp_period = FRACTION_EXPOSURE_PERIOD
             self.parameters.scan_time = -1
+            self.parameters._pulses_per_step = 1
             self.parameters.saxsmode = 1  # 0 for ptychography, 1 for SAXS
             self.parameters.base_datafolder = "/net/s12data/export/12id-c/"
         
@@ -455,6 +456,7 @@ class ptyco_main_control(QMainWindow):
         self.ui.actionCapture_multi_frames.triggered.connect(self.select_hdf_multiframecapture)
         self.ui.actionSet_basepaths.triggered.connect(self.set_basepaths)
         self.ui.actionPut_DET_alignmode.triggered.connect(self.set_det_alignmode)
+        self.ui.actionSet_shot_number_per_a_step.triggered.connect(self.set_shotnumber_per_step)
         self.parameters.scan_number +=1
         #self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)+1))
         self.update_scannumber()
@@ -782,6 +784,15 @@ class ptyco_main_control(QMainWindow):
             self.parameters._waittime_between_scans = value
             self.parameters.writeini()
 #            print(self.parameters.softglue_channels)
+    def set_shotnumber_per_step(self):
+        if hasattr(self.parameters, '_pulses_per_step'):
+            wtime = self.parameters._pulses_per_step
+        else:
+            wtime = 1.0
+        value, okPressed = QInputDialog.getDouble(self, "How many shots per step?","Number of shots:", wtime)
+        if okPressed:
+            self.parameters._pulses_per_step = value
+            self.parameters.writeini()
 
     def update_workingfolder(self, folder=""):
         if len(folder) == 0:
@@ -2652,7 +2663,7 @@ class ptyco_main_control(QMainWindow):
                     print(f"Exposure time set to %0.3f seconds for {det._prefix}."% expt)
                     try:
                         #det.fly_ready(expt, len(pos))
-                        det.step_ready(expt, len(pos), fn=self.hdf_plugin_name[detN])  # Arm detector for multiple data.
+                        det.step_ready(expt, len(pos), pulsespershot = self.parameters._pulses_per_step, fn=self.hdf_plugin_name[detN])  # Arm detector for multiple data.
     #                            print("det is ready.")
                     except TimeoutError:
                         self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
@@ -2661,7 +2672,13 @@ class ptyco_main_control(QMainWindow):
                         #showerror("Detector timeout.")
                         return
         # each time it will send a pulse
-        dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
+        if self.parameters._pulses_per_step==1:
+            period = 0
+        else:
+            period = expt + 0.020  # in seconds
+            if period<0.03:
+                period = 0.03
+        dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage = self.parameters._pulses_per_step, Cycperiod=period)
         
         # if self.isStruckCountNeeded:
         #     struck.mcs_counter_init()
@@ -2682,11 +2699,11 @@ class ptyco_main_control(QMainWindow):
             #     dg645_12ID.trigger()
             #     print("Trigger sent1")
             # trigger the detector.
-            if isDET_selected:
-                #struck.arm_mcs_counter()
-                #struck.mcs_counter_waitstarted()
-                dg645_12ID.trigger()
-                print("Trigger sent2")
+            if self.parameters._pulses_per_step>1:
+                for detN, det in enumerate(self.detector):
+                    if det is not None:
+                        #det.nextFileNumber()
+                        det.StartCapture()
                 #while struck.strk.scaler.CNT:
                 #    time.sleep(0.01)
 
@@ -2698,8 +2715,13 @@ class ptyco_main_control(QMainWindow):
                 if ndet>2: 
                     continue
                 if det is not None:
-                    while det.Armed == 0:
+                    while det.Armed == 0 or det.getCapture() == 0:
                         time.sleep(0.1)
+            if isDET_selected:
+                #struck.arm_mcs_counter()
+                #struck.mcs_counter_waitstarted()
+                dg645_12ID.trigger()
+                print("Trigger sent2")
             # Waiting for data collection done.
             val = N_imgcollected
             print("Acquire starated")
@@ -2718,13 +2740,19 @@ class ptyco_main_control(QMainWindow):
             if update_status:
                 update_status(msg)
 
+            # for ndet, det in enumerate(self.detector):
+            #     if ndet>1: 
+            #         continue
+            #     if det is not None:
+            #         while val == N_imgcollected:
+            #             val = det.ArrayCounter_RBV
+            #             time.sleep(0.1)
             for ndet, det in enumerate(self.detector):
                 if ndet>1: 
                     continue
                 if det is not None:
-                    while val == N_imgcollected:
-                        val = det.ArrayCounter_RBV
-                        time.sleep(0.1)
+                    while det.getCapture() == 1:
+                        time.sleep(0.02)
             # image collection done.
             N_imgcollected = val
 
@@ -2816,13 +2844,23 @@ class ptyco_main_control(QMainWindow):
         Nline = len(pos)
         # keep for later use if needed
         self.stepscan2d_positions = pos
-        dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
- #       print("Trigger set")
+        #dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
+        # each time it will send a pulse
+        if self.parameters._pulses_per_step==1:
+            period = 0
+        else:
+            period = expt + 0.020  # in seconds
+            if period<0.03:
+                period = 0.03
+        dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage = self.parameters._pulses_per_step, Cycperiod=period)
+ # print("Trigger set")
         isreshreshed = 1
         ## prepre detectors ............
         for i, det in enumerate(self.detector): #JD
             if det is not None:  #JD
-                det.step_ready(expt, Nline)
+                #det.step_ready(expt, Nline)
+                det.step_ready(expt, Nline, pulsespershot = self.parameters._pulses_per_step, fn=self.hdf_plugin_name[detN])  # Arm detector for multiple data.
+
                 print(f"step _ready, detector {i}'s status: {det.Armed}")  #JD
 
         N_imgcollected = 0
@@ -2851,6 +2889,26 @@ class ptyco_main_control(QMainWindow):
                     pos_status = self.pts.hexapod.handle_error()
                     print("Hexapod error is fixed....")
 
+            if self.parameters._pulses_per_step>1:
+                for detN, det in enumerate(self.detector):
+                    if det is not None:
+                        #det.nextFileNumber()
+                        det.StartCapture()
+                #while struck.strk.scaler.CNT:
+                #    time.sleep(0.01)
+
+                    #while struck.strk.scaler.CNT:
+                    #    time.sleep(0.01)
+
+            # make sure trigger done.                
+            for ndet, det in enumerate(self.detector):
+                if ndet>2: 
+                    continue
+                if det is not None:
+                    while det.Armed == 0 or det.getCapture() == 0:
+                        time.sleep(0.1)
+ 
+
             # trigger the detector.
             dg645_12ID.trigger()
             print(f"Trigger sent out for {i}th point..........................\r")
@@ -2859,7 +2917,6 @@ class ptyco_main_control(QMainWindow):
             #     struck.mcs_counter_count(expt)
             #     #print("Is struck working?")
             
-
             # wait for 1 image collection done.
             val = N_imgcollected
             #print(val, " This is val...")
@@ -2867,14 +2924,10 @@ class ptyco_main_control(QMainWindow):
             t_start = time.time()
             timeout_occurred = False
             for ndet, det in enumerate(self.detector):
+                if ndet>1: 
+                    continue
                 if det is not None:
-                    #print(det._prefix)
-                    while val >= N_imgcollected:
-                        try:
-                            N_imgcollected = det.ArrayCounter_RBV
-                        except:
-                            pass
-                        #print(N_imgcollected, val, " Waiting for image collection...............")
+                    while det.getCapture() == 1:
                         time.sleep(0.02)
                         if (time.time() - t_start) > TIMEOUT:
                             timeout_occurred = True
@@ -2883,6 +2936,23 @@ class ptyco_main_control(QMainWindow):
                     if timeout_occurred:  
                         print("Breaking out of detector loop due to timeout.") 
                         break
+            # for ndet, det in enumerate(self.detector):
+            #     if det is not None:
+            #         #print(det._prefix)
+            #         while val >= N_imgcollected:
+            #             try:
+            #                 N_imgcollected = det.ArrayCounter_RBV
+            #             except:
+            #                 pass
+            #             #print(N_imgcollected, val, " Waiting for image collection...............")
+            #             time.sleep(0.02)
+            #             if (time.time() - t_start) > TIMEOUT:
+            #                 timeout_occurred = True
+            #                 print(f"Timeout occurred for detector {det._prefix} after {TIMEOUT} seconds.")
+            #                 break
+            #         if timeout_occurred:  
+            #             print("Breaking out of detector loop due to timeout.") 
+            #             break
 #                    break
 #            print("Out now")
             if timeout_occurred:

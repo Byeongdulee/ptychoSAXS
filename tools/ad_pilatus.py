@@ -102,23 +102,30 @@ class AD_Pilatus(Device):
         #self.TriggerMode = 3
 
         # number of images for collection and capture
-        self.NumImages = n_trig
         if n_cap==0:
             n_cap = n_trig
+        else:
+            n_trig = n_cap*n_trig
+        self.NumImages = n_trig
         # set filesaver
         self.filePut('NumCapture',    n_cap)
         self.filePut('EnableCallbacks', 1)
-        #self.filePut('FileNumber',    1)
+        self.filePut('FileNumber',    1)
         time.sleep(0.025)
 
+    def CaptureOn(self):
+        self.filePut('Capture', 1)
+
     def StartCapture(self):
+        self.SetCapture()
+        self.CaptureOn()  # start capture
+        self.Arm()
+
+
+    def SetCapture(self):
         self.ShutterMode = 0
         self.filePut('AutoSave', 1)
         self.filePut('FileWriteMode', 1)  # Stream..... BL 12/2/2024. This was 1 for capture.
-        time.sleep(0.05)
-        self.filePut('Capture', 1)  # start capture
-        self.Arm()
-        time.sleep(0.025)
 
     def StartSingleFrame(self, fn=""):
         self.ShutterMode = 0
@@ -361,7 +368,7 @@ class AD_Dante(Device):
         self.GatingMode = 0 # Free run mode
         self.ListBufferSize = 4096
 
-    def SetMultiFrames(self, n_trig):
+    def SetMultiFrames(self, n_trig, n_cap=0):
         """set number of images(triggers) for camera
         AND the number of images to capture with file plugin
         When you want to arm camera for 100 images and save every 20 images into a file,
@@ -369,12 +376,16 @@ class AD_Dante(Device):
         """
 
         # number of images for collection and capture
+        if n_cap==0:
+            n_cap = n_trig
+        else:
+            n_trig = n_cap*n_trig
         self.MappingPoints = n_trig
 
         # set filesaver
-        self.filePut('NumCapture',    n_trig)
+        self.filePut('NumCapture',    n_cap)
         self.filePut('EnableCallbacks', 1)
-        #self.filePut('FileNumber',    1)
+        self.filePut('FileNumber',    1)
         time.sleep(0.025)
 
     def StartCapture(self):
@@ -672,9 +683,11 @@ class AD_XSP(Device):
         #self.TriggerMode = 3
 
         # number of images for collection and capture
-        self.NumImages = n_trig
         if n_cap==0:
             n_cap = n_trig
+        else:
+            n_trig = n_cap*n_trig
+        self.NumImages = n_trig
         # set filesaver
         self.filePut('NumCapture',    n_cap)
         self.filePut('EnableCallbacks', 1)
