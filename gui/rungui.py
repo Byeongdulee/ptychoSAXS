@@ -307,7 +307,7 @@ class ptyco_main_control(QMainWindow):
             self.parameters.scan_time = -1
             self.parameters._pulses_per_step = 1
             self.parameters.saxsmode = 1  # 0 for ptychography, 1 for SAXS
-            self.parameters.base_datafolder = "/net/s12data/export/12id-c/"
+            self.parameters.base_linux_datafolder = "/net/s12data/export/12id-c/"
         
         self.isscan = False
         self.isfly = False
@@ -866,7 +866,7 @@ class ptyco_main_control(QMainWindow):
                         else: # scattering mode
                             if len(tp)==0:
                                 continue
-                            basepath = self.parameters.base_datafolder
+                            basepath = self.parameters.base_linux_datafolder
                             folder_type = tp+"AXS"
                             tif_path = ""
                     if "3820" in det._prefix:
@@ -876,14 +876,14 @@ class ptyco_main_control(QMainWindow):
                         if self.is_ptychomode:
                             basepath = det.basepath
                         else:
-                            basepath = self.parameters.base_datafolder
+                            basepath = self.parameters.base_linux_datafolder
                         tif_path = ""
                     if ("dante" in det._prefix) or ("XSP" in det._prefix):
                         folder_type = 'DANTE'
                         if self.is_ptychomode:
                             basepath = det.basepath
                         else:
-                            basepath = self.parameters.base_datafolder
+                            basepath = self.parameters.base_linux_datafolder
                         
                     hdfname = tp+txt
                     if i<2:
@@ -1262,17 +1262,17 @@ class ptyco_main_control(QMainWindow):
             text = ""
         # Prompt user for base path for detectors
 #        default_basepath = '/net/micdata/data2'
-        default_basepath = self.parameters.base_datafolder
+        default_basepath = self.parameters.base_linux_datafolder
         if len(text)==0:
-            if len(self.parameters.base_datafolder)>0:
-                default_basepath = self.parameters.base_datafolder
-            text, ok = QInputDialog.getText(self, "Set Detector Base Path", "Base path for detectors:", QLineEdit.Normal, default_basepath)
+            if len(self.parameters.base_linux_datafolder)>0:
+                default_basepath = self.parameters.base_linux_datafolder
+            text, ok = QInputDialog.getText(self, "Set Detector Base Path", "Basepath in linux for detectors:", QLineEdit.Normal, default_basepath)
         else:
             ok = True
         if ok and text:
-            self.parameters.base_datafolder = text
+            self.parameters.base_linux_datafolder = text
         else:
-            self.parameters.base_datafolder = default_basepath
+            self.parameters.base_linux_datafolder = default_basepath
 
     def select_detectors(self, N, value=None):
         if N==1:
@@ -2316,13 +2316,32 @@ class ptyco_main_control(QMainWindow):
 
 
     def stepscan(self, motornumber=-1):
+        if self.parameters._pulses_per_step>1 and not self.use_hdf_plugin:
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Check HDF Plugin")
+            msg = (
+                f"Pulses per step is set to {self.parameters._pulses_per_step}.\n"
+                "HDF5 plugin must be used for multi-pulse per step scans.\n")
+            dlg.setText(msg)
+            #move_btn = dlg.addButton("Move to original position", QMessageBox.AcceptRole)
+            #update_btn = dlg.addButton("Update the original position", QMessageBox.DestructiveRole)
+            cancel_btn = dlg.addButton(QMessageBox.Cancel)
+            dlg.setIcon(QMessageBox.Question)
+            dlg.exec_()
+            clicked = dlg.clickedButton()
+            # if clicked == move_btn:
+            #     pass
+            return
+        
         self.get_detectors_ready()
         self.update_scanname()
         self.write_motor_scan_range()
         self.isStopScanIssued = False
         motor = motornumber
+
         scan_name = "stepscan2d"
         print(f'\n\n{scan_name}:{motor=}')
+
 
         # logging
         scaninfo = []
@@ -2398,6 +2417,22 @@ class ptyco_main_control(QMainWindow):
         scan_name = "stepscan2d"
         print(f'\n\n{scan_name}:{xmotor=}; {ymotor=}')
 
+        if self.parameters._pulses_per_step>1 and not self.use_hdf_plugin:
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Check HDF Plugin")
+            msg = (
+                f"Pulses per step is set to {self.parameters._pulses_per_step}.\n"
+                "HDF5 plugin must be used for multi-pulse per step scans.\n")
+            dlg.setText(msg)
+            #move_btn = dlg.addButton("Move to original position", QMessageBox.AcceptRole)
+            #update_btn = dlg.addButton("Update the original position", QMessageBox.DestructiveRole)
+            cancel_btn = dlg.addButton(QMessageBox.Cancel)
+            dlg.setIcon(QMessageBox.Question)
+            dlg.exec_()
+            clicked = dlg.clickedButton()
+            # if clicked == move_btn:
+            #     pass
+            return
         # logging
         scaninfo = []
         scaninfo.append('\n#S')
@@ -2485,6 +2520,23 @@ class ptyco_main_control(QMainWindow):
 
 
     def stepscan3d(self, xmotor=0, ymotor=1, phimotor=6):
+        if self.parameters._pulses_per_step>1 and not self.use_hdf_plugin:
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("Check HDF Plugin")
+            msg = (
+                f"Pulses per step is set to {self.parameters._pulses_per_step}.\n"
+                "HDF5 plugin must be used for multi-pulse per step scans.\n")
+            dlg.setText(msg)
+            #move_btn = dlg.addButton("Move to original position", QMessageBox.AcceptRole)
+            #update_btn = dlg.addButton("Update the original position", QMessageBox.DestructiveRole)
+            cancel_btn = dlg.addButton(QMessageBox.Cancel)
+            dlg.setIcon(QMessageBox.Question)
+            dlg.exec_()
+            clicked = dlg.clickedButton()
+            # if clicked == move_btn:
+            #     pass
+            return
+                
         self.get_detectors_ready()
 #        self.switch_SGstream(False)
 
@@ -2912,6 +2964,7 @@ class ptyco_main_control(QMainWindow):
             if self.isStopScanIssued:
                 break
 #            print(pos[i,0], pos[i,1], " Moving to this position...............")
+
             pos_status = False
             while not pos_status:
                 pos_status = self.pts.hexapod.mv(xaxis, pos[i,0], yaxis, pos[i,1], wait=True)
@@ -2934,7 +2987,7 @@ class ptyco_main_control(QMainWindow):
                     #while struck.strk.scaler.CNT:
                     #    time.sleep(0.01)
 
-            # make sure trigger done.                
+            # make sure detectors are ready for taking triggers.                
             if det is not None:
                 if self.parameters._pulses_per_step>1:
                     while det.Armed == 0 or det.getCapture() == 0:
@@ -2943,17 +2996,14 @@ class ptyco_main_control(QMainWindow):
                     while det.Armed == 0:
                         time.sleep(0.1)
 
+            # if needed, wait between scans
+            time.sleep(self.parameters._waittime_between_scans)
+
             # trigger the detector.
             dg645_12ID.trigger()
             print(f"Trigger sent out for {i}th point..........................\r")
 
-            # if self.isStruckCountNeeded:
-            #     struck.mcs_counter_count(expt)
-            #     #print("Is struck working?")
-            
-            # wait for 1 image collection done.
-            val = N_imgcollected
-            #print(val, " This is val...")
+            # waiting for data collection done.
             TIMEOUT = expt + 3
             t_start = time.time()
             timeout_occurred = False
@@ -2961,7 +3011,7 @@ class ptyco_main_control(QMainWindow):
                 if ndet>1: 
                     continue
                 if det is not None:
-                    while det.getCapture() == 1:
+                    while det.ArrayCounter_RBV < self.parameters._pulses_per_step*(i+1):
                         time.sleep(0.02)
                         if (time.time() - t_start) > TIMEOUT:
                             timeout_occurred = True
@@ -2993,26 +3043,8 @@ class ptyco_main_control(QMainWindow):
                 print(f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish.")
                 self.recent_error_msg = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish."
                 return -1
-#            # image collection done.
-#            N_imgcollected = det.ArrayCounter_RBV
 
-            # # update all relevant data.
-            # if self.isStruckCountNeeded:
-            #     cnts = struck.read_scaler_all()
-            #     #self.rpos.append([cnts[2], cnts[3], cnts[4]])
-            #     self.rpos.append([cnts[2], cnts[4], cnts[5]])
-            #     # data = [value, cnts[2],cnts[3],cnts[4]]
-            #     # self.log_data(data)
-            # else:
-            #     r = self.get_qds_pos()
-            #     self.rpos.append([r[0], r[1], r[2]])
-            #     # data = [value, [r[0], r[1], r[2]]]
-            #     # self.log_data(data)
-            #pos = self.get_motorpos(self.signalmotor)
-            #time.sleep(0.1)
-            t1 = time.time()
-            while (time.time()-t1 < self.parameters._waittime_between_scans):
-                time.sleep(0.01)
+
             timeelapsed = time.time()-t0
             self.mpos.append(value)
             #self.mpos.append(timeelapsed)

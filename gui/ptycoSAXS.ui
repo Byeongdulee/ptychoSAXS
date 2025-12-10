@@ -2230,6 +2230,7 @@
     <addaction name="actionRatio_of_exptime_period_for_Flyscan"/>
     <addaction name="actionSet_waittime_between_scans"/>
     <addaction name="actionSet_shot_number_per_a_step"/>
+    <addaction name="separator"/>
     <addaction name="menu2D_XY_scan"/>
     <addaction name="menu3D_XYphi_scan"/>
     <addaction name="separator"/>
@@ -2262,14 +2263,14 @@
      <property name="title">
       <string>XRF</string>
      </property>
-     <addaction name="actionXSP3"/>
      <addaction name="actionDante"/>
+     <addaction name="actionXSP3"/>
     </widget>
     <addaction name="actionSAXS"/>
     <addaction name="actionWAXS"/>
     <addaction name="actionStruck"/>
-    <addaction name="menuDante"/>
     <addaction name="actionSG"/>
+    <addaction name="menuDante"/>
     <addaction name="separator"/>
     <addaction name="actionReset_to_Fly_mode"/>
     <addaction name="actionSet_basepaths"/>
