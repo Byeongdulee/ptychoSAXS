@@ -1189,6 +1189,8 @@ class ptyco_main_control(QMainWindow):
                     det.stop()
                     self.rpos = det.read_mcs(STRUCK_CHANNELS)
                     continue
+                if 'XSP3' in det._prefix:
+                    det.Acquire = 0
                 if det.Armed == 1:
                     print(f"Detector {i} is still armed. Disarming it now.")
                 if self.use_hdf_plugin:
@@ -1573,9 +1575,9 @@ class ptyco_main_control(QMainWindow):
         self.isfly = False
 
         if len(self.parameters.logfilename)>0:
-            if self.isStruckCountNeeded:
+            if self.detector[2] is not None:
                 # save struck data.
-                r = struck.read_mcs(STRUCK_CHANNELS)
+                r = self.detector[2].read_mcs(STRUCK_CHANNELS)
                 pos = np.arange(len(r[0]))
                 self.mpos = pos
                 print("Number of MCS channels : ", len(r))
@@ -1814,8 +1816,8 @@ class ptyco_main_control(QMainWindow):
         else:
             self.switch_SGstream(False)
 
-        if self.isStruckCountNeeded:
-            struck.mcs_init()
+        if self.detector[2] is not None:
+            self.detector[2].mcs_init()
             self.isMCS_ready = False
 
         self.write_motor_scan_range()
@@ -2040,8 +2042,8 @@ class ptyco_main_control(QMainWindow):
         else:
             self.switch_SGstream(False)
 
-        if self.isStruckCountNeeded:
-            struck.mcs_init()
+        if self.detector[2] is not None:
+            self.detector[2].mcs_init()
             self.isMCS_ready = False
 
         self.write_motor_scan_range()
@@ -2147,8 +2149,8 @@ class ptyco_main_control(QMainWindow):
     def fly(self, motornumber=-1):
         self.get_detectors_ready()
         self.update_scanname()
-        if self.isStruckCountNeeded:
-            struck.mcs_init()
+        if self.detector[2] is not None:
+            self.detector[2].mcs_init()
             self.isMCS_ready = False
 
         self.write_motor_scan_range()
@@ -2540,8 +2542,8 @@ class ptyco_main_control(QMainWindow):
         self.get_detectors_ready()
 #        self.switch_SGstream(False)
 
-        if self.isStruckCountNeeded:
-            struck.mcs_init()
+        if self.detector[2] is not None:
+            self.detector[2].mcs_init()
             self.isMCS_ready = False
 
         self.write_motor_scan_range()
@@ -2743,7 +2745,7 @@ class ptyco_main_control(QMainWindow):
                     try:
                         #det.fly_ready(expt, len(pos))
                         det.step_ready(expt, len(pos), pulsespershot = self.parameters._pulses_per_step, fn=self.hdf_plugin_name[detN])  # Arm detector for multiple data.
-    #                            print("det is ready.")
+                        print("det is ready.")
                     except TimeoutError:
                         self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
                         print(self.recent_error_msg)
@@ -3512,9 +3514,9 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append('#H')
         if self.isStruckCountNeeded:
             scaninfo.append(self.Xaxis)
-            scaninfo.append(struck.scaler.NM2)
-            scaninfo.append(struck.scaler.NM3)
-            scaninfo.append(struck.scaler.NM4)
+            scaninfo.append(self.detector[2].scaler.NM2)
+            scaninfo.append(self.detector[2].scaler.NM3)
+            scaninfo.append(self.detector[2].scaler.NM4)
         else:
             scaninfo.append(self.Xaxis)
             scaninfo.append('QDS1')
@@ -3545,10 +3547,10 @@ class ptyco_main_control(QMainWindow):
             if self.isStruckCountNeeded:
                 #struck.mcs_init()
                 if not self.isMCS_ready:
-                    struck.mcs_ready(self.pts.hexapod.pulse_number, self.pts.hexapod.pulse_number*period+10)
+                    self.detector[2].mcs_ready(self.pts.hexapod.pulse_number, self.pts.hexapod.pulse_number*period+10)
                     self.isMCS_ready = True
                     print(self.pts.hexapod.pulse_number, " MCS Ncouts updated.")
-                struck.arm_mcs()
+                self.detector[2].arm_mcs()
             else:
                 pass
         # set the delay generator
@@ -3602,14 +3604,14 @@ class ptyco_main_control(QMainWindow):
         if self.isStruckCountNeeded:
             isdone = False
             while not isdone:
-                if struck.Armed:
+                if self.detector[2].Armed:
                     isdone = False
                 else:
                     isdone = True
                 time.sleep(0.1)
                 msg = ""
                 timeelapsed = time.time()-t0
-                progress_fraction = float(struck.CurrentChannel)/float(struck.NuseAll)
+                progress_fraction = float(self.detector[2].CurrentChannel)/float(self.detector[2].NuseAll)
                 if progress_fraction==0:
                     progress_fraction=0.0001
                 if update_progress:
@@ -3635,7 +3637,7 @@ class ptyco_main_control(QMainWindow):
                 if update_status:
                     update_status(msg)
         if self.isStruckCountNeeded:
-            struck.stop()
+            self.detector[2].stop()
         else:
             pass
 
@@ -3686,9 +3688,9 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append('#H')
         if self.isStruckCountNeeded:
             scaninfo.append(self.motornames[motornumber])
-            scaninfo.append(struck.scaler.NM2)
-            scaninfo.append(struck.scaler.NM3)
-            scaninfo.append(struck.scaler.NM4)
+            scaninfo.append(self.detector[2].scaler.NM2)
+            scaninfo.append(self.detector[2].scaler.NM3)
+            scaninfo.append(self.detector[2].scaler.NM4)
         else:
             scaninfo.append(self.motornames[motornumber])
             scaninfo.append('QDS1')
@@ -4387,9 +4389,9 @@ class ptyco_main_control(QMainWindow):
             
             if len(self.plotlabels) == 0:
                 if self.isStruckCountNeeded:
-                    yl = struck.scaler.NM2
-                    yl2 = struck.scaler.NM3
-                    yl3 = struck.scaler.NM4
+                    yl = self.detector[2].scaler.NM2
+                    yl2 = self.detector[2].scaler.NM3
+                    yl3 = self.detector[2].scaler.NM4
                 else:
                     yl = 'X position (um)'
                     yl2 = 'Z position (um)'

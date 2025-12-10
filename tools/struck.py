@@ -8,12 +8,12 @@ class struck(Struck):
 	def __init__(self, prefix='12idc:'):
 		Struck.__init__(self, prefix+'3820:', scaler='%sscaler1' % prefix, nchan=12)
 		self.basepath = "/net/micdata/data2/"
-		self.add_pv('%sAcquireMode' % prefix, attr = 'AcquireMode')
-		self.add_pv('%sInputMode' % prefix, attr = 'InputMode')
-		self.add_pv('%sOutputMode' % prefix, attr = 'OutputMode')
-		self.add_pv('%sOutputPolarity' % prefix, attr = 'OutputPolarity')
-		self.add_pv('%sReadAll.SCAN' % prefix, attr = 'SCAN')
-		self.add_pv('%sSoftwareChannelAdvance' % prefix, attr = 'SoftwareChannelAdvance')
+		# self.add_pv('%sAcquireMode' % prefix, attr = 'AcquireMode')
+		# self.add_pv('%sInputMode' % prefix, attr = 'InputMode')
+		# self.add_pv('%sOutputMode' % prefix, attr = 'OutputMode')
+		# self.add_pv('%sOutputPolarity' % prefix, attr = 'OutputPolarity')
+		# self.add_pv('%sReadAll.SCAN' % prefix, attr = 'SCAN')
+		# self.add_pv('%sSoftwareChannelAdvance' % prefix, attr = 'SoftwareChannelAdvance')
 	@property
 	def Armed(self):
 		return self.Acquiring
@@ -62,18 +62,19 @@ class struck(Struck):
 		return valarr
 		
 	def mcs_ready(self, imagN, TotalMeasurementTime):
-		mcs_init()
+		self.mcs_init()
 		self.NuseAll = imagN
 		self.CountOnStart = 1
 		self.PresetReal = TotalMeasurementTime
 
 	def Arm(self):
 		self.start()
+		print("struck started.")
 
 	def Stop(self):
 		self.stop()
 
-	def mcs_getready(self):
+	def mcscounter_getready(self):
 		self.scaler.TP = 0.001
 		self.scaler.CNT = 1
 		time.sleep(0.01)
@@ -83,7 +84,7 @@ class struck(Struck):
 		self.stop()
 		self.ChannelAdvance = 1
 		self.scaler.CONT = 0
-		self.SCAN = 2
+		#self.SCAN = 2
 		self.CountOnStart = 1
 		self.Channel1Source = 0
 		self.UserLED = 0
@@ -93,13 +94,13 @@ class struck(Struck):
 		self.OutputPolarity = 0
 		self.EraseAll = 1
 		self.StopAll = 1
-		if self.AcquireMode == "Scaler":
-			mcs_getready()
+		if self.PV('AcquireMode').get() == 1: # if scaler mode, then make counter ready
+			self.mcscounter_getready()
 		return 1
 
 	def arm_mcs(self):
 		self.start()
-		mcs_waitstarted()
+		self.mcs_waitstarted()
 		
 	def channelAdvance_mcs(self):
 		self.SoftwareChannelAdvance = 1
@@ -126,7 +127,7 @@ class struck(Struck):
 	def mcs_counter_count(self,expt):
 		self.scaler.CountTime(expt)
 		self.scaler.Count()
-		mcs_counter_waitstarted()
+		self.mcs_counter_waitstarted()
 		TIMEOUT = expt + 1.0
 		t_start = time.time()
 		while self.scaler.CNT:
@@ -145,13 +146,13 @@ class struck(Struck):
 		return 2
 		
 	def mcs_counter_ready(self,expt):
-		mcs_counter_init()
+		self.mcs_counter_init()
 		self.EraseAll = 1
 		self.scaler.TP = expt + 20
 
 	def arm_mcs_counter(self):
 		self.scaler.Count()
-		mcs_counter_waitstarted()
+		self.mcs_counter_waitstarted()
 		time.sleep(0.1)     
 		
 	def mcs_counter_wait(self,timeExp):
