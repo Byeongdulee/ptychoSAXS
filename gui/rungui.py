@@ -1162,14 +1162,15 @@ class ptyco_main_control(QMainWindow):
 #        print(self.pts.phi.vel, " This was vel value")
         self.pts.set_speed(self.pts.hexapod.axes[0], 5, None)
 
-    def scandone(self, update_scannumber=True):
+    def scandone(self, update_scannumber=True, donedone = True):
         # return to the initial positions
         for i, key in enumerate(self.motor_p0):
             # put only x motors and ymotors back to initial positions
             if i<2:
                 self.mv(key, self.motor_p0[key])
-        if self.shutter_close_after_scan:
-            self.shutterC.close()        
+        if donedone:
+            if self.shutter_close_after_scan:
+                self.shutterC.close()        
 
         print("scan done")
         self.isscan = False
@@ -3166,7 +3167,7 @@ class ptyco_main_control(QMainWindow):
                 msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {(i+1)/len(pos)*100}%.'
                 update_status(msg)
             
-            self.scandone(True)
+            self.scandone(True, False)
 
             # monitoring the station ready
             if self.monitor_beamline_status:
