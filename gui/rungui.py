@@ -2775,6 +2775,9 @@ class ptyco_main_control(QMainWindow):
                 break
             self.pts.mv(axis, value)
             print("Motor moved...")
+                        # if needed, wait between scans
+            time.sleep(self.parameters._waittime_between_scans)
+
             # if self.isStruckCountNeeded:
             #     struck.mcs_counter_count(expt)
             #     dg645_12ID.trigger()
@@ -2810,8 +2813,27 @@ class ptyco_main_control(QMainWindow):
                 dg645_12ID.trigger()
                 print("Trigger sent2")
             # Waiting for data collection done.
-            val = N_imgcollected
-            print("Acquire starated")
+            TIMEOUT = 10
+            t_start = time.time()
+            timeout_occurred = False
+            for ndet, det in enumerate(self.detector):
+                if ndet>1: 
+                    continue
+                if det is not None:
+                    while det.ArrayCounter_RBV < self.parameters._pulses_per_step*(i+1):
+                        time.sleep(0.02)
+                        if (time.time() - t_start) > TIMEOUT:
+                            timeout_occurred = True
+                            print(f"Timeout occurred for detector {det._prefix} after {TIMEOUT} seconds.")
+                            break
+                    if timeout_occurred:  
+                        print("Breaking out of detector loop due to timeout.") 
+                        break
+            if timeout_occurred:
+                print(f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish.")
+                self.recent_error_msg = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish."
+                return -1
+
             # Update progress bar and status message.
             timeelapsed = time.time()-t0
             prog = float(i+1)/float(len(pos))
@@ -2826,22 +2848,6 @@ class ptyco_main_control(QMainWindow):
             msg = "%s%s"%(msg1, msg2)
             if update_status:
                 update_status(msg)
-
-            # for ndet, det in enumerate(self.detector):
-            #     if ndet>1: 
-            #         continue
-            #     if det is not None:
-            #         while val == N_imgcollected:
-            #             val = det.ArrayCounter_RBV
-            #             time.sleep(0.1)
-            for ndet, det in enumerate(self.detector):
-                if ndet>1: 
-                    continue
-                if det is not None:
-                    while det.getCapture() == 1:
-                        time.sleep(0.02)
-            # image collection done.
-            N_imgcollected = val
 
             # # update all relevant data.
             # if self.isStruckCountNeeded:
@@ -2976,20 +2982,43 @@ class ptyco_main_control(QMainWindow):
                     pos_status = self.pts.hexapod.handle_error()
                     print("Hexapod error is fixed....")
 
-            if self.parameters._pulses_per_step>1:
-                for detN, det in enumerate(self.detector):
-                    if det is not None:
+
+            TIMEOUT = 10               
+            t_start = time.time()
+            timeout_occurred = False
+            for detN, det in enumerate(self.detector):
+                if det is not None:
+                    if self.parameters._pulses_per_step>1:
                         while det.Armed == 0 or det.getCapture() == 0:
                             det.StartCapture()
                             time.sleep(0.1)
-                            print("Start capture ....")
+                            if (time.time() - t_start) > TIMEOUT:
+                                timeout_occurred = True
+                                print(f"Timeout occurred for detector {det._prefix} after {TIMEOUT} seconds.")
+                                break
+                    else:
+                        while det.Armed == 0:
+                            det.Arm()
+                            time.sleep(0.1)
+                            if (time.time() - t_start) > TIMEOUT:
+                                timeout_occurred = True
+                                print(f"Timeout occurred for detector {det._prefix} after {TIMEOUT} seconds.")
+                                break
+                        if timeout_occurred:  
+                            print("Breaking out of detector loop due to timeout.") 
+                            break
+            if timeout_occurred:
+                print(f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish.")
+                self.recent_error_msg = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish."
+                return -1
+            
                 #while struck.strk.scaler.CNT:
                 #    time.sleep(0.01)
 
                     #while struck.strk.scaler.CNT:
                     #    time.sleep(0.01)
 
-            # make sure detectors are ready for taking triggers.                
+            # make sure detectors are ready for taking triggers. 
             if det is not None:
                 if self.parameters._pulses_per_step>1:
                     while det.Armed == 0 or det.getCapture() == 0:
@@ -3006,7 +3035,10 @@ class ptyco_main_control(QMainWindow):
             print(f"Trigger sent out for {i}th point..........................\r")
 
             # waiting for data collection done.
-            TIMEOUT = expt + 3
+            if self.parameters._pulses_per_step > 1.5:
+                TIMEOUT = (expt+0.03) * self.parameters._pulses_per_step + 10
+            else:
+                TIMEOUT = expt + 3
             t_start = time.time()
             timeout_occurred = False
             for ndet, det in enumerate(self.detector):
