@@ -6,9 +6,9 @@
 # mv X 0.076894 Z -4.682002 phi 0
 # setrange axis phi L -49 R 59 N 2 t 2
 # stepscan3d xmotor 0 ymotor 2 phimotor 6
-mv X 0.076894 Z -4.682002 phi 0
-setrange axis phi L -49.5 R 59.5 N 2 t 2
-stepscan3d xmotor 0 ymotor 2 phimotor 6
+# mv X 0.076894 Z -4.682002 phi 0
+# setrange axis phi L -49.5 R 59.5 N 2 t 2
+# stepscan3d xmotor 0 ymotor 2 phimotor 6
 mv X 0.076894 Z -4.682002 phi 0
 setrange axis phi L -48.5 R 58.5 N 2 t 2
 stepscan3d xmotor 0 ymotor 2 phimotor 6
