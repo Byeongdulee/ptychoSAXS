@@ -4621,7 +4621,8 @@ class ptyco_main_control(QMainWindow):
                     self.ui.cb_reversescandir.setChecked(False)
             except:
                 pass
-
+        elif cmd == "shclose":
+            self.shutterC.close()
         elif cmd == "setfolder":
             self.parameters.working_folder = folder
             self.update_workingfolder(self.parameters.working_folder)
