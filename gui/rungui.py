@@ -1235,7 +1235,8 @@ class ptyco_main_control(QMainWindow):
         # when the measurement is all done, update the scan number.
         if update_scannumber:
             self.run_stop_issued()
-        self.update_status_scan_time()
+        if donedone:
+            self.update_status_scan_time()
 
     def set_det_alignmode(self, value=None):
         if value is None:
@@ -1552,7 +1553,7 @@ class ptyco_main_control(QMainWindow):
                 strv = "%0.5e   %0.5e   %0.5e   %0.5e"%(hpos["X"][0][i],hpos["X"][1][i],hpos["Z"][0][i],hpos["Z"][1][i])
                 f.write("%i    %s\n"%(i, strv))
 
-    def flydone(self, return_motor=True, reset_scannumber=True):
+    def flydone(self, return_motor=True, reset_scannumber=True, donedone=True):
         print(return_motor, " Returning motors?")
         if return_motor:
             # when 1D scan is done.
@@ -1687,7 +1688,8 @@ class ptyco_main_control(QMainWindow):
         if len(self.motor_p0.keys()) ==1: # 1d fly
             self.updateprogressbar(100)
         print(f"Elapsed time to finish flydone = {time.time()-ct0}")
-        self.update_status_scan_time()
+        if donedone:
+            self.update_status_scan_time()
 
     def flydone2d(self, value=0):
         for key in self.motor_p0:
@@ -2812,10 +2814,10 @@ class ptyco_main_control(QMainWindow):
                 if det is not None:
                     if self.parameters._pulses_per_step>1:
                         while det.Armed == 0 or det.getCapture() == 0:
-                            time.sleep(0.1)
+                            time.sleep(0.02)
                     else:
                         while det.Armed == 0:
-                            time.sleep(0.1)
+                            time.sleep(0.02)
             if isDET_selected:
                 #struck.arm_mcs_counter()
                 #struck.mcs_counter_waitstarted()
@@ -3031,10 +3033,10 @@ class ptyco_main_control(QMainWindow):
             if det is not None:
                 if self.parameters._pulses_per_step>1:
                     while det.Armed == 0 or det.getCapture() == 0:
-                        time.sleep(0.1)
+                        time.sleep(0.02)
                 else:
                     while det.Armed == 0:
-                        time.sleep(0.1)
+                        time.sleep(0.02)
 
             # if needed, wait between scans
             time.sleep(self.parameters._waittime_between_scans)
@@ -3250,7 +3252,7 @@ class ptyco_main_control(QMainWindow):
                 msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {(i+1)/len(pos)*100}%.'
                 update_status(msg)
             
-            self.flydone(False, reset_scannumber=True)
+            self.flydone(False, reset_scannumber=True, donedone=False)
 
             # monitoring the station ready
             if self.monitor_beamline_status:
