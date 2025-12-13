@@ -1354,7 +1354,7 @@ class ptyco_main_control(QMainWindow):
             if self.ui.actionCapture_multi_frames.isChecked():
                 self.hdf_plugin_savemode = 2
             # When this is on, it will automatically turn on MCS.
-            self.switch_MCS(True)
+#            self.switch_MCS(True)
         else:
             self.ui.actionSG.setChecked(False)
             self.detector[3] = None
@@ -1575,45 +1575,45 @@ class ptyco_main_control(QMainWindow):
         self.isscan = False
         self.isfly = False
 
-        if len(self.parameters.logfilename)>0:
-            if self.detector[2] is not None:
-                # save struck data.
-                r = self.detector[2].read_mcs(STRUCK_CHANNELS)
-                pos = np.arange(len(r[0]))
-                self.mpos = pos
-                print("Number of MCS channels : ", len(r))
-            else:
-                # save qds data.
-                pos = np.asarray(self.mpos)
-                r = np.asarray(self.rpos)
-            try:
-                self.save_nparray(self.parameters.logfilename, pos,r,[0,1,2],"a")
-            except:
-                self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
-            # hexapod read
-            if self.is_hexrecord_required:
-                self.save_hexapod_record(self.parameters.logfilename)
+        # if len(self.parameters.logfilename)>0:
+        #     if self.detector[2] is not None:
+        #         # save struck data.
+        #         r = self.detector[2].read_mcs(STRUCK_CHANNELS)
+        #         pos = np.arange(len(r[0]))
+        #         self.mpos = pos
+        #         print("Number of MCS channels : ", len(r))
+        #     else:
+        #         # save qds data.
+        #         pos = np.asarray(self.mpos)
+        #         r = np.asarray(self.rpos)
+        #     try:
+        #         self.save_nparray(self.parameters.logfilename, pos,r,[0,1,2],"a")
+        #     except:
+        #         self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
+        #     # hexapod read
+        #     if self.is_hexrecord_required:
+        #         self.save_hexapod_record(self.parameters.logfilename)
 
-            scaninfo = []
-            scaninfo.append('#D')
-            scaninfo.append(time.ctime())
-            self.write_scaninfo_to_logfile(scaninfo)
-        success=False
+        #     scaninfo = []
+        #     scaninfo.append('#D')
+        #     scaninfo.append(time.ctime())
+        #     self.write_scaninfo_to_logfile(scaninfo)
+        # success=False
 
-#        if self.is_ptychomode:
-        try:
-            s12softglue.flush()
-            #time.sleep(0.1)
-        except:
-            self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
-            print(self.recent_error_msg) 
-        if not self.ui.actionSG.isChecked(): # SG streammode is not on.
-            try:
-                self.save_softglue()
-                success = True
-            except:
-                pass
-        print(f"Elapsed time to save softglue data since flydone = {time.time()-ct0}")
+# #        if self.is_ptychomode:
+#         try:
+#             s12softglue.flush()
+#             #time.sleep(0.1)
+#         except:
+#             self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
+#             print(self.recent_error_msg) 
+#         if not self.ui.actionSG.isChecked(): # SG streammode is not on.
+#             try:
+#                 self.save_softglue()
+#                 success = True
+#             except:
+#                 pass
+#         print(f"Elapsed time to save softglue data since flydone = {time.time()-ct0}")
 
         # if read softglue failed...
         scaninfo = []
@@ -1624,13 +1624,22 @@ class ptyco_main_control(QMainWindow):
         filename = "%s%0.3i"%(txt,self.parameters.scan_number)
         scaninfo.append(filename)
 
-        for det in self.detector:
+        for i, det in enumerate(self.detector):
             if det is not None:
                 if 'SG' in det._prefix:
                     s12softglue.flush()
+                    #time.sleep(5)
                     det.ForceStop()
                     success = True
-                fn = ""
+                if '3820' in det._prefix:
+                    det.stop()
+                    self.rpos = det.read_mcs(STRUCK_CHANNELS)
+                    continue
+                if 'XSP3' in det._prefix:
+                    det.Acquire = 0
+                if det.Armed == 1:
+                    print(f"Detector {i} is still armed. Disarming it now.")
+                    fn = ""
                 if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):# capture mode
                     while det.fileGet('WriteFile_RBV'): # still saving?
                         time.sleep(0.01)
@@ -1640,7 +1649,7 @@ class ptyco_main_control(QMainWindow):
                     if reset_scannumber:
                         det.filePut('FileNumber', 1)
                 else:
-                    if 'SG' not in det._prefix:
+                    if 'cam' in det._prefix:
                         fnum = det.FileNumber_RBV
                         fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
                         if reset_scannumber:
@@ -1817,9 +1826,9 @@ class ptyco_main_control(QMainWindow):
         else:
             self.switch_SGstream(False)
 
+        self.isMCS_ready = False
         if self.detector[2] is not None:
             self.detector[2].mcs_init()
-            self.isMCS_ready = False
 
         self.write_motor_scan_range()
         self.isStopScanIssued = False
@@ -2042,10 +2051,10 @@ class ptyco_main_control(QMainWindow):
             self.switch_SGstream(True)
         else:
             self.switch_SGstream(False)
+        self.isMCS_ready = False
 
         if self.detector[2] is not None:
             self.detector[2].mcs_init()
-            self.isMCS_ready = False
 
         self.write_motor_scan_range()
         self.isStopScanIssued = False
@@ -2150,9 +2159,9 @@ class ptyco_main_control(QMainWindow):
     def fly(self, motornumber=-1):
         self.get_detectors_ready()
         self.update_scanname()
+        self.isMCS_ready = False
         if self.detector[2] is not None:
             self.detector[2].mcs_init()
-            self.isMCS_ready = False
 
         self.write_motor_scan_range()
         self.isStopScanIssued = False
@@ -2542,10 +2551,9 @@ class ptyco_main_control(QMainWindow):
                 
         self.get_detectors_ready()
 #        self.switch_SGstream(False)
-
+        self.isMCS_ready = False
         if self.detector[2] is not None:
             self.detector[2].mcs_init()
-            self.isMCS_ready = False
 
         self.write_motor_scan_range()
         self.isStopScanIssued = False
@@ -3547,9 +3555,15 @@ class ptyco_main_control(QMainWindow):
         scaninfo.append('#H')
         if self.isStruckCountNeeded:
             scaninfo.append(self.Xaxis)
-            scaninfo.append(self.detector[2].scaler.NM2)
-            scaninfo.append(self.detector[2].scaler.NM3)
-            scaninfo.append(self.detector[2].scaler.NM4)
+            print(self.isStruckCountNeeded, " Struck count needed")
+            try:
+                scaninfo.append(self.detector[2].scaler.NM2)
+                scaninfo.append(self.detector[2].scaler.NM3)
+                scaninfo.append(self.detector[2].scaler.NM4)
+            except:
+                scaninfo.append('QDS1')
+                scaninfo.append('QDS2')
+                scaninfo.append('QDS3')
         else:
             scaninfo.append(self.Xaxis)
             scaninfo.append('QDS1')
@@ -3611,10 +3625,13 @@ class ptyco_main_control(QMainWindow):
             return
         
         # Scan start ............................
-        #print("Time to finish line 2182: %0.3f" % (time.time()-t0))
+        print("Time to finish line 2182: %0.3f" % (time.time()-t0))
         axes = [self.Xaxis, self.Yaxis]
+        print(axes)
         self.pts.hexapod.goto_start_pos(axes) # took 0.4 second
-        #print("Time to finish line 2184: %0.3f" % (time.time()-t0))
+        print("Time to finish line 2184: %0.3f" % (time.time()-t0))
+        print(self.pts.hexapod.pulse_number_per_line, " pulses per line")
+        print(self.pts.hexapod.number_of_lines, " number of lines")
         for det in self.detector:
             if det is not None:
                 try:
@@ -3627,7 +3644,7 @@ class ptyco_main_control(QMainWindow):
                     self.ui.statusbar.showMessage(self.recent_error_msg)
                     #showerror("Detector timeout.")
                     return
-#                print("Ready for traj")
+        print("Ready for traj")
 
         if not isTestRun:
             self.pts.hexapod.run_traj(axes)

@@ -52,7 +52,9 @@ class pilatus(AD_Pilatus):
 		self.filePut('AutoSave', 1)
 		self.filePut('FileWriteMode', 1)
 
-	def fly_ready(self, expt, x_points, y_points=1, wait=False, period=0, isTest=False, capture=(True, 1), fn=""):
+	def fly_ready(self, expt, x_points, y_points=1, period=0, isTest=False, capture=(True, 1), wait=False, fn=""):
+		
+		print(x_points, y_points)
 		Npoints = x_points*y_points
 		self.SetExposureTime(expt)
 		if period>0:
@@ -71,8 +73,8 @@ class pilatus(AD_Pilatus):
 		#self.setFileNumber(1)
 		if not isTest:
 			if isHDFMode:
-				if capture[1]==2: # for SG is in streammode, save all images into a file.
-					self.SetMultiFrames(Npoints, Npoints)
+#				if capture[1]==2: # for SG is in streammode, save all images into a file.
+#					self.SetMultiFrames(Npoints, x_points)
 				try:
 					if capture[1]==0:
 						self.StartSingleFrame(fn)

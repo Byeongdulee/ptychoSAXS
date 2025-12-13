@@ -33,9 +33,9 @@ class struck(Struck):
 		self.mcs_ready(imagN, TotalMeasurementTime)
 		self.Arm()
 
-	def fly_ready(self, expt, Nstep, **kwargs):
-		TotalMeasurementTime = expt*Nstep + 10000
-		self.mcs_ready(Nstep, TotalMeasurementTime)
+	def fly_ready(self, expt, Nstep, y_points=1, period=0, isTest=False, capture=(True, 1), wait=False, fn=""):
+		TotalMeasurementTime = expt*Nstep*y_points + 10000
+		self.mcs_ready(Nstep*y_points, TotalMeasurementTime)
 		self.Arm()
 	
 	def read_mcs(self, ch):

@@ -104,8 +104,8 @@ class AD_Pilatus(Device):
         # number of images for collection and capture
         if n_cap==0:
             n_cap = n_trig
-        else:
-            n_trig = n_cap*n_trig
+        # else:
+        #     n_trig = n_cap*n_trig
         self.NumImages = n_trig
         # set filesaver
         self.filePut('NumCapture',    n_cap)
