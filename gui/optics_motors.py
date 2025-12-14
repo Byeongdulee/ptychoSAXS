@@ -46,7 +46,7 @@ class motor_control(QMainWindow):
         self.control["camera"]= camera()
         self.control["beamstop"]= beamstop()
         self.control["slit"] = slit()
-        self.control["slit_CRL"] = slit_CRL()
+        #self.control["slit_CRL"] = slit_CRL()
         self.motornames = []
         self.motorunits = []
         self.motorindices = []
@@ -81,11 +81,11 @@ class motor_control(QMainWindow):
             self.controller.append('slit')
             self.motorindices.append(i)
         
-        for i, m in enumerate(self.control["slit_CRL"].motors):
-            self.motornames.append(m.name)
-            self.motorunits.append(m.units)
-            self.controller.append('slit_CRL')
-            self.motorindices.append(i)
+        # for i, m in enumerate(self.control["slit_CRL"].motors):
+        #     self.motornames.append(m.name)
+        #     self.motorunits.append(m.units)
+        #     self.controller.append('slit_CRL')
+        #     self.motorindices.append(i)
 
         print(self.motornames)
         self.lock = Lock()
