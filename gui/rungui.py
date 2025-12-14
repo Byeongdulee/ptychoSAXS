@@ -70,6 +70,9 @@ from typing import List
 
 from threading import Lock
 
+import requests
+status_url = "https://12idb.xray.aps.anl.gov/PVapp/ptycho_status"
+
 HEXAPOD_FLYMODE_WAVELET = 0
 HEXAPOD_FLYMODE_STANDARD = 1
 FRACTION_EXPOSURE_PERIOD = 0.2
@@ -268,7 +271,8 @@ class ptyco_main_control(QMainWindow):
 
         #self.beamstatus = beamstatus()
         self.ui = uic.loadUi(guiName)
-        self.recent_error_msg = ''
+        self.messages = {}
+        self.messages["recent error message"] = ''
         self.isOK2run = True
         self.is_softglue_savingdone = True
         self.monitor_beamline_status = True
@@ -551,6 +555,11 @@ class ptyco_main_control(QMainWindow):
             self.timer = QTimer()
             self.timer.timeout.connect(self.update_qds)
             self.timer.start(100)        
+
+        if os.name == 'nt':
+            self.timer_update = QTimer()
+            self.timer_update.timeout.connect(self.update_status)
+            self.timer_update.start(10_000)        
         self.ui.show()
         #self.resized.connect(self.resizeFunction)
 
@@ -1172,7 +1181,8 @@ class ptyco_main_control(QMainWindow):
             if self.shutter_close_after_scan:
                 self.shutterC.close()        
 
-        print("scan done")
+        self.messages["current status"] = f"stepscan done. {time.ctime()}"
+        print(self.messages["current status"])
         self.isscan = False
         self.updatepos()
         #self.plot()
@@ -1240,6 +1250,11 @@ class ptyco_main_control(QMainWindow):
             self.run_stop_issued()
         if donedone:
             self.update_status_scan_time()
+
+    def update_status(self):
+        msg= json.dumps(self.messages)
+        status = {'status': msg}
+        res = requests.post(status_url, json=status)
 
     def set_det_alignmode(self, value=None):
         if value is None:
@@ -1417,8 +1432,8 @@ class ptyco_main_control(QMainWindow):
                     filename = "%s" % rstrip_from_char(filename, "_")
                 
         if len(filename) ==0:
-            self.recent_error_msg = "****** Detector ioc is not available."
-            print(self.recent_error_msg)
+            self.messages["recent error message"] = "****** Detector ioc is not available."
+            print(self.messages["recent error message"])
             filename = "temp%i"%int(time.time())
         return (foldername, filename)
     
@@ -1567,7 +1582,8 @@ class ptyco_main_control(QMainWindow):
                     self.setphivel_default()
                 self.mv(key, self.motor_p0[key])
 
-        print("fly done.......")
+        self.messages["current status"] = f"fly done. {time.ctime()}"
+        print(self.messages["current status"])
         if self.shutter_close_after_scan:
             self.shutterC.close()        
         ct0 = time.time()
@@ -1609,8 +1625,8 @@ class ptyco_main_control(QMainWindow):
 #             s12softglue.flush()
 #             #time.sleep(0.1)
 #         except:
-#             self.recent_error_msg = "The softglue flush failed, it will be flushed again....."
-#             print(self.recent_error_msg) 
+#             self.messages["recent error message"] = "The softglue flush failed, it will be flushed again....."
+#             print(self.messages["recent error message"]) 
 #         if not self.ui.actionSG.isChecked(): # SG streammode is not on.
 #             try:
 #                 self.save_softglue()
@@ -1676,8 +1692,8 @@ class ptyco_main_control(QMainWindow):
                 filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
                 
                 if len(filename) ==0:
-                    self.recent_error_msg = "****** Error: detector ioc does not response."
-                    print(self.recent_error_msg)
+                    self.messages["recent error message"] = "****** Error: detector ioc does not response."
+                    print(self.messages["recent error message"])
                     filename = "temp%i"%int(time.time())
                 
                 filename = f"{filename}.dat"
@@ -1698,7 +1714,8 @@ class ptyco_main_control(QMainWindow):
         for key in self.motor_p0:
             self.mv(key, self.motor_p0[key])
 #            self.ui.findChild(QLineEdit, "ed_%i"%n).setText("%0.4f"%self.motor_p0[m])
-        print("2D fly done.......")
+        self.messages["current status"] = f"2D fly done. {time.ctime()}"
+        print(self.messages["current status"])
         isTestRun = self.ui.actionTestFly.isChecked()
         if isTestRun:
             return
@@ -1718,7 +1735,8 @@ class ptyco_main_control(QMainWindow):
         for key in self.motor_p0:
             self.mv(key, self.motor_p0[key])        
         print("")
-        print("3D fly done.......")
+        self.messages["current status"] = f"3D fly done. {time.ctime()}"
+        print(self.messages["current status"])
         isTestRun = self.ui.actionTestFly.isChecked()
         if isTestRun:
             return
@@ -2761,9 +2779,9 @@ class ptyco_main_control(QMainWindow):
                         det.step_ready(expt, len(pos), pulsespershot = self.parameters._pulses_per_step, fn=self.hdf_plugin_name[detN])  # Arm detector for multiple data.
                         print("det is ready.")
                     except TimeoutError:
-                        self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
-                        print(self.recent_error_msg)
-                        self.ui.statusbar.showMessage(self.recent_error_msg)
+                        self.messages["recent error message"] = f"Detector, {det._prefix}, hasnt started yet. Fly scan own start."
+                        print(self.messages["recent error message"])
+                        self.ui.statusbar.showMessage(self.messages["recent error message"])
                         #showerror("Detector timeout.")
                         return
         # each time it will send a pulse
@@ -2845,7 +2863,7 @@ class ptyco_main_control(QMainWindow):
                         break
             if timeout_occurred:
                 print(f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish.")
-                self.recent_error_msg = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish."
+                self.messages["recent error message"] = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to finish."
                 return -1
 
             # Update progress bar and status message.
@@ -3043,8 +3061,14 @@ class ptyco_main_control(QMainWindow):
         # make sure detectors get armed.                
         self.get_detectors_armed()
 
+        self.messages["recent error message"] = ""
+        self.messages["current status"] = ""
+        self.messages["progress"] = ""
+
         print("Starting 2D step scan now...........................")
         for i, value in enumerate(pos):
+            # prepare for status update
+
             if self.isStopScanIssued:
                 break
 #            print(pos[i,0], pos[i,1], " Moving to this position...............")
@@ -3054,16 +3078,19 @@ class ptyco_main_control(QMainWindow):
                 pos_status = self.pts.hexapod.mv(xaxis, pos[i,0], yaxis, pos[i,1], wait=True)
                 #print(pos_status, " Hexapod move status")
                 if not pos_status:
-                    print("Hexapod move failed, trying to handle the error...")
+                    self.messages["recent error message"] = f"Hexapod move failed, trying to handle the error... {time.ctime()}"
+                    print(self.messages["recent error message"])
                     pos_status = self.pts.hexapod.handle_error()
-                    print("Hexapod error is fixed....")
+                    self.messages["current status"] = f"Hexapod error is fixed.... {time.ctime()}"
+                    #update_status(self.currnt_status_msg)
+                    print(self.messages["current status"])
 
             time.sleep(self.parameters._waittime_between_scans)
 
             timeout_occurred, TIMEOUT = self.is_arming_detecotors_timedout()
             if timeout_occurred:
-                print(f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to be Armed.")
-                self.recent_error_msg = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to be Armed."
+                self.messages["recent error message"] = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to be Armed. {time.ctime()}"
+                print(self.messages["recent error message"])
                 return -1
             
 
@@ -3080,14 +3107,15 @@ class ptyco_main_control(QMainWindow):
 
             # trigger the detector.
             dg645_12ID.trigger()
-            print(f"Trigger sent out for {i}th point..........................\r")
+            self.messages["current status"] = f"Trigger sent out for {i}th point.......................... {time.ctime()}\r"
+            print(self.messages["current status"])
 
             # waiting for data collection done.
             timeout_occurred, TIMEOUT = self.is_waiting_detectors_timedout(expt, i)
 
             if timeout_occurred:
-                print(f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to collect data.")
-                self.recent_error_msg = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to collect data."
+                self.messages["recent error message"] = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to collect data. {time.ctime()}"
+                print(self.messages["recent error message"])
                 return -1
 
             timeelapsed = time.time()-t0
@@ -3116,10 +3144,9 @@ class ptyco_main_control(QMainWindow):
                     remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
                     msg1 = f'Updated at {time.ctime()} : {int(timeelapsed)}s since the start.'
                     msg2 = f"; Remaining time for the current 2D scan is {remtime}s, or {time.ctime(time.time()+remtime)}\n"
-                msg = "%s%s"%(msg1, msg2)
-
+                self.messages["progress"] = "%s%s"%(msg1, msg2)
             if update_status:
-                update_status(msg)
+                update_status(self.messages["progress"])
 
         #self.run_stop_issued()
         return 1
@@ -3279,17 +3306,17 @@ class ptyco_main_control(QMainWindow):
         ct0 = time.time()
         while self.isOK2run is not True:
             time.sleep(10)
-            msg = f'Beam has been down for {int((time.time()-ct0)/60)} minutes.'
-            update_status(msg)
+            self.messages["current status"] = f'Beam has been down for {int((time.time()-ct0)/60)} minutes. {time.ctime()}'
+            update_status(self.messages["current status"])
             if self.isStopScanIssued:
                 break
         # Need some action after shutter back up
         self.shutter.put(1)
-        msg = f'Beam just came back. A-shutter open command was sent and run will resume in 5mins.'
-        update_status(msg)
+        self.messages["current status"] = f'Beam just came back. A-shutter open command was sent and run will resume in 10mins. {time.ctime()}'
+        update_status(self.messages["current status"])
         time.sleep(60)
         self.shutter.put(1)
-        time.sleep(60*4)
+        time.sleep(60*9)
         scaninfo = []
         scaninfo.append('\n')
         scaninfo.append('#Note: Shutter has been closed for %i mins'%int((time.time()-ct0)/60))
@@ -3388,8 +3415,8 @@ class ptyco_main_control(QMainWindow):
                     isreshreshed = self.refresh_detectors()
                 if isreshreshed == 0:
                     print("Detector refresh failed. Stopping scan.")
-                    msg1 = f'Detector refresh failed. Stopping scan.'
-                    update_status(msg1)
+                    self.messages["current status"] = f'Detector refresh failed. Stopping scan. {time.ctime()}'
+                    update_status(self.messages["current status"])
                     break
             if isreshreshed == 0:
                 return -1
@@ -3421,9 +3448,9 @@ class ptyco_main_control(QMainWindow):
                     remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
                     msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
                     msg2 = f"; Remaining time for the current 2D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
-                msg = "%s%s"%(msg1, msg2)
+                self.messages["current status"] = "%s%s"%(msg1, msg2)
             if update_status:
-                update_status(msg)
+                update_status(self.messages["current status"])
 
         self.run_stop_issued()
         return 1
@@ -3548,8 +3575,8 @@ class ptyco_main_control(QMainWindow):
                 if s12softglue.isConnected:
                     s12softglue.memory_clear()
             except TimeoutError:
-                self.recent_error_msg = "softglue memory_clear timeout"
-                print(self.recent_error_msg)
+                self.messages["recent error message"] = "softglue memory_clear timeout"
+                print(self.messages["recent error message"])
 
 
         isTestRun = self.ui.actionTestFly.isChecked()
@@ -3594,15 +3621,15 @@ class ptyco_main_control(QMainWindow):
             raise RuntimeError("expouretime is too short to readout DET images.")
 
         if expt <= 0:
-            self.recent_error_msg = f"Note that after subtracting the detector readout time {self.det_readout_time:.3e} s, the exposure time becomes equal or less than 0."
-            print(self.recent_error_msg)
+            self.messages["recent error message"] = f"Note that after subtracting the detector readout time {self.det_readout_time:.3e} s, the exposure time becomes equal or less than 0."
+            print(self.messages["recent error message"])
 #                    print("******* Cannot run.")
-            raise DET_MIN_READOUT_Error(self.recent_error_msg)
+            raise DET_MIN_READOUT_Error(self.messages["recent error message"])
         if abs(period-expt) <= 0.033:
-            self.recent_error_msg = f"Note that Max speed of Pilatus2M is 30Hz."
-            print(self.recent_error_msg)
+            self.messages["recent error message"] = f"Note that Max speed of Pilatus2M is 30Hz."
+            print(self.messages["recent error message"])
 #                    print("******* Cannot run.")
-            raise DET_OVER_READOUT_SPEED_Error(self.recent_error_msg)
+            raise DET_OVER_READOUT_SPEED_Error(self.messages["recent error message"])
 
         if not isTestRun:
             if self.isStruckCountNeeded:
@@ -3632,8 +3659,8 @@ class ptyco_main_control(QMainWindow):
                 self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
                 print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a shot.")
                 #if N_counts>100000: # No need to check for SNAKE
-                #    self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
-                #    raise SOFTGLUE_Setup_Error(self.recent_error_msg)
+                #    self.messages["recent error message"] = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                #    raise SOFTGLUE_Setup_Error(self.messages["recent error message"])
 
         if isTestRun:
             return
@@ -3653,9 +3680,9 @@ class ptyco_main_control(QMainWindow):
                                     isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
         #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
                 except TimeoutError:
-                    self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
-                    print(self.recent_error_msg)
-                    self.ui.statusbar.showMessage(self.recent_error_msg)
+                    self.messages["recent error message"] = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
+                    print(self.messages["recent error message"])
+                    self.ui.statusbar.showMessage(self.messages["recent error message"])
                     #showerror("Detector timeout.")
                     return
         print("Ready for traj")
@@ -3697,9 +3724,9 @@ class ptyco_main_control(QMainWindow):
                         msg1 = f'Updated at {time.ctime()} : {int(timeelapsed)}s since the start.'
                         msg2 = f"; Remaining time for the current 2D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
 
-                    msg = "%s%s"%(msg1, msg2)
+                    self.messages["current status"] = "%s%s"%(msg1, msg2)
                 if update_status:
-                    update_status(msg)
+                    update_status(self.messages["current status"])
         if self.isStruckCountNeeded:
             self.detector[2].stop()
         else:
@@ -3729,8 +3756,8 @@ class ptyco_main_control(QMainWindow):
                 if s12softglue.isConnected:
                     s12softglue.memory_clear()
             except TimeoutError:
-                self.recent_error_msg = "softglue memory_clear timeout"
-                print(self.recent_error_msg)
+                self.messages["recent error message"] = "softglue memory_clear timeout"
+                print(self.messages["recent error message"])
 
         print("")
         isTestRun = self.ui.actionTestFly.isChecked()
@@ -3798,11 +3825,11 @@ class ptyco_main_control(QMainWindow):
                     print(f"{self.pts.hexapod.pulse_number} images will be collected every {period}s with exposure time of {expt}s.")
                 
                 if period-expt < DETECTOR_READOUTTIME:
-                    self.recent_error_msg = (
+                    self.messages["recent error message"] = (
                         f"Exposure time {expt:.4f} and period {period:.4f} requires the readout time {period-expt}, which is too short."
                     )
-                    print(self.recent_error_msg)
-                    self.ui.statusbar.showMessage(self.recent_error_msg)
+                    print(self.messages["recent error message"])
+                    self.ui.statusbar.showMessage(self.messages["recent error message"])
                     # dlg = QMessageBox(self)
                     # dlg.setWindowTitle("Scanparameter Error")
                     # dlg.setText(msg)
@@ -3816,16 +3843,16 @@ class ptyco_main_control(QMainWindow):
                     #raise RuntimeError("Not enough time left for reading out DET images. Make the X step time longer or make the ratio_exp_period smaller.")
 
                 if expt <= 0:
-                    self.recent_error_msg = f"Note that after subtracting the detector readout time {self.det_readout_time:.3e} s, the exposure time becomes equal or less than 0."
-                    print(self.recent_error_msg)
+                    self.messages["recent error message"] = f"Note that after subtracting the detector readout time {self.det_readout_time:.3e} s, the exposure time becomes equal or less than 0."
+                    print(self.messages["recent error message"])
 #                    print("******* Cannot run.")
-                    raise DET_MIN_READOUT_Error(self.recent_error_msg)
+                    raise DET_MIN_READOUT_Error(self.messages["recent error message"])
                 
                 if abs(step) <= 0.033:
-                    self.recent_error_msg = f"Note that Max speed of Pilatus2M is 30Hz."
-                    print(self.recent_error_msg)
+                    self.messages["recent error message"] = f"Note that Max speed of Pilatus2M is 30Hz."
+                    print(self.messages["recent error message"])
 #                    print("******* Cannot run.")
-                    raise DET_OVER_READOUT_SPEED_Error(self.recent_error_msg)
+                    raise DET_OVER_READOUT_SPEED_Error(self.messages["recent error message"])
 
                 # if not isTestRun:
                 #     if self.isStruckCountNeeded:
@@ -3856,8 +3883,8 @@ class ptyco_main_control(QMainWindow):
                         self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
                         print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a DET image.")
                         if N_counts>100000:
-                            self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
-                            raise SOFTGLUE_Setup_Error(self.recent_error_msg)
+                            self.messages["recent error message"] = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                            raise SOFTGLUE_Setup_Error(self.messages["recent error message"])
 
                 if isTestRun:
                     return
@@ -3877,9 +3904,9 @@ class ptyco_main_control(QMainWindow):
                                           isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode), fn=self.hdf_plugin_name[detN])
                 #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
                         except TimeoutError:
-                            self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
-                            print(self.recent_error_msg)
-                            self.ui.statusbar.showMessage(self.recent_error_msg)
+                            self.messages["recent error message"] = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
+                            print(self.messages["recent error message"])
+                            self.ui.statusbar.showMessage(self.messages["recent error message"])
                             #showerror("Detector timeout.")
                             return DETECTOR_NOT_STARTED_ERROR
                 print("Ready for traj")
@@ -3904,8 +3931,8 @@ class ptyco_main_control(QMainWindow):
                     #istraj_running = self.is_traj_running()
                     i = i+1
                     if i>timeout:
-                        self.recent_error_msg = "traj scan command is resent for 5 times to the hexapod without success."
-                        print(self.recent_error_msg)
+                        self.messages["recent error message"] = "traj scan command is resent for 5 times to the hexapod without success."
+                        print(self.messages["recent error message"])
                         break
                 print("Run_traj is sent command in rungui.")
                 isattarget = False
@@ -3955,9 +3982,9 @@ class ptyco_main_control(QMainWindow):
                                         isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode),fn=self.hdf_plugin_name[detN])
             #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
                     except TimeoutError:
-                        self.recent_error_msg = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
-                        print(self.recent_error_msg)
-                        self.ui.statusbar.showMessage(self.recent_error_msg)
+                        self.messages["recent error message"] = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
+                        print(self.messages["recent error message"])
+                        self.ui.statusbar.showMessage(self.messages["recent error message"])
                         #showerror("Detector timeout.")
                         return            
             # # MCS ready
@@ -3985,8 +4012,8 @@ class ptyco_main_control(QMainWindow):
                     if s12softglue.isConnected:
                         N_counts = s12softglue.number_acquisition(expt, Nstep)
                         if N_counts>100000:
-                            self.recent_error_msg = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
-                            raise SOFTGLUE_Setup_Error(self.recent_error_msg)
+                            self.messages["recent error message"] = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                            raise SOFTGLUE_Setup_Error(self.messages["recent error message"])
 
             if self.ui.cb_reversescandir.isChecked():
                 if abs(st-pos)>abs(fe-pos):
@@ -4029,9 +4056,9 @@ class ptyco_main_control(QMainWindow):
                     else:
                         remainingtime = 999
                     msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime,2)}s\n"
-                    msg = "%s%s"%(msg1, msg2)
+                    self.messages["current status"] = "%s%s"%(msg1, msg2)
                     if update_status:
-                        update_status(msg)
+                        update_status(self.messages["current status"])
 
                     time.sleep(0.1)
                     # image collection done.
@@ -4256,8 +4283,8 @@ class ptyco_main_control(QMainWindow):
                     np.savetxt(filename, dt2, fmt="%1.8e %1.8e %i")
 #                    np.savetxt(filename, dt2, fmt="%1.8e %1.8e %1.8e")
                 except:
-                    self.recent_error_msg = "Error in fly_result."
-                    print(self.recent_error_msg)
+                    self.messages["recent error message"] = "Error in fly_result."
+                    print(self.messages["recent error message"])
 
                 print("Done...")
     def clearplot(self):
@@ -4320,8 +4347,8 @@ class ptyco_main_control(QMainWindow):
         try:
             r = self.get_qds_pos()
         except:
-            self.recent_error_msg = "QDS does not work."
-            print(self.recent_error_msg)
+            self.messages["recent error message"] = "QDS does not work."
+            print(self.messages["recent error message"])
             return
         self.qds_array.append(r)
         self.ui.lcd_X.display("%0.3f" % (r[0]))     
@@ -4337,8 +4364,8 @@ class ptyco_main_control(QMainWindow):
 #         try:
 #             r = self.get_qds_pos()
 #         except:
-#             self.recent_error_msg = "QDS does not work."
-#             print(self.recent_error_msg)
+#             self.messages["recent error message"] = "QDS does not work."
+#             print(self.messages["recent error message"])
 #             return
 # #        print(r)
 
@@ -4641,7 +4668,7 @@ class ptyco_main_control(QMainWindow):
             self.parameters.working_folder = folder
             self.update_workingfolder(self.parameters.working_folder)
         elif cmd == 'get_error_message':
-            return self.recent_error_msg
+            return self.messages["recent error message"]
         else:
             print(f"Invalid command {cmd} is recieved.")
 
