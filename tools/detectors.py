@@ -104,7 +104,7 @@ class pilatus(AD_Pilatus):
 			self.StartSingleFrame(fn=fn) # Arm the detector
 		else:
 			# set filesaver
-			self.SetMultiFrames(N_image, pulsespershot)
+			self.SetMultiFrames(N_image*pulsespershot, pulsespershot)
 			self.StartCapture()
 
 	def set_scanNumberAsfilename(self):

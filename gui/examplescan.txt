@@ -12,3 +12,9 @@
 # mv X 0.076894 Z -4.682002 phi 0
 # setrange axis phi L -48.5 R 58.5 N 2 t 2
 # stepscan3d xmotor 0 ymotor 2 phimotor 6
+# mv Z -1.557 trans1 0.383
+# set scanname coal_ash_pos5_
+# stepscan2d xmotor 0 ymotor 2
+# mv Z -1.549 trans1 -0.812
+# set scanname coal_ash_pos2_
+# stepscan2d xmotor 0 ymotor 2

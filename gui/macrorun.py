@@ -31,4 +31,4 @@ while 1:
 
             with open(macrofilename, 'w', encoding='utf-8') as f:
                 f.writelines(file_lines)
-    time.sleep(60)
+    time.sleep(10)
