@@ -583,22 +583,6 @@ class ptyco_main_control(QMainWindow):
 
     def handle_hexapod_error(self):
         self.pts.hexapod.handle_error()
-        # msg = (
-        #     f"Hexapod Servos are off, and they are back on.\n"
-        #     "Do you want to move to references?"
-        # )
-        # dlg = QMessageBox(self)
-        # dlg.setWindowTitle("Referencing Hexapod")
-        # dlg.setText(msg)
-        # move_btn = dlg.addButton("Referencing", QMessageBox.AcceptRole)
-        # cancel_btn = dlg.addButton(QMessageBox.Cancel)
-        # dlg.setIcon(QMessageBox.Question)
-        # dlg.exec_()
-        # clicked = dlg.clickedButton()
-        # if clicked == move_btn:
-        #     pos = self.pts.hexapod.get_pos()
-        #     self.pts.hexapod.move_ref()
-        #     self.pts.hexapod.mv_pos(pos)
 
     def write_motor_scan_range(self):
         numbers = np.random.rand(len(self.motornames), 6)
@@ -1253,6 +1237,7 @@ class ptyco_main_control(QMainWindow):
 
     def update_status(self):
         msg= json.dumps(self.messages)
+        msg["parameters"] = json.dumps(self.parameters.__dict__, indent=4)
         status = {'status': msg}
         res = requests.post(status_url, json=status)
 
