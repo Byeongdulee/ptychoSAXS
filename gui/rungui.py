@@ -1236,12 +1236,12 @@ class ptyco_main_control(QMainWindow):
             self.update_status_scan_time()
 
     def update_status(self):
-        msg= json.dumps(self.messages)
         parameters = {}
         parameters["scan number"] = self.parameters.scan_number
         parameters["scan name"] =self.parameters.scan_name = ""
         parameters["scan scan elapsed time"] = self.parameters.scan_time
-        msg["parameters"] = json.dumps(parameters)
+        self.messages["parameters"] = parameters
+        msg= json.dumps(self.messages)
         status = {'status': msg}
         res = requests.post(status_url, json=status)
 
