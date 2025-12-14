@@ -71,6 +71,9 @@ class struck(Struck):
 		self.start()
 		print("struck started.")
 
+	def Forcestop(self, timeout=5):
+		self.stop()
+		
 	def Stop(self):
 		self.stop()
 
