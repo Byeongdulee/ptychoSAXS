@@ -131,7 +131,8 @@ class AD_Pilatus(Device):
         self.ShutterMode = 0
         if fn == "":
             fn = bytes(self.FileName_RBV).decode().strip('\x00')
-        self.setFileName("%s_%5.5d"%(fn, self.FileNumber_RBV))
+        self.setFileName(fn)
+        #self.setFileName("%s_%5.5d"%(fn, self.FileNumber_RBV))
         self.AutoIncrement = 1
         self.filePut('AutoIncrement', 1)
         self.filePut('FileNumber',1)
@@ -628,15 +629,15 @@ class AD_XSP(Device):
             self.add_pv(pvname, attr='File_'+p)
             
     def Arm(self, nimg = 0):
-        if self.Acquire_RBV == 1:
-            t = time.time()
-            self.Acquire = 0 # stop acquire
-            while self.Acquire_RBV == 1:
-                self.Acquire = 0
-                time.sleep(0.1)
-                if abs(time.time()-t)>10:
-                    print("CCD still running timeout.")
-                    raise TimeoutError        
+        # if self.Acquire_RBV == 1:
+        #     t = time.time()
+        #     self.Acquire = 0 # stop acquire
+        #     while self.Acquire_RBV == 1:
+        #         self.Acquire = 0
+        #         time.sleep(0.1)
+        #         if abs(time.time()-t)>10:
+        #             print("CCD still running timeout.")
+        #             raise TimeoutError        
         self.ImageMode = 1
         if nimg>0:
             self.NumImages = nimg
@@ -707,7 +708,8 @@ class AD_XSP(Device):
         self.ShutterMode = 0
         if fn == "":
             fn = bytes(self.FileName_RBV).decode().strip('\x00')
-        self.setFileName("%s_%5.5d"%(fn, self.FileNumber_RBV))
+        self.setFileName(fn)
+        #self.setFileName("%s_%5.5d"%(fn, self.FileNumber_RBV))
         self.AutoIncrement = 1
         self.filePut('AutoIncrement', 1)
         self.filePut('FileNumber',1)
@@ -896,15 +898,15 @@ class AD_SG(Device):
             self.add_pv(pvname, attr='File_'+p)
             
     def Arm(self, nimg = 0):
-        if self.Acquire_RBV == 1:
-            t = time.time()
-            self.Acquire = 0 # stop acquire
-            while self.Acquire_RBV == 1:
-                self.Acquire = 0
-                time.sleep(0.1)
-                if abs(time.time()-t)>10:
-                    print("CCD still running timeout.")
-                    raise TimeoutError        
+        # if self.Acquire_RBV == 1:
+        #     t = time.time()
+        #     self.Acquire = 0 # stop acquire
+        #     while self.Acquire_RBV == 1:
+        #         self.Acquire = 0
+        #         time.sleep(0.1)
+        #         if abs(time.time()-t)>10:
+        #             print("CCD still running timeout.")
+        #             raise TimeoutError        
         self.ImageMode = 1
         if nimg>0:
             self.NumImages = nimg

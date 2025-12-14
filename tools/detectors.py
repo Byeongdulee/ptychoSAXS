@@ -367,14 +367,23 @@ class XSP(AD_XSP):
 		self.setFileTemplate('%s%s_%5.5d.h5')
 		self.FileTemplate ='%s%s_%5.5d.h5'
 
-		self.SetMultiFrames(N_image, pulsespershot)
+
 		if len(fn)>0:
 			self.setFileName("%s"%fn)
         # set filesaver
 		#self.filePut('NumCapture',   1)
+		
 		self.filePut('FileNumber',    1)
-		self.StartCapture() # Arm the detector
-		self.Arm()
+		if pulsespershot==1:
+			self.NumImages = N_image
+			# set filesaver
+			self.filePut('NumCapture',   1)
+			self.filePut('FileNumber',    1)
+			self.StartSingleFrame(fn=fn) # Arm the detector
+		else:
+			# set filesaver
+			self.SetMultiFrames(N_image, pulsespershot)
+			self.StartCapture()
 
 	def set_scanNumberAsfilename(self):
 		fw_dir = caget(f"{beamlinePV}data:userDir")
