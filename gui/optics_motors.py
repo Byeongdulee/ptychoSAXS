@@ -20,7 +20,7 @@ sys.path.append('../ptychosaxs')
 #import tw_galil as gl
 MotorControlAvailable = True
 try:
-    from optics import ptyoptics, opticsbox, OSA, camera, beamstop, slit, gentry
+    from optics import ptyoptics, opticsbox, OSA, camera, beamstop, slit, slit_CRL, gentry
     #from newport_piezo import newport
     MotorControlAvailable = True
 except:
@@ -46,6 +46,7 @@ class motor_control(QMainWindow):
         self.control["camera"]= camera()
         self.control["beamstop"]= beamstop()
         self.control["slit"] = slit()
+        self.control["slit_CRL"] = slit_CRL()
         self.motornames = []
         self.motorunits = []
         self.motorindices = []
@@ -78,6 +79,12 @@ class motor_control(QMainWindow):
             self.motornames.append(m.name)
             self.motorunits.append(m.units)
             self.controller.append('slit')
+            self.motorindices.append(i)
+        
+        for i, m in enumerate(self.control["slit_CRL"].motors):
+            self.motornames.append(m.name)
+            self.motorunits.append(m.units)
+            self.controller.append('slit_CRL')
             self.motorindices.append(i)
 
         print(self.motornames)

@@ -30,6 +30,12 @@ class slit(epicsslit): # motors for gentry
         units = ["mm", "mm"]
         super().__init__(pvlist, names, units)
 
+class slit_CRL(epicsslit): # slits before CRL
+    def __init__(self, pvlist=["usxLAX:m58:c1:m7", "usxLAX:m58:c1:m8"]):
+        names = ["CRL slit H", "CRL slit V"]
+        units = ["mm", "mm"]
+        super().__init__(pvlist, names, units)
+
 class gentry(epicsmotor): # motors for gentry
     def __init__(self, pvlist=["12idc:m5", "12idc:m6"]):
         super().__init__(pvlist)
