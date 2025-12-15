@@ -3248,6 +3248,7 @@ class ptyco_main_control(QMainWindow):
             scanname=f"{scanname}{axis}"
         i=0
         while i<len(pos):
+            wait_long = False
             value = pos[i]
 #        for i, value in enumerate(pos):
             if self.isStopScanIssued:
@@ -3272,15 +3273,24 @@ class ptyco_main_control(QMainWindow):
             else:
                 retval = self.fly2d0(xmotor=xmotor, ymotor=ymotor, scanname=scan, 
                     update_progress=update_progress, update_status=update_status)
+            
             if retval == -1:
                 msg = f'Detector refresh failed .'
                 update_status(msg)
-                break
+                retried_dueto_timeout = retried_dueto_timeout + 1
+                wait_long = True
+                i = i - 1  # retry the same angle
+                if retried_dueto_timeout > 2:
+                    msg = f'Detector refresh failed 3 times. Aborting 3D scan.'
+                    update_status(msg)
+                    break
             if update_status:
                 msg = f'Elapsed time = {time.time()-self.time_scanstart}s to finish {(i+1)/len(pos)*100}%.'
                 update_status(msg)
             
             self.flydone(False, reset_scannumber=True, donedone=False)
+            if wait_long:
+                time.sleep(60)
 
             # monitoring the station ready
             if self.monitor_beamline_status:
@@ -3290,6 +3300,7 @@ class ptyco_main_control(QMainWindow):
                     # retry the same angle
                     i -= 1
             i=i+1
+
 
     def wait_for_beam(self, update_status, value):
         ct0 = time.time()
@@ -3396,8 +3407,9 @@ class ptyco_main_control(QMainWindow):
             while status < 1:
                 if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
                     for det in self.detector: #JD
-                        if det is not None:  #JD            
-                            det.filePut('FileNumber', i+1) 
+                        if det is not None:  #JD
+                            if "cam" or "SG" or "dante" or "xsp3" in det._prefix.lower():
+                                det.filePut('FileNumber', i+1) 
 
                 status = self.fly0(xmotor)
                 if status is DETECTOR_NOT_STARTED_ERROR:
@@ -3411,10 +3423,7 @@ class ptyco_main_control(QMainWindow):
                 return -1
 #            print("CCCC")
             self.flydone(return_motor=False, reset_scannumber=False)
-            # try:
-            #epics.caput('12idc:scaler1.CNT', 0)
-            # except:
-            #     print("epics 2 error")
+ 
             t1 = time.time()
             while (time.time()-t1 < self.parameters._waittime_between_scans):
                 time.sleep(0.01)
@@ -3530,14 +3539,6 @@ class ptyco_main_control(QMainWindow):
 
     def fly2d0_SNAKE(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
         self.update_scanname()
-        # for i, det in enumerate(self.detector): #JD
-        #     if i<2:
-        #         if det is not None:  #JD
-        #             det.filePut('FileNumber', 1)  #JD
-        #             det.FileTemplate = '%s%s_%5.5d.tif'
-        #             if 'SG' not in det._prefix:
-        #                 det.FileNumber = 1
-
 
         self.isfly2 = False
         ##### ############## need to work from this........
@@ -3549,11 +3550,6 @@ class ptyco_main_control(QMainWindow):
         # self.write_scaninfo_to_logfile(scaninfo) 
 
         t0 = time.time()
-
-        # if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
-        #     for det in self.detector: #JD
-        #         if det is not None:  #JD            
-        #             det.filePut('FileNumber', 1) 
 
         self.plotlabels = []
         if self.ui.actionckTime_reset_before_scan.isChecked():
@@ -3620,16 +3616,16 @@ class ptyco_main_control(QMainWindow):
 #                    print("******* Cannot run.")
             raise DET_OVER_READOUT_SPEED_Error(self.messages["recent error message"])
 
-        if not isTestRun:
-            if self.isStruckCountNeeded:
-                #struck.mcs_init()
-                if not self.isMCS_ready:
-                    self.detector[2].mcs_ready(self.pts.hexapod.pulse_number, self.pts.hexapod.pulse_number*period+10)
-                    self.isMCS_ready = True
-                    print(self.pts.hexapod.pulse_number, " MCS Ncouts updated.")
-                self.detector[2].arm_mcs()
-            else:
-                pass
+        # if not isTestRun:
+        #     if self.isStruckCountNeeded:
+        #         #struck.mcs_init()
+        #         if not self.isMCS_ready:
+        #             self.detector[2].mcs_ready(self.pts.hexapod.pulse_number, self.pts.hexapod.pulse_number*period+10)
+        #             self.isMCS_ready = True
+        #             print(self.pts.hexapod.pulse_number, " MCS Ncouts updated.")
+        #         self.detector[2].arm_mcs()
+        #     else:
+        #         pass
         # set the delay generator
         if expt != dg645_12ID._exposuretime:
             try:
@@ -3642,14 +3638,14 @@ class ptyco_main_control(QMainWindow):
         movestep = self.fly1d_step*1000*self.parameters._ratio_exp_period
         print(f"Actual exposure time: {expt:0.3e} s. In distance: {movestep:.3e} um.")
 #                print("During the exposure, the motor moves %0.3f um." % movestep)
-        if self.detector[3] is None: 
-            if s12softglue.isConnected:
-                N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
-                self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
-                print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a shot.")
-                #if N_counts>100000: # No need to check for SNAKE
-                #    self.messages["recent error message"] = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
-                #    raise SOFTGLUE_Setup_Error(self.messages["recent error message"])
+        # if self.detector[3] is None: 
+        #     if s12softglue.isConnected:
+        #         N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
+        #         self.parameters.countsperexposure = np.round(N_counts/self.pts.hexapod.pulse_number)
+        #         print(f"Total {self.parameters.countsperexposure} encoder positions will be collected per a shot.")
+        #         #if N_counts>100000: # No need to check for SNAKE
+        #         #    self.messages["recent error message"] = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+        #         #    raise SOFTGLUE_Setup_Error(self.messages["recent error message"])
 
         if isTestRun:
             return
@@ -3674,52 +3670,76 @@ class ptyco_main_control(QMainWindow):
                     self.ui.statusbar.showMessage(self.messages["recent error message"])
                     #showerror("Detector timeout.")
                     return
+        timeout_occurred, TIMEOUT = self.is_arming_detecotors_timedout()
+        if timeout_occurred:
+            self.messages["recent error message"] = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to be Armed. {time.ctime()}"
+            print(self.messages["recent error message"])
+            return -1
+        
         print("Ready for traj")
 
         if not isTestRun:
             self.pts.hexapod.run_traj(axes)
 
-        # snake sleep requires detectors.....
-        t1 = time.time()
-        if self.isStruckCountNeeded:
-            isdone = False
-            while not isdone:
-                if self.detector[2].Armed:
-                    isdone = False
+        # Update progress bar and status message.
+        N_imgcollected = 0
+        timeelapsed = time.time()-t0
+        TIMEOUT = period*2+1
+        timestart = time.time()
+        Nstep = self.pts.hexapod.pulse_number_per_line*self.pts.hexapod.number_of_lines
+        while N_imgcollected<Nstep:
+            for ndet, det in enumerate(self.detector):
+                if ndet>1: 
+                    continue
+                if det is not None:
+                    val = det.ArrayCounter_RBV
+                    continue
+            timeelapsed = time.time()-t0
+            progress_fraction = float(val)/float(Nstep)
+            if progress_fraction==0:
+                progress_fraction=0.0001
+            if update_progress:
+                if self.fly3d_p0: # 3d scan
+                    c3d, all3d = self.progress_3d
+                    #update_progress(int(prog*c3d/all3d*100))
+                    progress_fraction = progress_fraction*c3d/all3d
+                    timeelapsed = time.time()-self.time_scanstart
+                    #time_per_pos = timeelapsed / (i + 1)
+                    update_progress(int(progress_fraction*100))
+                    remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
+                    msg1 = f'Updated at {time.ctime()} : {int(timeelapsed)}s since the start.'
+                    msg2 = f"; Remaining time for the current 3D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
                 else:
-                    isdone = True
-                time.sleep(0.1)
-                msg = ""
-                timeelapsed = time.time()-t0
-                progress_fraction = float(self.detector[2].CurrentChannel)/float(self.detector[2].NuseAll)
-                if progress_fraction==0:
-                    progress_fraction=0.0001
-                if update_progress:
-                    if self.fly3d_p0: # 3d scan
-                        c3d, all3d = self.progress_3d
-                        #update_progress(int(prog*c3d/all3d*100))
-                        progress_fraction = progress_fraction*c3d/all3d
-                        timeelapsed = time.time()-self.time_scanstart
-                        #time_per_pos = timeelapsed / (i + 1)
-                        update_progress(int(progress_fraction*100))
-                        remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
-                        msg1 = f'Updated at {time.ctime()} : {int(timeelapsed)}s since the start.'
-                        msg2 = f"; Remaining time for the current 3D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
-                    else:
-                        #print("2d scan progress update")
-                        #progress_fraction = (i+1)/Nline
-                        update_progress(int(progress_fraction*100))
-                        remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
-                        msg1 = f'Updated at {time.ctime()} : {int(timeelapsed)}s since the start.'
-                        msg2 = f"; Remaining time for the current 2D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
+                    #print("2d scan progress update")
+                    #progress_fraction = (i+1)/Nline
+                    update_progress(int(progress_fraction*100))
+                    remtime = np.round(timeelapsed*(1/progress_fraction-1),2)
+                    msg1 = f'Updated at {time.ctime()} : {int(timeelapsed)}s since the start.'
+                    msg2 = f"; Remaining time for the current 2D scan is {remtime}s or {time.ctime(time.time()+remtime)}\n"
 
-                    self.messages["current status"] = "%s%s"%(msg1, msg2)
-                if update_status:
-                    update_status(self.messages["current status"])
-        if self.isStruckCountNeeded:
-            self.detector[2].stop()
-        else:
-            pass
+                self.messages["current status"] = "%s%s"%(msg1, msg2)
+            if update_status:
+                update_status(self.messages["current status"])
+
+            time.sleep(0.1)
+            if val>N_imgcollected:
+                N_imgcollected = val
+                timestart = time.time()
+
+            updatetime = time.time()-timestart
+            if updatetime>TIMEOUT:
+                self.messages["recent error message"] = f"Detector {det._prefix} data collection timeout after {TIMEOUT} seconds."
+                print(self.messages["recent error message"])
+                self.ui.statusbar.showMessage(self.messages["recent error message"])
+                return -1
+            timeelapsed = time.time()-t0
+            if self.isStopScanIssued:
+                break
+
+        # if self.isStruckCountNeeded:
+        #     self.detector[2].stop()
+        # else:
+        #     pass
 
         # # check if data collections are all done..
         # for det in self.detector:
@@ -3819,40 +3839,18 @@ class ptyco_main_control(QMainWindow):
                     )
                     print(self.messages["recent error message"])
                     self.ui.statusbar.showMessage(self.messages["recent error message"])
-                    # dlg = QMessageBox(self)
-                    # dlg.setWindowTitle("Scanparameter Error")
-                    # dlg.setText(msg)
-                    # #move_btn = dlg.addButton("Move to original position", QMessageBox.AcceptRole)
-                    # #update_btn = dlg.addButton("Update the original position", QMessageBox.DestructiveRole)
-                    # cancel_btn = dlg.addButton(QMessageBox.Cancel)
-                    # dlg.setIcon(QMessageBox.Question)
-                    # dlg.exec_()
-                    # clicked = dlg.clickedButton()
                     return None
-                    #raise RuntimeError("Not enough time left for reading out DET images. Make the X step time longer or make the ratio_exp_period smaller.")
 
                 if expt <= 0:
                     self.messages["recent error message"] = f"Note that after subtracting the detector readout time {self.det_readout_time:.3e} s, the exposure time becomes equal or less than 0."
                     print(self.messages["recent error message"])
-#                    print("******* Cannot run.")
                     raise DET_MIN_READOUT_Error(self.messages["recent error message"])
                 
                 if abs(step) <= 0.033:
                     self.messages["recent error message"] = f"Note that Max speed of Pilatus2M is 30Hz."
                     print(self.messages["recent error message"])
-#                    print("******* Cannot run.")
                     raise DET_OVER_READOUT_SPEED_Error(self.messages["recent error message"])
 
-                # if not isTestRun:
-                #     if self.isStruckCountNeeded:
-                #         #struck.mcs_init()
-                #         if not self.isMCS_ready:
-                #             struck.mcs_ready(self.pts.hexapod.pulse_number, tm+10)
-                #             self.isMCS_ready = True
-                #             print(f"Struck is ready for {self.pts.hexapod.pulse_number} counts.")
-                #         struck.arm_mcs()
-                #     else:
-                #         pass
                 # set the delay generator
                 if expt != dg645_12ID._exposuretime:
                     try:
@@ -3864,8 +3862,8 @@ class ptyco_main_control(QMainWindow):
                 #SoftGlue ready for recording interferometer values
                 movestep = abs(fe-st)/self.pts.hexapod.pulse_number*1000*self.parameters._ratio_exp_period
                 print(f"Actual exposure time: {expt:0.3e} s, during which {axis} will move {movestep:.3e} um.")
-#                print("During the exposure, the motor moves %0.3f um." % movestep)
-    
+
+                # If softglue SG is not selected, use prepare for the softglue.
                 if self.detector[3] is None: 
                     if s12softglue.isConnected:
                         N_counts = s12softglue.number_acquisition(expt, self.pts.hexapod.pulse_number)
@@ -3879,30 +3877,29 @@ class ptyco_main_control(QMainWindow):
                     return
                 
                 # Scan start ............................
-                #print("Time to finish line 2182: %0.3f" % (time.time()-t0))
                 self.pts.hexapod.goto_start_pos(axis) # took 0.4 second
                 #print("Time to finish line 2184: %0.3f" % (time.time()-t0))
                 for detN, det in enumerate(self.detector):
-                    if detN > 2:
-                        continue
                     if det is not None:
                         try:
-#                            print(self.use_hdf_plugin, " This is use_hdf_plugin")
-#                            print(self.hdf_plugin_savemode, " This is use_hdf_plugin")
                             det.fly_ready(expt, self.pts.hexapod.pulse_number, period=period, 
                                           isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode), fn=self.hdf_plugin_name[detN])
-                #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
                         except TimeoutError:
                             self.messages["recent error message"] = f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
                             print(self.messages["recent error message"])
                             self.ui.statusbar.showMessage(self.messages["recent error message"])
-                            #showerror("Detector timeout.")
                             return DETECTOR_NOT_STARTED_ERROR
                 print("Ready for traj")
                 pos = self.pts.get_pos(axis)
                 print(f"pos is {pos} before traj run start.")
                 #print("Time to finish line 2196: %0.3f" % (time.time()-t0)) # take 0.1 second
 
+                timeout_occurred, TIMEOUT = self.is_arming_detecotors_timedout()
+                if timeout_occurred:
+                    self.messages["recent error message"] = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to be Armed. {time.ctime()}"
+                    print(self.messages["recent error message"])
+                    return -1
+            
                 istraj_running = False
                 timeout = 5
                 i = 0
@@ -3930,16 +3927,10 @@ class ptyco_main_control(QMainWindow):
                         isattarget = self.pts.hexapod.isattarget(axis)
                     except:
                         isattarget = False
-                    #self.updatepos()
-#                    print("Waiting to be done...")
-                    time.sleep(0.05)
+                    time.sleep(0.02)
                     if self.isStopScanIssued:
                         break
-                # if self.isStruckCountNeeded:
-                #     struck.strk.stop()
-                # else:
-                #     pass
-#                    epics.caput('12idc:scaler1.CNT', 0)
+
                 pos = self.pts.get_pos(axis)
                 print(f"pos is {pos:.3e} after the traj run done.")
 
@@ -3963,8 +3954,8 @@ class ptyco_main_control(QMainWindow):
             
             # Need to make detectors ready
             for detN, det in enumerate(self.detector):
-                if detN > 2:
-                    continue
+                # if detN > 2:
+                #     continue
                 if det is not None:
                     try:
                         det.fly_ready(expt, Nstep, period=step, 
@@ -3976,17 +3967,13 @@ class ptyco_main_control(QMainWindow):
                         self.ui.statusbar.showMessage(self.messages["recent error message"])
                         #showerror("Detector timeout.")
                         return            
-            # # MCS ready
-            # if not isTestRun:
-            #     if self.isStruckCountNeeded:
-            #         #struck.mcs_init()
-            #         if not self.isMCS_ready:
-            #             struck.mcs_ready(Nstep, tm+10)
-            #             self.isMCS_ready = True
-            #             print(Nstep, " MCS Ncouts updated.")
-            #         struck.arm_mcs()
-            #     else:
-            #         pass
+
+            timeout_occurred, TIMEOUT = self.is_arming_detecotors_timedout()
+            if timeout_occurred:
+                self.messages["recent error message"] = f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to be Armed. {time.ctime()}"
+                print(self.messages["recent error message"])
+                return -1
+
 
             # set the delay generator
             if expt != dg645_12ID._exposuretime:
@@ -3994,15 +3981,14 @@ class ptyco_main_control(QMainWindow):
                     dg645_12ID.set_pilatus2(expt, Nstep, step)
                 except:
                     raise DG645_Error
-            
-            # softglue ready
-            if self.is_ptychomode:
-                if self.detector[3] is None: 
-                    if s12softglue.isConnected:
-                        N_counts = s12softglue.number_acquisition(expt, Nstep)
-                        if N_counts>100000:
-                            self.messages["recent error message"] = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
-                            raise SOFTGLUE_Setup_Error(self.messages["recent error message"])
+            # # softglue ready
+            # if self.is_ptychomode:
+            #     if self.detector[3] is None: 
+            #         if s12softglue.isConnected:
+            #             N_counts = s12softglue.number_acquisition(expt, Nstep)
+            #             if N_counts>100000:
+            #                 self.messages["recent error message"] = f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+            #                 raise SOFTGLUE_Setup_Error(self.messages["recent error message"])
 
             if self.ui.cb_reversescandir.isChecked():
                 if abs(st-pos)>abs(fe-pos):
@@ -4010,7 +3996,6 @@ class ptyco_main_control(QMainWindow):
                     fe = st
                     st = t 
 
-            N_imgcollected = 0
             if motornumber ==6:
                 # enable fit menu
                 self.ui.actionFit_QDS_phi.setEnabled(True)
@@ -4023,37 +4008,6 @@ class ptyco_main_control(QMainWindow):
                 self.pts.set_speed(axis, abs(fe-st)/tm,abs(fe-st)/tm*10)
 #                print(f"Speed of phi is set to {self.pts.phi.vel}.")
                 self.pts.mv('phi', fe, wait=False)
-                dg645_12ID.trigger()
-                print("Phi scan started..")
-                # while self.pts.ismoving(axis):
-                #     time.sleep(0.2)
-                
-                # Update progress bar and status message.
-                timeelapsed = time.time()-t0
-                while N_imgcollected<Nstep:
-                    for ndet, det in enumerate(self.detector):
-                        if ndet>1: 
-                            continue
-                        if det is not None:
-                            val = det.ArrayCounter_RBV
-                    prog = float(val)/float(Nstep)
-                    if update_progress:
-                        update_progress(int(prog*100))
-                    msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
-                    if prog>0:
-                        remainingtime = timeelapsed/prog - timeelapsed
-                    else:
-                        remainingtime = 999
-                    msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime,2)}s\n"
-                    self.messages["current status"] = "%s%s"%(msg1, msg2)
-                    if update_status:
-                        update_status(self.messages["current status"])
-
-                    time.sleep(0.1)
-                    # image collection done.
-                    N_imgcollected = val
-                    if self.isStopScanIssued:
-                        break
 
             else:
                 self.pts.mv(axis, st, wait=True)
@@ -4065,8 +4019,51 @@ class ptyco_main_control(QMainWindow):
                 time.sleep(0.02)
                 self.pts.mv(axis, fe, wait=True)
 #                print("Should be in run.")
-        #self.isscan = False
+            
+            # Start collect data while an axis is moving.
+            dg645_12ID.trigger()
+            print(f"{axis} scan started..")
+            # while self.pts.ismoving(axis):
+            #     time.sleep(0.2)
+            
+            # Update progress bar and status message.
+            N_imgcollected = 0
+            timeelapsed = time.time()-t0
+            TIMEOUT = step*2+1
+            timestart = time.time()
+            while N_imgcollected<Nstep:
+                for ndet, det in enumerate(self.detector):
+                    if ndet>1: 
+                        continue
+                    if det is not None:
+                        val = det.ArrayCounter_RBV
+                prog = float(val)/float(Nstep)
+                if update_progress:
+                    update_progress(int(prog*100))
+                msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+                if prog>0:
+                    remainingtime = timeelapsed/prog - timeelapsed
+                else:
+                    remainingtime = 999
+                msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime,2)}s\n"
+                self.messages["current status"] = "%s%s"%(msg1, msg2)
+                if update_status:
+                    update_status(self.messages["current status"])
 
+                time.sleep(0.1)
+                if val>N_imgcollected:
+                    N_imgcollected = val
+                    timestart = time.time()
+
+                updatetime = time.time()-timestart
+                if updatetime>TIMEOUT:
+                    self.messages["recent error message"] = f"Detector {det._prefix} data collection timeout after {TIMEOUT} seconds."
+                    print(self.messages["recent error message"])
+                    self.ui.statusbar.showMessage(self.messages["recent error message"])
+                    return -1
+                timeelapsed = time.time()-t0
+                if self.isStopScanIssued:
+                    break
         # check if data collections are all done..
         for det in self.detector:
             if det is not None:
