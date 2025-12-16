@@ -33,15 +33,6 @@ except:
     phi = Axis
     phi.connected = False
 
-try:
-    #from ptychosaxs.smaract_gonio import ctl
-    import ptychosaxs.smaract_gonio as gonio
-    gonio.connected = gonio.isconnected()
-except:
-    class gonio:
-        pass
-    gonio.connected = [False,False,False,False]
-
 from PyQt5.QtCore import QObject, pyqtSignal
 
 class motorSignals(QObject):
@@ -69,28 +60,111 @@ def generate_raster_scan_positions(size):
                 y_positions.append(i)
     return np.array(x_positions), np.array(y_positions)
 
-class motors(object):
+
+import smaract_gonio
+
+class gonio(object):
+
     def __init__(self):
-        # hexapod
-        self.hexapod = hexapod
-        # ACS motion
-        self.phi = phi
-        # SmarAct
-        self.gonio = gonio
-        # EPICS motor
-        # self.epicsmotors = []
-        # self.epicsmotors.append(Motor("12idcUC8:m1"))
-        # self.epicsmotors.append(Motor("12idcUC8:m2"))
-        # self.epicsmotors.append(Motor("12idcUC8:m3"))
-        self.signals = motorSignals()
+        self.connected = smaract_gonio.isconnected()
+        self.motornames = smaract_gonio.channel_names
+        self.motorunits = smaract_gonio.units
+        
 
-    def commutate_phi(self):
-        acsc.commutate(acscontroller.hc, self.phi.axisno, wait=acsc.SYNCHRONOUS)
+    def ismoving(self, axis):
+        ch = self.channel_names.index(axis)
+        ismoving = smaract_gonio.ismoving(ch)
+        return ismoving
 
-    def mvphi(self, target, relative=False, wait=True):
+    def get_pos(self, axis):
+        ch = smaract_gonio.channel_names.index(axis)
+        pos = smaract_gonio.get_pos(ch)
+        return pos
+
+    def mv(self, axis, target):
+        ch = smaract_gonio.channel_names.index(axis)
+        smaract_gonio.mv(ch, target, wait=False)
+
+    def mvr(self, axis, target):
+        ch = smaract_gonio.channel_names.index(axis)
+        smaract_gonio.mvr(ch, target, wait=False)
+
+    def get_speed(self, axis):
+        ch = smaract_gonio.channel_names.index(axis)
+        vel,acc = smaract_gonio.get_speed(ch)
+        return vel, acc
+    
+    def set_speed(self, axis, vel=1, acc=1):
+        ch = smaract_gonio.channel_names.index(axis)
+        smaract_gonio.set_speed(ch, vel, acc)
+    
+    def set_pos(self, axis, pos=0):
+        ch = smaract_gonio.channel_names.index(axis)
+        smaract_gonio.set_pos(ch, pos)
+        
+    def isconnected(self, axis = 'X'):
+        ax = smaract_gonio.channel_names.index(axis)
+        return self.connected[ax]
+
+class hexa(object):
+
+    def __init__(self):
+        self.motornames = hexapod.axes
+        self.motorunits = ["mm","mm","mm","deg","deg","deg"]
+
+    def mvx(self, target, relative=False):
+        if relative:
+            pos = hexapod.get_pos()
+            target += pos['X']
+        hexapod.mv('X', target)
+
+    def mvrx(self, target):
+        self.mvx(target, relative=True)
+
+    def ismoving(self, axis):
+        ismoving = not hexapod.isattarget(axis)
+        return ismoving
+
+    def get_pos(self, axis=""):
+        pos = hexapod.get_pos()
+        if len(axis) == 0:
+            return pos
+        else:
+            return float(pos[axis])
+    
+    def mv(self, *args):
+        status = hexapod.mv(*args)
+        return status
+
+    def mvr(self, axis, target):
+        pos = hexapod.get_pos()
+        prevpos = pos[axis]
+        abstarget = prevpos+target
+        return hexapod.mv(axis, abstarget)
+
+    def get_speed(self, axis=0):
+        return hexapod.get_speed(), None
+    
+    def set_speed(self, axis=0, vel=1, acc=1):
+        hexapod.set_speed(vel)
+    
+    def set_pos(self, axis, pos=0):
+        pass        
+
+    
+class rotation(object):
+    def __init__(self):
+        self.motornames = ["phi"]
+        self.motorunits = ["deg"]
+        self.axisno = 0
+    
+    def commutate(self):
+        acsc.commutate(acscontroller.hc, self.axisno, wait=acsc.SYNCHRONOUS)
+
+    def mv(self, target, relative=False, **kwargs):
         try:
-            if self.phi.enabled == False:
-                self.phi.enable()
+            if phi.enabled == False:
+                phi.enable()
             if relative:
                 c = "relative"
             else:
@@ -99,7 +173,99 @@ class motors(object):
                 wait = acsc.SYNCHRONOUS
             else:
                 wait = acsc.ASYNCHRONOUS
-            self.phi.ptp(target=target, coordinates=c, wait=wait)
+            self.control["phi"].ptp(target=target, coordinates=c, **kwargs)
+        except acsc.AcscError as Err:
+            if '3261:' in Err:
+                print("phi was not commutated, and is being commutated. Please wait.")
+                self.commutate()
+
+    def mvr(self, val, **kwargs):
+        self.mv(val, relative=True, **kwargs)
+
+    def ismoving(self, axis):
+        ismoving = not phi.in_position
+        return ismoving
+
+    def get_pos(self, axis=0):
+        return float(self.pos)
+    
+    def get_speed(self, axis):
+        return phi.vel, phi.acc
+    
+    def set_speed(self, axis, vel=1, acc=1):
+        phi.vel = vel
+        phi.acc = acc
+    
+    def set_pos(self, axis, pos=0):
+        acsc.setRPosition(phi.controller.hc, self.axisno, pos)
+        
+    def disconnect(self):
+        phi.controller.disconnect()
+
+    def connect(self):
+        phi.controller.connect(acsIP)
+        #self.control["phi"] = Axis(acscontroller, 0)
+    
+    def isconnected(self, axis = 'X'):
+        phi.connected
+
+class motors(object):
+    def __init__(self):
+
+        self.control = {}
+        self.control["hexapod"]= hexapod
+        self.control["phi"]= phi
+        self.control["gonio"]= gonio
+        #self.control["beamstop"]= beamstop()
+        self.motornames = []
+        self.motorunits = []
+        self.motorindices = []
+        self.controller = []
+        for i, m in enumerate(self.control["hexapod"].axes):
+            self.motornames.append(m)
+            if i<3:
+                unit = 'mm'
+            else:
+                unit = 'deg'
+            self.motorunits.append(unit)
+            self.controller.append('hexapod')
+            self.motorindices.append(i)
+        
+        for i in range(1):
+            self.motornames.append('phi')
+            self.motorunits.append('deg')
+            self.controller.append('phi')
+            self.motorindices.append(i)
+        
+        for i, m in enumerate(self.control["gonio"].motornames):
+            self.motornames.append(m)
+            self.motorunits.append(self.control["gonio"].motorunits[i])
+            self.controller.append('gonio')
+            self.motorindices.append(i)
+        # for i, m in enumerate(self.control["beamstop"].motors):
+        #     self.motornames.append(m.DESC)
+        #     self.motorunits.append(m.EGU)
+        #     self.controller.append('beamstop')
+        #     self.motorindices.append(i)
+
+        self.signals = motorSignals()
+
+    def commutate_phi(self):
+        acsc.commutate(acscontroller.hc, self.control["phi"].axisno, wait=acsc.SYNCHRONOUS)
+
+    def mvphi(self, target, relative=False, wait=True):
+        try:
+            if self.control["phi"].enabled == False:
+                self.control["phi"].enable()
+            if relative:
+                c = "relative"
+            else:
+                c = "absolute"        
+            if wait:
+                wait = acsc.SYNCHRONOUS
+            else:
+                wait = acsc.ASYNCHRONOUS
+            self.control["phi"].ptp(target=target, coordinates=c, wait=wait)
         except acsc.AcscError as Err:
             if '3261:' in Err:
                 print("phi was not commutated, and is being commutated. Please wait.")
@@ -110,9 +276,9 @@ class motors(object):
 
     def mvx(self, target, relative=False):
         if relative:
-            pos = self.hexapod.get_pos()
+            pos = self.control["hexapod"].get_pos()
             target += pos['X']
-        self.hexapod.mv('X', target)
+        self.control["hexapod"].mv('X', target)
 
     def mvrx(self, target):
         self.mvx(target, relative=True)
@@ -132,9 +298,9 @@ class motors(object):
             if dmov==1:
                 ismoving = False
         if axis == "phi":
-            ismoving = not self.phi.in_position
-        if axis in self.hexapod.axes:
-            ismoving = not self.hexapod.isattarget(axis)
+            ismoving = not self.control["phi"].in_position
+        if axis in self.control["hexapod"].axes:
+            ismoving = not self.control["hexapod"].isattarget(axis)
         if axis in self.gonio.channel_names:
             ch = self.gonio.channel_names.index(axis)
             ismoving = self.gonio.ismoving(ch)
@@ -153,9 +319,9 @@ class motors(object):
             return pos
         if axis == "phi":
             return float(self.posphi)
-        if axis in self.hexapod.axes:
+        if axis in self.control["hexapod"].axes:
             if ishexpodavailable:
-                pos = self.hexapod.get_pos()
+                pos = self.control["hexapod"].get_pos()
             else:
                 pos = {"X":-999,"Y":-999,"Z":-999,"U":-999,"V":-999,"W":-999}
             return float(pos[axis])
@@ -165,11 +331,11 @@ class motors(object):
             return pos
     
     def mv_hex(self, *args, wait=True):
-        self.hexapod.mv(*args)
+        self.control["hexapod"].mv(*args)
         if wait:
             time.sleep(0.01)
             while True:
-                if self.hexapod.isattarget():
+                if self.control["hexapod"].isattarget():
                     break
                 time.sleep(0.01)
 
@@ -207,12 +373,12 @@ class motors(object):
                     ismoving = self.ismoving(axis)
                     time.sleep(0.01)
 
-        if axis in self.hexapod.axes:
+        if axis in self.control["hexapod"].axes:
             status = False
             while not status:
-                status = self.hexapod.mv(axis, target)
+                status = self.control["hexapod"].mv(axis, target)
                 if not status:
-                    status = self.hexapod.handle_error()
+                    status = self.control["hexapod"].handle_error()
                     print("Hexapod error, trying to servo back on.")
                     
             prevpos = target-1
@@ -221,12 +387,12 @@ class motors(object):
                 time.sleep(0.01)
 #                print("aaa")
                 while True:
-                    pos = self.hexapod.get_pos()
-                    #print(self.hexapod.isattarget())
+                    pos = self.control["hexapod"].get_pos()
+                    #print(self.control["hexapod"].isattarget())
                     pos = float(pos[axis])
                     self.signals.AxisPosSignal.emit(pos)
 #                    if (abs(pos-target)<0.00001) or (abs(pos-prevpos)<0.00001):
-                    if self.hexapod.isattarget(axis):
+                    if self.control["hexapod"].isattarget(axis):
                         break
                     prevpos = pos
                     time.sleep(0.01)
@@ -248,7 +414,7 @@ class motors(object):
                 ismoving = True
                 time.sleep(0.2)
                 while ismoving:
-                    b = self.phi.motor_state
+                    b = self.control["phi"].motor_state
                     self.signals.AxisPosSignal.emit(self.posphi)
                     ismoving = b['moving']
                     time.sleep(0.02)
@@ -267,19 +433,19 @@ class motors(object):
                     self.signals.AxisPosSignal.emit(self.epicsmotors[n].VAL)
                     ismoving = self.ismoving(axis)
                     time.sleep(0.01)                    
-        if axis in self.hexapod.axes:
-            pos = self.hexapod.get_pos()
+        if axis in self.control["hexapod"].axes:
+            pos = self.control["hexapod"].get_pos()
             prevpos = pos[axis]
             abstarget = prevpos+target
-            self.hexapod.mv(axis, abstarget)
+            self.control["hexapod"].mv(axis, abstarget)
             if wait:
                 time.sleep(0.02)
                 while True:
-                    pos = self.hexapod.get_pos()
+                    pos = self.control["hexapod"].get_pos()
                     pos = float(pos[axis])
                     self.signals.AxisPosSignal.emit(pos)
                     #if (abs(pos-abstarget)<0.00001) or (abs(pos-prevpos)<0.00001):
-                    if self.hexapod.isattarget(axis):
+                    if self.control["hexapod"].isattarget(axis):
                         break
                     prevpos = pos
                     time.sleep(0.01)
@@ -303,9 +469,9 @@ class motors(object):
                 n = 2
             return self.epicsmotors[n].get('VBAS')
         if axis == "phi":
-            return self.phi.vel, self.phi.acc
-        if axis in self.hexapod.axes:
-            return self.hexapod.get_speed(), None
+            return self.control["phi"].vel, self.control["phi"].acc
+        if axis in self.control["hexapod"].axes:
+            return self.control["hexapod"].get_speed(), None
         if axis in self.gonio.channel_names:
             ch = self.gonio.channel_names.index(axis)
             vel,acc = self.gonio.get_speed(ch)
@@ -321,10 +487,10 @@ class motors(object):
                 n = 2
             self.epicsmotors[n].put('VBAS', vel)
         if axis == "phi":
-            self.phi.vel = vel
-            self.phi.acc = acc
-        if axis in self.hexapod.axes:
-            self.hexapod.set_speed(vel)
+            self.control["phi"].vel = vel
+            self.control["phi"].acc = acc
+        if axis in self.control["hexapod"].axes:
+            self.control["hexapod"].set_speed(vel)
         if axis in self.gonio.channel_names:
             ch = self.gonio.channel_names.index(axis)
             self.gonio.set_speed(ch, vel, acc)
@@ -339,19 +505,19 @@ class motors(object):
                 n = 2
             self.epicsmotors[n].put('VBAS', pos)
         if axis == "phi":
-            acsc.setRPosition(self.phi.controller.hc, self.phi.axisno, pos)
+            acsc.setRPosition(self.control["phi"].controller.hc, self.control["phi"].axisno, pos)
         if axis in self.gonio.channel_names:
             ch = self.gonio.channel_names.index(axis)
             self.gonio.set_pos(ch, pos)
         
     def disconnect(self):
-        self.hexapod.disconnect()
-        self.phi.controller.disconnect()
+        self.control["hexapod"].disconnect()
+        self.control["phi"].controller.disconnect()
 
     def connect(self):
         self.hexapod = Hexapod(hexapodIP)
-        self.phi.controller.connect(acsIP)
-        #self.phi = Axis(acscontroller, 0)
+        self.control["phi"].controller.connect(acsIP)
+        #self.control["phi"] = Axis(acscontroller, 0)
     
     def isconnected(self, axis = 'X'):
         #print(axis, " This is in motions.py")
@@ -365,20 +531,20 @@ class motors(object):
         if axis in self.gonio.channel_names:
             ax = self.gonio.channel_names.index(axis)
             return self.gonio.connected[ax]
-        if axis in self.hexapod.axes:
-            ax = self.hexapod.axes.index(axis)
-            return self.hexapod.connected[ax]
+        if axis in self.control["hexapod"].axes:
+            ax = self.control["hexapod"].axes.index(axis)
+            return self.control["hexapod"].connected[ax]
         if axis == "phi":
-            return self.phi.connected
+            return self.control["phi"].connected
 
     def disp(self):
-        while self.phi.moving:
-            print(self.phi.fpos)
+        while self.control["phi"].moving:
+            print(self.control["phi"].fpos)
             time.sleep(1)
         
     def plot_hex(self, axis = 'X', filename=""):
         print("Getting records from Hexapod.")
-        data = self.hexapod.get_records()
+        data = self.control["hexapod"].get_records()
         print("Done.. Preparing to plot.")
         if isinstance(data, type({})):
             l_data = [data]
@@ -411,55 +577,55 @@ class motors(object):
     #pos = hexapod.get_pos()
     @property
     def posx(self):
-        pos = self.hexapod.get_pos()
+        pos = self.control["hexapod"].get_pos()
         return pos['X']
     @posx.setter
     def posx(self, value):
-        self.hexapod.mv('X', value)
+        self.control["hexapod"].mv('X', value)
     
     @property
     def posy(self):
-        pos = self.hexapod.get_pos()
+        pos = self.control["hexapod"].get_pos()
         return pos['Y']
     @posy.setter
     def posy(self, value):
-        self.hexapod.mv('Y', value)
+        self.control["hexapod"].mv('Y', value)
 
     @property
     def posz(self):
-        pos = self.hexapod.get_pos()
+        pos = self.control["hexapod"].get_pos()
         return pos['Z']
     @posz.setter
     def posz(self, value):
-        self.hexapod.mv('Z', value)
+        self.control["hexapod"].mv('Z', value)
     
     @property
     def posu(self):
-        pos = self.hexapod.get_pos()
+        pos = self.control["hexapod"].get_pos()
         return pos['U']
     @posu.setter
     def posu(self, value):
-        self.hexapod.mv('U', value)
+        self.control["hexapod"].mv('U', value)
 
     @property
     def posv(self):
-        pos = self.hexapod.get_pos()
+        pos = self.control["hexapod"].get_pos()
         return pos['V']
     @posv.setter
     def posv(self, value):
-        self.hexapod.mv('V', value)
+        self.control["hexapod"].mv('V', value)
 
     @property
     def posw(self):
-        pos = self.hexapod.get_pos()
+        pos = self.control["hexapod"].get_pos()
         return pos['W']
     @posw.setter
     def posw(self, value):
-        self.hexapod.mv('W', value)
+        self.control["hexapod"].mv('W', value)
 
     @property
     def posphi(self):
-        return self.phi.fpos
+        return self.control["phi"].fpos
     @posphi.setter
     def posphi(self, value):
         self.mvphi(value)
