@@ -380,7 +380,7 @@ def set_pos(ax, position=0):
 
 def ismoving(ax):
     if type(ax) == str:
-        ax = channels.index(ax)
+        ax = motornames.index(ax)
     r_id2 = ctl.RequestReadProperty(smaract, ax, ctl.Property.CHANNEL_STATE, 0)
     state = ctl.ReadProperty_i32(smaract, r_id2)
     if (state & ctl.ChannelState.ACTIVELY_MOVING) == 0:

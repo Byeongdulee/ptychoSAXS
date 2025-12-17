@@ -1,4 +1,5 @@
-from .motions import motors
+#from .motions import motors
+from .motions_ver2 import motors
 from .interferometers import qds
 from .interferometers import plot_position
 import time

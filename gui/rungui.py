@@ -26,6 +26,7 @@ import time
 #import QThread
 
 sys.path.append('..')
+sys.path.append('../ptychosaxs')
 
 from ptychosaxs import instruments
 pts = instruments()
@@ -268,7 +269,6 @@ class ptyco_main_control(QMainWindow):
             print("Hexapod servo is off. Trying to turn it on...")
             self.handle_hexapod_error()
             print("Hexapod servo is now on.")
-
         #self.beamstatus = beamstatus()
         self.ui = uic.loadUi(guiName)
         self.messages = {}
