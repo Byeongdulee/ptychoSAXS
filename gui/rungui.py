@@ -2762,6 +2762,8 @@ class ptyco_main_control(QMainWindow):
             for detN, det in enumerate(self.detector):
                 if det is not None:
                     isDET_selected = True
+                    print(detN, det)
+                    print(det._prefix)
                     print(f"Exposure time set to %0.3f seconds for {det._prefix}."% expt)
                     try:
                         #det.fly_ready(expt, len(pos))
