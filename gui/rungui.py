@@ -1561,7 +1561,6 @@ class ptyco_main_control(QMainWindow):
                 f.write("%i    %s\n"%(i, strv))
 
     def flydone(self, return_motor=True, reset_scannumber=True, donedone=True):
-        print(return_motor, " Returning motors?")
         if return_motor:
             # when 1D scan is done.
             if self.shutter_close_after_scan:
@@ -1625,13 +1624,6 @@ class ptyco_main_control(QMainWindow):
 #         print(f"Elapsed time to save softglue data since flydone = {time.time()-ct0}")
 
         # if read softglue failed...
-        scaninfo = []
-        scaninfo.append('#I detector_filename')
-
-        txt = self.ui.ed_scanname.text()
-        self.parameters.scan_number = int(self.ui.le_scannumber.text())
-        filename = "%s%0.3i"%(txt,self.parameters.scan_number)
-        scaninfo.append(filename)
 
         for i, det in enumerate(self.detector):
             if det is not None:
@@ -1663,36 +1655,31 @@ class ptyco_main_control(QMainWindow):
                         fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
                         if reset_scannumber:
                             det.FileNumber = 1
-                if len(fn)>0:
-                    print("===============================")
-                    print(f"saved filename: {fn}")
-                    print("===============================")
+                # if len(fn)>0:
+                #     print("===============================")
+                #     print(f"saved filename: {fn}")
+                #     print("===============================")
+                #     filename = os.path.basename(fn)
+                # else:
+                #     filename = ""
+        
+        if len(self.parameters.logfilename)>0:
+            pos = np.asarray(self.mpos)
+            r = np.asarray(self.rpos)
+            if len(r) > 0:
+                self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
+            self.mpos = []
+            self.rpos = []
+            scaninfo = []
+            scaninfo.append('#I detector_filename')
+            if len(fn)>0:
                     filename = os.path.basename(fn)
-                else:
-                    filename = ""
-        if len(scaninfo)>1:
-            self.write_scaninfo_to_logfile(scaninfo)
-
-        if self.is_ptychomode:
-            if success == False:
-                foldername = self.ui.ed_workingfolder.text()
-                if len(foldername) == 0:
-                    return
-                filename = "%s_%0.5i" % (rstrip_from_char(filename, "_"), fnum-1)
-                
-                if len(filename) ==0:
-                    self.messages["recent error message"] = "****** Error: detector ioc does not response."
-                    print(self.messages["recent error message"])
-                    filename = "temp%i"%int(time.time())
-                
-                filename = f"{filename}.dat"
-                print(f"\nSoftglue epics erorr.....Data read from usb will be saved in {filename}\n")
-                try:
-                    self.save_nparray(filename, pos,r,[0,1,2],"a")
-                except:
-                    self.save_list(filename, pos,r,[0,1,2],"a")
-        self.rpos = []
-        self.mpos = []
+                    scaninfo.append(filename)
+            if len(scaninfo)>1:
+                self.write_scaninfo_to_logfile(scaninfo)
+            scaninfo = []
+            scaninfo.append('#D')
+            scaninfo.append(time.ctime())
         if len(self.motor_p0.keys()) ==1: # 1d fly
             self.updateprogressbar(100)
         print(f"Elapsed time to finish flydone = {time.time()-ct0}")
@@ -2755,6 +2742,20 @@ class ptyco_main_control(QMainWindow):
             pos = np.array([st, fe])
         #self.ui.progressBar.setValue(0)
 
+        scaninfo = []
+        scaninfo.append('#H')
+        if self.detector[2] is not None:
+            scaninfo.append(axis)
+            scaninfo.append(self.detector[2].scaler.NM2)
+            scaninfo.append(self.detector[2].scaler.NM3)
+            scaninfo.append(self.detector[2].scaler.NM4)
+        else:
+            scaninfo.append(axis)
+            scaninfo.append('QDS1')
+            scaninfo.append('QDS2')
+            scaninfo.append('QDS3')
+        self.write_scaninfo_to_logfile(scaninfo)  
+
         # prepare to collect Detector images
         isDET_selected = False
 #        print(pos, " This is the phi angle to be measured...............")
@@ -3024,12 +3025,29 @@ class ptyco_main_control(QMainWindow):
 
         # Nx2 numpy array of (x, y)
         pos = np.asarray(coords)
-#        print(pos)
         Nline = len(pos)
         # keep for later use if needed
         self.stepscan2d_positions = pos
         #dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
         # each time it will send a pulse
+
+        scaninfo = []
+        scaninfo.append('#H')
+        if self.detector[2] is not None:
+            scaninfo.append(xaxis)
+            scaninfo.append(yaxis)
+            scaninfo.append(self.detector[2].scaler.NM2)
+            scaninfo.append(self.detector[2].scaler.NM3)
+            scaninfo.append(self.detector[2].scaler.NM4)
+        else:
+            scaninfo.append(xaxis)
+            scaninfo.append(yaxis)
+            scaninfo.append('QDS1')
+            scaninfo.append('QDS2')
+            scaninfo.append('QDS3')
+        self.write_scaninfo_to_logfile(scaninfo)  
+
+
         if self.parameters._pulses_per_step==1:
             period = 0
         else:
@@ -3581,19 +3599,13 @@ class ptyco_main_control(QMainWindow):
         # logging datatype
         scaninfo = []
         scaninfo.append('#H')
-        if self.isStruckCountNeeded:
-            scaninfo.append(self.Xaxis)
-            print(self.isStruckCountNeeded, " Struck count needed")
-            try:
-                scaninfo.append(self.detector[2].scaler.NM2)
-                scaninfo.append(self.detector[2].scaler.NM3)
-                scaninfo.append(self.detector[2].scaler.NM4)
-            except:
-                scaninfo.append('QDS1')
-                scaninfo.append('QDS2')
-                scaninfo.append('QDS3')
-        else:
-            scaninfo.append(self.Xaxis)
+        if self.detector[2] is not None: # if struck is selected
+            scaninfo.append("index")
+            scaninfo.append(self.detector[2].scaler.NM2)
+            scaninfo.append(self.detector[2].scaler.NM3)
+            scaninfo.append(self.detector[2].scaler.NM4)
+        else: # if struck is not selected
+            scaninfo.append("index")
             scaninfo.append('QDS1')
             scaninfo.append('QDS2')
             scaninfo.append('QDS3')
@@ -3653,13 +3665,13 @@ class ptyco_main_control(QMainWindow):
             return
         
         # Scan start ............................
-        print("Time to finish line 2182: %0.3f" % (time.time()-t0))
+#        print("Time to finish line 2182: %0.3f" % (time.time()-t0))
         axes = [self.Xaxis, self.Yaxis]
-        print(axes)
+#        print(axes)
         self.pts.hexapod.goto_start_pos(axes) # took 0.4 second
-        print("Time to finish line 2184: %0.3f" % (time.time()-t0))
-        print(self.pts.hexapod.pulse_number_per_line, " pulses per line")
-        print(self.pts.hexapod.number_of_lines, " number of lines")
+#        print("Time to finish line 2184: %0.3f" % (time.time()-t0))
+#        print(self.pts.hexapod.pulse_number_per_line, " pulses per line")
+#        print(self.pts.hexapod.number_of_lines, " number of lines")
         for det in self.detector:
             if det is not None:
                 try:
@@ -3788,7 +3800,7 @@ class ptyco_main_control(QMainWindow):
         # logging datatype
         scaninfo = []
         scaninfo.append('#H')
-        if self.isStruckCountNeeded:
+        if self.detector[2] is not None:
             scaninfo.append(self.motornames[motornumber])
             scaninfo.append(self.detector[2].scaler.NM2)
             scaninfo.append(self.detector[2].scaler.NM3)
@@ -3924,12 +3936,29 @@ class ptyco_main_control(QMainWindow):
                         break
                 print("Run_traj is sent command in rungui.")
                 isattarget = False
+                timeelapsed = 0
+                t0 = time.time()
                 while not isattarget:
                     try:
                         isattarget = self.pts.hexapod.isattarget(axis)
                     except:
                         isattarget = False
                     time.sleep(0.02)
+                    #pos_tmp = self.pts.get_pos(axis)
+                    timeelapsed = time.time()-t0
+                    prog = float(timeelapsed)/float(tm)
+                    if update_progress:
+                        update_progress(int(prog*100))
+                    msg1 = f'Elapsed time = {int(timeelapsed)}s since the start.'
+                    if prog>0:
+                        remainingtime = timeelapsed/prog - timeelapsed
+                    else:
+                        remainingtime = 999
+                    msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime,2)}s\n"
+                    self.messages["current status"] = "%s%s"%(msg1, msg2)
+                    if update_status:
+                        update_status(self.messages["current status"])
+
                     if self.isStopScanIssued:
                         break
 
@@ -4019,7 +4048,7 @@ class ptyco_main_control(QMainWindow):
 #                print("speed should be ", abs(fe-st)/tm)
                 self.pts.set_speed(axis, abs(fe-st)/tm, abs(fe-st)/tm*10)
                 time.sleep(0.02)
-                self.pts.mv(axis, fe, wait=True)
+                self.pts.mv(axis, fe, wait=False)
 #                print("Should be in run.")
             
             # Start collect data while an axis is moving.
@@ -4069,8 +4098,9 @@ class ptyco_main_control(QMainWindow):
         # check if data collections are all done..
         for det in self.detector:
             if det is not None:
-#                print(f"Detector, {det._prefix}, will be foreced to stop")
-                det.ForceStop(2)
+                if det.Armed:
+                    print(f"Detector, {det._prefix}, will be foreced to stop")
+                    det.ForceStop(2)
         #print("Time to finish fly0: %0.3f" % (time.time()-t0))
         return 1
 
@@ -4189,6 +4219,8 @@ class ptyco_main_control(QMainWindow):
 
         if len(rpos) == 0:
             return
+        if len(mpos) ==0:
+            mpos = np.arange(rpos.shape[1])
         if mpos.ndim ==2:
             with open(filename, option) as f:
                 for i, m in enumerate(mpos):
