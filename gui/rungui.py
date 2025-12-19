@@ -1146,10 +1146,10 @@ class ptyco_main_control(QMainWindow):
                         
     def setphivel_default(self):
 #        print(self.pts.phi.vel, " This was vel value")
-        self.pts.phi.vel = 36
-        time.sleep(0.1)
-        self.pts.phi.acc = self.pts.phi.vel*10
-#        self.pts.set_speed()
+        #self.pts.phi.vel = 36
+        #time.sleep(0.1)
+        #self.pts.phi.acc = self.pts.phi.vel*10
+        self.pts.set_speed(36, 360)
 
     def sethexapodvel_default(self):
 #        print(self.pts.phi.vel, " This was vel value")
@@ -1565,9 +1565,12 @@ class ptyco_main_control(QMainWindow):
             # when 1D scan is done.
             if self.shutter_close_after_scan:
                 self.shutterC.close()
-            for key in self.motor_p0:
+            for i, key in enumerate(self.motor_p0):
                 if self.motornames[key] == 'phi':
                     self.setphivel_default()
+                if i==0:
+                    if hasattr(self, '_prev_vel'):
+                        self.pts.set_speed(self._prev_vel,self._prev_acc)
                 self.mv(key, self.motor_p0[key])
 
         self.messages["current status"] = f"fly done. {time.ctime()}"
@@ -4013,24 +4016,21 @@ class ptyco_main_control(QMainWindow):
                 # enable fit menu
                 self.ui.actionFit_QDS_phi.setEnabled(True)
                 # scan start
-                self._prev_vel, self._prev_acc = self.pts.get_speed(axis)
-                self.pts.set_speed(axis, 36/2, 36/2*10)
+#                self._prev_vel, self._prev_acc = self.pts.get_speed(axis)
+#                self.pts.set_speed(axis, 36/2, 36/2*10)
 #                print(f"Speed of phi is set to {self.pts.phi.vel}.")
-                self.pts.mv('phi', st, wait=True)
-                time.sleep(0.2)
-                self.pts.set_speed(axis, abs(fe-st)/tm,abs(fe-st)/tm*10)
-#                print(f"Speed of phi is set to {self.pts.phi.vel}.")
-                self.pts.mv('phi', fe, wait=False)
+#                self.pts.mv('phi', st, wait=True)
+#                time.sleep(0.2)
+#                 self.pts.set_speed(axis, abs(fe-st)/tm,abs(fe-st)/tm*10)
+# #                print(f"Speed of phi is set to {self.pts.phi.vel}.")
+#                 self.pts.mv('phi', fe, wait=False)
 
-            else:
-                self.pts.mv(axis, st, wait=True)
-                #ax = self.pts.gonio.channel_names.index(axis)
-                self._prev_vel,self._prev_acc = self.pts.get_speed(axis)
-#                print("prev speed was ", self._prev_vel)
-#                print("speed should be ", abs(fe-st)/tm)
-                self.pts.set_speed(axis, abs(fe-st)/tm, abs(fe-st)/tm*10)
-                time.sleep(0.02)
-                self.pts.mv(axis, fe, wait=False)
+            self._prev_vel,self._prev_acc = self.pts.get_speed(axis)
+            self.pts.mv(axis, st, wait=True)
+            time.sleep(0.1)
+            self.pts.set_speed(axis, abs(fe-st)/tm, abs(fe-st)/tm*10)
+            time.sleep(0.02)
+            self.pts.mv(axis, fe, wait=False)
 
             
             # Start collect data while an axis is moving.
