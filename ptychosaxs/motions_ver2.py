@@ -206,7 +206,7 @@ class motors(object):
         if controller == "phi":
             con.mv(target)
         if controller == "gonio":
-            con.mv(axis, target)
+            con.mv(axis, target, wait=wait)
         TIMEOUT = 10
         t0 = time.time()
         if wait:

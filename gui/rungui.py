@@ -1149,7 +1149,7 @@ class ptyco_main_control(QMainWindow):
         #self.pts.phi.vel = 36
         #time.sleep(0.1)
         #self.pts.phi.acc = self.pts.phi.vel*10
-        self.pts.set_speed(36, 360)
+        self.pts.set_speed('phi', 36, 360)
 
     def sethexapodvel_default(self):
 #        print(self.pts.phi.vel, " This was vel value")
@@ -1356,7 +1356,7 @@ class ptyco_main_control(QMainWindow):
         basename = '12idSGSocket:'
         if status:
             self.ui.actionSG.setChecked(True)
-            self.detector[3] = SGstream(basename)
+            self.detector[3] = SGstream(basename, s12softglue)
             #self.detector[3].basepath = self.det_basepath
             #self.detector[3].basename = basename
             if self.ui.actionCapture_multi_frames.isChecked():
@@ -1570,7 +1570,7 @@ class ptyco_main_control(QMainWindow):
                     self.setphivel_default()
                 if i==0:
                     if hasattr(self, '_prev_vel'):
-                        self.pts.set_speed(self._prev_vel,self._prev_acc)
+                        self.pts.set_speed(self.motornames[key], self._prev_vel,self._prev_acc)
                 self.mv(key, self.motor_p0[key])
 
         self.messages["current status"] = f"fly done. {time.ctime()}"
@@ -1585,7 +1585,8 @@ class ptyco_main_control(QMainWindow):
 
         self.isscan = False
         self.isfly = False
-
+        s12softglue.flush()
+        print(f"softglue flushed at {time.ctime()}")
         # if len(self.parameters.logfilename)>0:
         #     if self.detector[2] is not None:
         #         # save struck data.
@@ -1631,7 +1632,6 @@ class ptyco_main_control(QMainWindow):
         for i, det in enumerate(self.detector):
             if det is not None:
                 if 'SG' in det._prefix:
-                    s12softglue.flush()
                     #time.sleep(5)
                     det.ForceStop()
                     success = True
@@ -3992,11 +3992,10 @@ class ptyco_main_control(QMainWindow):
 
 
             # set the delay generator
-            if expt != dg645_12ID._exposuretime:
-                try:
-                    dg645_12ID.set_pilatus2(expt, Nstep, step)
-                except:
-                    raise DG645_Error
+            try:
+                dg645_12ID.set_pilatus2(expt, Nstep, step)
+            except:
+                raise DG645_Error
             # # softglue ready
             # if self.is_ptychomode:
             #     if self.detector[3] is None: 
@@ -4035,6 +4034,7 @@ class ptyco_main_control(QMainWindow):
             
             # Start collect data while an axis is moving.
             dg645_12ID.trigger()
+            print("")
             print(f"{axis} scan started..")
             # while self.pts.ismoving(axis):
             #     time.sleep(0.2)
@@ -4043,6 +4043,8 @@ class ptyco_main_control(QMainWindow):
             N_imgcollected = 0
             timeelapsed = time.time()-t0
             TIMEOUT = step*2+1
+            if TIMEOUT < 5:
+                TIMEOUT = 5
             timestart = time.time()
             while N_imgcollected<Nstep:
                 for ndet, det in enumerate(self.detector):
@@ -4050,6 +4052,7 @@ class ptyco_main_control(QMainWindow):
                         continue
                     if det is not None:
                         val = det.ArrayCounter_RBV
+                        break
                 prog = float(val)/float(Nstep)
                 if update_progress:
                     update_progress(int(prog*100))
@@ -4078,12 +4081,12 @@ class ptyco_main_control(QMainWindow):
                 if self.isStopScanIssued:
                     break
         
-        # check if data collections are all done..
-        for det in self.detector:
-            if det is not None:
-                if det.Armed:
-                    print(f"Detector, {det._prefix}, will be foreced to stop")
-                    det.ForceStop(2)
+        # # check if data collections are all done..
+        # for det in self.detector:
+        #     if det is not None:
+        #         if det.Armed:
+        #             print(f"Detector, {det._prefix}, will be foreced to stop")
+        #             det.ForceStop(2)
         #print("Time to finish fly0: %0.3f" % (time.time()-t0))
         return 1
 

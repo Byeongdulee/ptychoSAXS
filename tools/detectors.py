@@ -436,19 +436,42 @@ class XSP(AD_XSP):
 
 class SGstream(AD_SG):
 	mode = ""
-	def __init__(self, basename="12idSGSocket:"):
-		super().__init__(basename)
+	def __init__(self, basename="12idSGSocket:", sgz=None):
+		super().__init__(basename, sgz)
 		self.setNDArrayPort()
 
 	def ForceStop(self, val=0):
-		self.Acquire = 0
+		#self.softglue.flush()
+		#print(f"softglue flushed second time at {time.ctime()}")
+		#time.sleep(0.5)
 		TIMEOUT = 5
+		t0 = time.time()
+		isflushedagain = False
+		while (self.getArrayCounter() == 0) and (not isflushedagain):
+			self.softglue.flush()
+			time.sleep(0.1)
+			isflushedagain = True
+			print("")
+			print(f"softglue flushed second time at {time.ctime()}")
+			print("")
+			#print(self.getArrayCounter())
+			if (time.time()-t0) > TIMEOUT:
+				print("SGstream timed out.")
+				break
+
 		t0 = time.time()
 		while self.getNumCaptured() != self.getArrayCounter():
 			time.sleep(0.02)
+			if isflushedagain:
+				if self.getNumCaptured()>0:
+					print("SG data captured on HDF")
+					break
+			#print(self.getNumCaptured(), self.getArrayCounter())
 			if (time.time()-t0) > TIMEOUT:
+				print("SGstream timed out.")
 				break
 		self.FileCaptureOff()
+		self.Acquire = 0
 
 	def SetNumImages(self, n):
 		pass

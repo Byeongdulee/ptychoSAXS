@@ -883,9 +883,9 @@ class AD_SG(Device):
                  'AutoSave', 'AutoIncrement', 'EnableCallbacks', 
                  'FileTemplate', 'FileTemplate_RBV', 'NDArrayPort')
 
-    _nonpvs  = ('_prefix', '_pvs', '_delim', 'filesaver','basepath',
+    _nonpvs  = ('_prefix', '_pvs', '_delim', 'filesaver','basepath','softglue',
                 'camattrs', 'pathattrs', '_nonpvs')
-    def __init__(self, prefix, FileNumber=0, filesaver='HDF1:', basepath = "/net/micdata/data2"):
+    def __init__(self, prefix, softglue=None, FileNumber=0, filesaver='HDF1:', basepath = "/net/micdata/data2"):
         camprefix = prefix + 'SG1:'
         self.FileNumber = FileNumber
         Device.__init__(self, camprefix, delim='',
@@ -893,6 +893,7 @@ class AD_SG(Device):
                         attrs=self.camattrs)
         self.filesaver = "%s%s" % (prefix, filesaver)
         self.basepath = basepath
+        self.softglue = softglue
         for p in self.pathattrs:
             pvname = '%s%s%s' % (prefix, filesaver, p)
             self.add_pv(pvname, attr='File_'+p)
