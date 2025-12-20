@@ -52,24 +52,11 @@ class hexapod(Hexapod):
         ismoving = not self.isattarget(axis)
         return ismoving
 
-    # def get_pos(self, axis=""):
-    #     pos = self.get_pos()
-    #     if len(axis) == 0:
-    #         return pos
-    #     else:
-    #         return float(pos[axis])
-    
     def mvr(self, axis, target):
         pos = self.get_pos()
         prevpos = pos[axis]
         abstarget = prevpos+target
         return self.mv(axis, abstarget)
-
-    # def get_speed(self, axis=0):
-    #     return self.get_speed(), None
-    
-    # def set_speed(self, axis=0, vel=1, acc=1):
-    #     self.set_speed(vel)
     
     def set_pos(self, axis, pos=0):
         pass        
@@ -270,8 +257,6 @@ class motors(object):
     
     def isconnected(self, axis = 'X'):
         indx = self.motornames.index(axis)
-        #controller = self.controller[indx]
-        #con = self.control[controller]
         return self.connected[indx]
     
     @property
