@@ -3333,36 +3333,31 @@ class ptyco_main_control(QMainWindow):
         if ymotor>-1: # 2D SNAKE scan
             n = ymotor+1
             Yaxis = self.motornames[ymotor]
-            # p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-            # p0 = float(p0)
-            # st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-            # fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
-            # step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-            # self.fly2d_p0 = p0
-            # self.fly2d_st = st
-            # self.fly2d_fe = fe
-            # self.fly2d_step = step
             isSNAKE = True
 
         n = xmotor+1
         Xaxis = self.motornames[xmotor]
-        # p0 = self.ui.findChild(QLineEdit, "ed_%i"%n).text()
-        # p0 = float(p0)
-        # st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L"%n).text())
-        # fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R"%n).text())
-        # tm = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t"%n).text())
-        # step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N"%n).text())
-        # self.fly1d_p0 = p0
-        # self.fly1d_st = st
-        # self.fly1d_fe = fe
-        # self.fly1d_tm = tm
-        # self.fly1d_step = step
 
         # get relative scan range and convert it to absolute...
         Xst = self.fly1d_st + self.fly1d_p0
         Xfe = self.fly1d_fe + self.fly1d_p0
-        Xstep = self.fly1d_step  # step time
+        # This was step time before, but now we will use it as distance step and compute step time based on the speed of hexapod and the distance step.
+        Xstep = self.fly1d_step  # step distance (this was step time before)
+        # This was the total time before, but now we will use it as the exposure time
+        # a time for each step will be calculated.
         Xtm = self.fly1d_tm
+
+        # step time calculation
+        step_time  = Xtm + self.det_readout_time
+        if step_time < 0.03:
+            step_time = 0.03
+        self.parameters._ratio_exp_period = Xtm / step_time
+        # total time calculation
+        Nsteps = int((Xfe-Xst)/Xstep)
+        total_time = Nsteps * step_time
+        Xtm = total_time
+        Xstep = step_time
+        
         self.Xi = Xst
         self.Xf = Xfe
         self.Xaxis = Xaxis
