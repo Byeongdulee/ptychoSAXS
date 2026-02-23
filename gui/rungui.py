@@ -72,7 +72,7 @@ from typing import List
 from threading import Lock
 
 import requests
-status_url = "https://12idb.xray.aps.anl.gov/PVapp/ptycho_status"
+status_url = "https://12ide.xray.aps.anl.gov/PVapp/ptycho_status"
 
 HEXAPOD_FLYMODE_WAVELET = 0
 HEXAPOD_FLYMODE_STANDARD = 1
