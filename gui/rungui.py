@@ -315,6 +315,7 @@ class ptyco_main_control(QMainWindow):
         
         self.isscan = False
         self.isfly = False
+        self.hdf_plugin_savemode = 2
 
         if not hasattr(self.pts.gonio, 'channel_names'):
             self.pts.gonio.channel_names = [""]
@@ -3349,8 +3350,8 @@ class ptyco_main_control(QMainWindow):
 
         # step time calculation
         step_time  = Xtm + self.det_readout_time
-        if step_time < 0.03:
-            step_time = 0.03
+        if step_time < 0.033:
+            step_time = 0.033
         self.parameters._ratio_exp_period = Xtm / step_time
         # total time calculation
         Nsteps = int((Xfe-Xst)/Xstep)
@@ -3450,7 +3451,7 @@ class ptyco_main_control(QMainWindow):
             print(self.messages["recent error message"])
 #                    print("******* Cannot run.")
             raise DET_MIN_READOUT_Error(self.messages["recent error message"])
-        if abs(period-expt) <= 0.033:
+        if abs(period) < 0.033:
             self.messages["recent error message"] = f"Note that Max speed of Pilatus2M is 30Hz."
             print(self.messages["recent error message"])
             raise DET_OVER_READOUT_SPEED_Error(self.messages["recent error message"])
@@ -3626,9 +3627,9 @@ class ptyco_main_control(QMainWindow):
                 dirv = 6
             self.pts.hexapod.assign_axis2wavtable(axis, self.pts.hexapod.WaveGenID[axis]+dirv)
 
-            period = self.pts.hexapod.pulse_step
+            period = self.pts.hexapod.pulse_step  # pulse step time.
             expt = period*self.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
-            
+            print(period, expt, step)
             if isTestRun:
                 print(f"{self.pts.hexapod.pulse_number} images will be collected every {period}s with exposure time of {expt}s.")
             
@@ -3645,7 +3646,7 @@ class ptyco_main_control(QMainWindow):
                 print(self.messages["recent error message"])
                 raise DET_MIN_READOUT_Error(self.messages["recent error message"])
             
-            if abs(step) <= 0.033:
+            if abs(period) < 0.033:
                 self.messages["recent error message"] = f"Note that Max speed of Pilatus2M is 30Hz."
                 print(self.messages["recent error message"])
                 raise DET_OVER_READOUT_SPEED_Error(self.messages["recent error message"])

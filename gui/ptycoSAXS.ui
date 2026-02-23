@@ -305,7 +305,7 @@
              </size>
             </property>
             <property name="text">
-             <string>expt[step]/run time[fly]</string>
+             <string>expt (s)</string>
             </property>
            </widget>
           </item>
@@ -1499,7 +1499,7 @@
              </size>
             </property>
             <property name="text">
-             <string>step[step]/expt[fly]</string>
+             <string>step (mm)</string>
             </property>
            </widget>
           </item>
@@ -2145,7 +2145,7 @@
      <x>0</x>
      <y>0</y>
      <width>1300</width>
-     <height>22</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
