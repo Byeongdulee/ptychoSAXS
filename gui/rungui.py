@@ -1612,7 +1612,7 @@ class ptyco_main_control(QMainWindow):
 #         print(f"Elapsed time to save softglue data since flydone = {time.time()-ct0}")
 
         # if read softglue failed...
-
+        fn = ""
         for i, det in enumerate(self.detector):
             if det is not None:
                 if 'SG' in det._prefix:
@@ -2635,19 +2635,19 @@ class ptyco_main_control(QMainWindow):
         if len(pos)==1:
             pos = np.array([st, fe])
 
-        scaninfo = []
-        scaninfo.append('#H')
-        if self.detector[2] is not None:
-            scaninfo.append(axis)
-            scaninfo.append(self.detector[2].scaler.NM2)
-            scaninfo.append(self.detector[2].scaler.NM3)
-            scaninfo.append(self.detector[2].scaler.NM4)
-        else:
-            scaninfo.append(axis)
-            scaninfo.append('QDS1')
-            scaninfo.append('QDS2')
-            scaninfo.append('QDS3')
-        self.write_scaninfo_to_logfile(scaninfo)  
+        # scaninfo = []
+        # scaninfo.append('#H')
+        # if self.detector[2] is not None:
+        #     scaninfo.append(axis)
+        #     scaninfo.append(self.detector[2].scaler.NM2)
+        #     scaninfo.append(self.detector[2].scaler.NM3)
+        #     scaninfo.append(self.detector[2].scaler.NM4)
+        # else:
+        #     scaninfo.append(axis)
+        #     scaninfo.append('QDS1')
+        #     scaninfo.append('QDS2')
+        #     scaninfo.append('QDS3')
+        # self.write_scaninfo_to_logfile(scaninfo)  
 
         # prepare to collect Detector images
         isDET_selected = False
@@ -2898,21 +2898,21 @@ class ptyco_main_control(QMainWindow):
         #dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
         # each time it will send a pulse
 
-        scaninfo = []
-        scaninfo.append('#H')
-        if self.detector[2] is not None:
-            scaninfo.append(xaxis)
-            scaninfo.append(yaxis)
-            scaninfo.append(self.detector[2].scaler.NM2)
-            scaninfo.append(self.detector[2].scaler.NM3)
-            scaninfo.append(self.detector[2].scaler.NM4)
-        else:
-            scaninfo.append(xaxis)
-            scaninfo.append(yaxis)
-            scaninfo.append('QDS1')
-            scaninfo.append('QDS2')
-            scaninfo.append('QDS3')
-        self.write_scaninfo_to_logfile(scaninfo)  
+        # scaninfo = []
+        # scaninfo.append('#H')
+        # if self.detector[2] is not None:
+        #     scaninfo.append(xaxis)
+        #     scaninfo.append(yaxis)
+        #     scaninfo.append(self.detector[2].scaler.NM2)
+        #     scaninfo.append(self.detector[2].scaler.NM3)
+        #     scaninfo.append(self.detector[2].scaler.NM4)
+        # else:
+        #     scaninfo.append(xaxis)
+        #     scaninfo.append(yaxis)
+        #     scaninfo.append('QDS1')
+        #     scaninfo.append('QDS2')
+        #     scaninfo.append('QDS3')
+        # self.write_scaninfo_to_logfile(scaninfo)  
 
         if self.parameters._pulses_per_step==1:
             period = 0
@@ -3423,20 +3423,20 @@ class ptyco_main_control(QMainWindow):
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
         
-        # logging datatype
-        scaninfo = []
-        scaninfo.append('#H')
-        if self.detector[2] is not None: # if struck is selected
-            scaninfo.append("index")
-            scaninfo.append(self.detector[2].scaler.NM2)
-            scaninfo.append(self.detector[2].scaler.NM3)
-            scaninfo.append(self.detector[2].scaler.NM4)
-        else: # if struck is not selected
-            scaninfo.append("index")
-            scaninfo.append('QDS1')
-            scaninfo.append('QDS2')
-            scaninfo.append('QDS3')
-        self.write_scaninfo_to_logfile(scaninfo)  
+        # # logging datatype
+        # scaninfo = []
+        # scaninfo.append('#H')
+        # if self.detector[2] is not None: # if struck is selected
+        #     scaninfo.append("index")
+        #     scaninfo.append(self.detector[2].scaler.NM2)
+        #     scaninfo.append(self.detector[2].scaler.NM3)
+        #     scaninfo.append(self.detector[2].scaler.NM4)
+        # else: # if struck is not selected
+        #     scaninfo.append("index")
+        #     scaninfo.append('QDS1')
+        #     scaninfo.append('QDS2')
+        #     scaninfo.append('QDS3')
+        # self.write_scaninfo_to_logfile(scaninfo)  
 
 
         #expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
@@ -3591,20 +3591,20 @@ class ptyco_main_control(QMainWindow):
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
         
-        # logging datatype
-        scaninfo = []
-        scaninfo.append('#H')
-        if self.detector[2] is not None:
-            scaninfo.append(self.motornames[motornumber])
-            scaninfo.append(self.detector[2].scaler.NM2)
-            scaninfo.append(self.detector[2].scaler.NM3)
-            scaninfo.append(self.detector[2].scaler.NM4)
-        else:
-            scaninfo.append(self.motornames[motornumber])
-            scaninfo.append('QDS1')
-            scaninfo.append('QDS2')
-            scaninfo.append('QDS3')
-        self.write_scaninfo_to_logfile(scaninfo)  
+        # # logging datatype
+        # scaninfo = []
+        # scaninfo.append('#H')
+        # if self.detector[2] is not None:
+        #     scaninfo.append(self.motornames[motornumber])
+        #     scaninfo.append(self.detector[2].scaler.NM2)
+        #     scaninfo.append(self.detector[2].scaler.NM3)
+        #     scaninfo.append(self.detector[2].scaler.NM4)
+        # else:
+        #     scaninfo.append(self.motornames[motornumber])
+        #     scaninfo.append('QDS1')
+        #     scaninfo.append('QDS2')
+        #     scaninfo.append('QDS3')
+        # self.write_scaninfo_to_logfile(scaninfo)  
 
         st = self.fly1d_st + self.fly1d_p0
         fe = self.fly1d_fe + self.fly1d_p0
