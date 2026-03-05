@@ -1414,6 +1414,8 @@ class ptyco_main_control(QMainWindow):
                     fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
                     filename = os.path.basename(fn)
                     filename = "%s" % rstrip_from_char(filename, "_")
+            if len(filename)>0:
+                break
                 
         if len(filename) ==0:
             self.messages["recent error message"] = "****** Detector ioc is not available."
