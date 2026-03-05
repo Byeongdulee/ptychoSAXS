@@ -85,7 +85,7 @@ QDS_UNIT_MM = 2
 QDS_UNIT_DEFAULT = QDS_UNIT_UM  # default QDS output is um
 DEFAULTS = {'xmotor':0, 'ymotor':2, 'phimotor':6}  #vertical stage is Z in the scan_gui, change 'ymotor' from 1 to 2, JD
 inifilename = "pty-co-saxs.ini"
-STRUCK_CHANNELS = [2,4,5]
+STRUCK_CHANNELS = [2,3,4,5]
 def rstrip_from_char(string, char):
     """Removes characters from the right of the string starting from the first occurrence of 'char'."""
 #    print(f'{string=}')
@@ -1206,11 +1206,22 @@ class ptyco_main_control(QMainWindow):
                         fnum = det.FileNumber_RBV
                         fn = bytes(det.FullFileName_RBV).decode().strip('\x00')
 
+        # save Struck as a separate txt file.
+        if self.isStruckCountNeeded:
+            #data = self.detector[2].read_mcs(STRUCK_CHANNELS)
+            foldername, filename = self.get_softglue_filename()
+            if len(foldername) == 0:
+                return
+            foldername = os.path.join(foldername, 'Struck', self.scannumberstring)
+            os.makedirs(foldername, exist_ok=True)
+            np.savetxt(os.path.join(foldername, filename + '.txt'), self.rpos)
+        
+        # update logfile if logfilename is set.
         if len(self.parameters.logfilename)>0:
-            pos = np.asarray(self.mpos)
-            r = np.asarray(self.rpos)
-            if len(r) > 0:
-                self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
+            #pos = np.asarray(self.mpos)
+            #r = np.asarray(self.rpos)
+            #if len(r) > 0:
+            #    self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
             self.mpos = []
             self.rpos = []
             scaninfo = []
@@ -1649,12 +1660,21 @@ class ptyco_main_control(QMainWindow):
                 #     filename = os.path.basename(fn)
                 # else:
                 #     filename = ""
+        # save Struck as a separate txt file.
+        if self.isStruckCountNeeded:
+            #data = self.detector[2].read_mcs(STRUCK_CHANNELS)
+            foldername, filename = self.get_softglue_filename()
+            if len(foldername) == 0:
+                return
+            foldername = os.path.join(foldername, 'Struck', self.scannumberstring)
+            os.makedirs(foldername, exist_ok=True)
+            np.savetxt(os.path.join(foldername, filename + '.txt'), self.rpos)
         
         if len(self.parameters.logfilename)>0:
-            pos = np.asarray(self.mpos)
-            r = np.asarray(self.rpos)
-            if len(r) > 0:
-                self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
+            # pos = np.asarray(self.mpos)
+            # r = np.asarray(self.rpos)
+            # if len(r) > 0:
+            #     self.save_list(self.parameters.logfilename, pos,r,[0,1,2],"a")
             self.mpos = []
             self.rpos = []
             scaninfo = []
@@ -2259,7 +2279,7 @@ class ptyco_main_control(QMainWindow):
         self.isStopScanIssued = False
         motor = motornumber
 
-        scan_name = "stepscan2d"
+        scan_name = "stepscan"
         print(f'\n\n{scan_name}:{motor=}')
 
 
@@ -2678,8 +2698,9 @@ class ptyco_main_control(QMainWindow):
                 period = 0.03
         dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage = self.parameters._pulses_per_step, Cycperiod=period)
         
-        # if self.isStruckCountNeeded:
-        #     struck.mcs_counter_init()
+        if self.isStruckCountNeeded:
+            self.detector[2].mcs_counter_init()
+            #struck.mcs_counter_init()
 
         self.plotlabels = []
         

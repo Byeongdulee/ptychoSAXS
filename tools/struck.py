@@ -141,11 +141,11 @@ class struck(Struck):
 		return 1
 		
 	def mcs_counter_init(self):
-		self.OneShotMode()
-		#self.ChannelAdvance = 1
-		#self.scaler.CONT = 0
-		#self.SCAN = 0
-		#self.Prescale = 1
+		#self.OneShotMode()
+		self.ChannelAdvance = 1
+		self.scaler.CONT = 0
+		self.SCAN = 0
+		self.Prescale = 1
 		return 2
 		
 	def mcs_counter_ready(self,expt):
