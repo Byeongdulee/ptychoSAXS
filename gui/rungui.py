@@ -3382,13 +3382,14 @@ class ptyco_main_control(QMainWindow):
         Xtm = self.fly1d_tm
 
         # step time calculation
-        if self.parameters._flyidletime < self.det_readout_time:
+        flyidletime= self.parameters._flyidletime
+        if flyidletime < self.det_readout_time:
             print("Note that the fly idle time per step %.3f s is too short to readout the detector images. It will be automatically set to %.3f s, which is the detector readout time."%(self.parameters._flyidletime, self.det_readout_time))
-            self.parameters._flyidletime = self.det_readout_time
-        if Xtm + self.parameters._flyidletime < 0.033:
+            flyidletime = self.det_readout_time
+        if Xtm + flyidletime < 0.033:
             print(f"Note that the step time is too short for the detector collection frequency. It will be automatically set to 0.033s.")
-            self.parameters._flyidletime = 0.033 - Xtm
-        step_time  = Xtm + self.parameters._flyidletime
+            flyidletime = 0.033 - Xtm
+        step_time  = Xtm + flyidletime
 
         #if step_time < 0.033:
         #    step_time = 0.033
@@ -3396,8 +3397,8 @@ class ptyco_main_control(QMainWindow):
         # total time calculation
         Nsteps = int((Xfe-Xst)/Xstep)+1
         total_time = Nsteps * step_time
-        Xtm = total_time
-        Xstep = step_time
+        #Xtm = total_time
+        #Xstep = step_time
         
         self.Xi = Xst
         self.Xf = Xfe
@@ -3413,18 +3414,11 @@ class ptyco_main_control(QMainWindow):
             self.Yf = Yfe
             self.Yaxis = Yaxis
 
-            #print('Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep')
-            #print(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
-            self.pts.hexapod.set_traj_SNAKE(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
-            #print("")
-            #print("SNAKE setup")
-            #print(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
-            #print("")
-            #axes = [Xaxis, Yaxis]
-            #wavtableIDs = [13, 14]
-            #self.pts.hexapod.assign_axis2wavtable(axes, wavtableIDs)
+            self.pts.hexapod.set_traj_SNAKE(total_time, Xst, Xfe-Xst, Yst, Yfe, Ystep, step_time)
+            #self.pts.hexapod.set_traj_SNAKE2(step_time, Xst, Xfe-Xst, Xstep,Yst, Yfe, Ystep)
+
         else: # regular scan
-            self.pts.hexapod.set_traj(Xaxis, Xtm, Xfe-Xst, Xst, 1, abs(Xstep), 50)
+            self.pts.hexapod.set_traj(Xaxis, total_time, Xfe-Xst, Xst, 1, abs(step_time), 50)
 
     def fly2d0_SNAKE(self, xmotor = 0, ymotor=1, scanname = "", update_progress=None, update_status=None):
         self.update_scanname()
