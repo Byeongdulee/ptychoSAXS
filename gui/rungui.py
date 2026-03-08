@@ -308,6 +308,7 @@ class ptyco_main_control(QMainWindow):
             self.parameters.scan_number = 0
             self.parameters.scan_name = ""
             self.parameters._ratio_exp_period = FRACTION_EXPOSURE_PERIOD
+            self.parameters._fly_idletime = 0.033
             self.parameters.scan_time = -1
             self.parameters._pulses_per_step = 1
             self.parameters.saxsmode = 1  # 0 for ptychography, 1 for SAXS
@@ -465,7 +466,8 @@ class ptyco_main_control(QMainWindow):
         self.parameters.scan_number +=1
         #self.ui.le_scannumber.setText(str(int(self.parameters.scan_number)+1))
         self.update_scannumber()
-        self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_exp_period_ratio)
+        #self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_exp_period_ratio)
+        self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_fly_idletime)
 
         if os.name != 'nt':
             self.ui.menuQDS.setDisabled(True)
@@ -981,6 +983,11 @@ class ptyco_main_control(QMainWindow):
     def set_exp_period_ratio(self):
         val, ok = QInputDialog().getDouble(self, "Exposuretime/Period for Flyscan", "Fraction", self.parameters._ratio_exp_period, decimals=2)
         self.parameters._ratio_exp_period = val
+        self.parameters.writeini()
+
+    def set_fly_idletime(self):
+        val, ok = QInputDialog().getDouble(self, "Flyscan step time-exptime", "Time (s)", self.parameters._fly_idletime, decimals=2)
+        self.parameters._fly_idletime = val
         self.parameters.writeini()
 
     def select_qds_x(self):
@@ -3375,9 +3382,16 @@ class ptyco_main_control(QMainWindow):
         Xtm = self.fly1d_tm
 
         # step time calculation
-        step_time  = Xtm + self.det_readout_time
-        if step_time < 0.033:
-            step_time = 0.033
+        if self.parameters._flyidletime < self.det_readout_time:
+            print("Note that the fly idle time per step %.3f s is too short to readout the detector images. It will be automatically set to %.3f s, which is the detector readout time."%(self.parameters._flyidletime, self.det_readout_time))
+            self.parameters._flyidletime = self.det_readout_time
+        if Xtm + self.parameters._flyidletime < 0.033:
+            print(f"Note that the step time is too short for the detector collection frequency. It will be automatically set to 0.033s.")
+            self.parameters._flyidletime = 0.033 - Xtm
+        step_time  = Xtm + self.parameters._flyidletime
+
+        #if step_time < 0.033:
+        #    step_time = 0.033
         self.parameters._ratio_exp_period = Xtm / step_time
         # total time calculation
         Nsteps = int((Xfe-Xst)/Xstep)+1
@@ -3399,11 +3413,11 @@ class ptyco_main_control(QMainWindow):
             self.Yf = Yfe
             self.Yaxis = Yaxis
 
-            print('Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep')
-            print(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
+            #print('Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep')
+            #print(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
             self.pts.hexapod.set_traj_SNAKE(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
             #print("")
-            print("SNAKE setup")
+            #print("SNAKE setup")
             #print(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
             #print("")
             #axes = [Xaxis, Yaxis]
@@ -3423,7 +3437,7 @@ class ptyco_main_control(QMainWindow):
         # scaninfo.append('#I Y = ')
         # scaninfo.append(value)
         # self.write_scaninfo_to_logfile(scaninfo) 
-        print("In fly2d0")
+        #print("In fly2d0")
         t0 = time.time()
 
         self.plotlabels = []
