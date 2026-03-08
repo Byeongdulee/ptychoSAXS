@@ -68,8 +68,10 @@ class pilatus(AD_Pilatus):
 		#if capture[0]: # as long as 
 		
 		isHDFMode = capture[0]; #use hdf plugin?
-
-		self.SetMultiFrames(Npoints, x_points)
+		if y_points ==1:
+			self.SetMultiFrames(Npoints, x_points)
+		else:
+			self.SetMultiFrames(Npoints, Npoints)
 		#self.setFileNumber(1)
 		if not isTest:
 			if isHDFMode:
@@ -498,9 +500,11 @@ class SGstream(AD_SG):
 		self.filePut('FileWriteMode', 2) # stream mode
 	
 	def step_ready(self, *args, **kwargs):
+		#self.setArrayCounter(0)
 		self.StartStreaming()
     
 	def fly_ready(self, *args, **kwargs):
+		#self.setArrayCounter(0)
 		self.StartStreaming()
 
 	def set_scanNumberAsfilename(self):

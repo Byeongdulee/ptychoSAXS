@@ -1000,6 +1000,7 @@ class AD_SG(Device):
         file saving plugin, and start acquisition
         """
         self.ShutterMode = 0
+        #self.filePut('ArrayCounter', 0) # reset array counter at the beginning of streaming
         self.filePut('AutoSave', 1)
         self.filePut('FileWriteMode', 2)  # stream
         time.sleep(0.025)

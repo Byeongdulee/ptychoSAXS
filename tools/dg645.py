@@ -321,8 +321,49 @@ class dg645_12ID(SRSDG645):
             self.check_error()
         else:
             self.burst_enable = 0
-    
-    def set_pilatus2(self, DGexpt, DGNimage=1, Cycperiod=0, negativedelay=0, triggerDelay=0, trigger_source=TSRC_SINGLE_SHOT):
+            
+    def set_pilatus2(self, DGexpt, DGNimage=1, Cycperiod=0, trigger_source=TSRC_SINGLE_SHOT):
+        delaytime = 0
+        if (delaytime >= UBZ_SHUTTER_DEADTIME):
+            delaytime = delaytime - UBZ_SHUTTER_DEADTIME
+        self.instrument["struck"].polarity = 0
+        self.instrument["detector"].polarity = 1
+        
+        self.trigger_source = trigger_source
+        if (DGNimage>1):
+            if (DGexpt >= Cycperiod):
+                raise ValueError("Image period should be longer than the exposure time + 0.004")
+        detector_delay = delaytime + UBZ_SHUTTER_DEADTIME
+        self.instrument["shutter"].delay = delaytime
+        self.instrument["shutter"].pulsewidth = DGexpt + UBZ_SHUTTER_DEADTIME*2
+        self.instrument["detector"].delay = detector_delay
+        self.instrument["detector"].pulsewidth = DGexpt
+        self.instrument["struck"].delay = detector_delay + DGexpt + 0.00001
+        self.instrument["struck"].pulsewidth = 0.0001
+        self.instrument["inhibitor"].delay = detector_delay
+        self.instrument["inhibitor"].pulsewidth = DGexpt
+
+        if Cycperiod == 0:
+            self.enable_burst_mode = 0
+            return
+        
+        longesttime = delaytime + DGexpt + UBZ_SHUTTER_DEADTIME*2
+        if (detector_delay+DGexpt) > longesttime:
+            longesttime = detector_delay+DGexpt
+        if (Cycperiod < longesttime):
+            raise TimeoutError("Cycperiod should be longer than a single pulse")
+        Cycdelay = SOFTWARE_INIT_DEADTIME
+        
+        self.burst_init()
+
+        if ((Cycperiod < DG645_BURST_MAX_TIME) and (DGNimage > 1)):
+            self.burst_set(DGNimage, Cycperiod, Cycdelay)
+            print(f"Set burst mode with {DGNimage} images, cycle period of {Cycperiod:.3f} s, and cycle delay of {Cycdelay:.3f} s.")
+            self.check_error()
+        else:
+            self.burst_enable = 0
+
+    def set_pilatus3(self, DGexpt, DGNimage=1, Cycperiod=0, negativedelay=0, triggerDelay=0, trigger_source=TSRC_SINGLE_SHOT):
         delaytime = 0
         if (delaytime >= UBZ_SHUTTER_DEADTIME):
             delaytime = delaytime - UBZ_SHUTTER_DEADTIME

@@ -27,6 +27,7 @@ try:
     acscontroller.connect(acsIP)
 
     phi = Axis(acscontroller, 0)
+    phi.enable()
     phi.connected = True
     acsc.commutate(phi.controller.hc, phi.axisno)
 except:

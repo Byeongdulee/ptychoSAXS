@@ -1,3 +1,5 @@
+set scanname siemens_star_05ms_
+stepscan2d xmotor 0 ymotor 2
 #fly2d xmotor 0 ymotor 1 scanname test
 #fly3d xmotor 0 ymotor 1 phimotor 6 scanname test
 #set scanname nanocube_2_pos2

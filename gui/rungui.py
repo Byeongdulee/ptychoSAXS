@@ -540,7 +540,7 @@ class ptyco_main_control(QMainWindow):
         self.updatepos()
 
         # detectors
-        self.det_readout_time = 0.02 # detector minimum readout time.
+        self.det_readout_time = DETECTOR_READOUTTIME # detector minimum readout time.
         self.detector = [None]*5
         self.detector_mode = ['', '', '', '', 'XRF']
         self.hdf_plugin_name = ['','','','', '']
@@ -1560,8 +1560,8 @@ class ptyco_main_control(QMainWindow):
     def flydone(self, return_motor=True, reset_scannumber=True, donedone=True):
         if return_motor:
             # when 1D scan is done.
-            if self.shutter_close_after_scan:
-                self.shutterC.close()
+            #if self.shutter_close_after_scan:
+            #    self.shutterC.close()
             for i, key in enumerate(self.motor_p0):
                 if self.motornames[key] == 'phi':
                     self.setphivel_default()
@@ -1572,8 +1572,6 @@ class ptyco_main_control(QMainWindow):
 
         self.messages["current status"] = f"fly done. {time.ctime()}"
         print(self.messages["current status"])
-        if self.shutter_close_after_scan:
-            self.shutterC.close()        
         ct0 = time.time()
 
         isTestRun = self.ui.actionTestFly.isChecked()
@@ -1694,6 +1692,9 @@ class ptyco_main_control(QMainWindow):
         print(f"Elapsed time to finish flydone = {time.time()-ct0}")
         if donedone:
             self.update_status_scan_time()
+            if self.shutter_close_after_scan:
+                self.shutterC.close()        
+
 
     def flydone2d(self, value=0):
         for key in self.motor_p0:
@@ -3284,6 +3285,8 @@ class ptyco_main_control(QMainWindow):
                 if self.use_hdf_plugin and (self.hdf_plugin_savemode>0):
                     for det in self.detector: #JD
                         if det is not None:  #JD
+                            if not hasattr(det, 'filePut'):
+                                continue
                             if "cam" or "SG" or "dante" or "xsp3" in det._prefix.lower():
                                 det.filePut('FileNumber', i+1) 
 
@@ -3377,7 +3380,7 @@ class ptyco_main_control(QMainWindow):
             step_time = 0.033
         self.parameters._ratio_exp_period = Xtm / step_time
         # total time calculation
-        Nsteps = int((Xfe-Xst)/Xstep)
+        Nsteps = int((Xfe-Xst)/Xstep)+1
         total_time = Nsteps * step_time
         Xtm = total_time
         Xstep = step_time
@@ -3396,9 +3399,11 @@ class ptyco_main_control(QMainWindow):
             self.Yf = Yfe
             self.Yaxis = Yaxis
 
+            print('Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep')
+            print(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
             self.pts.hexapod.set_traj_SNAKE(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
             #print("")
-            #print("SNAKE setup")
+            print("SNAKE setup")
             #print(Xtm, Xst, Xfe-Xst, Yst, Yfe, Ystep, Xstep)
             #print("")
             #axes = [Xaxis, Yaxis]
@@ -3418,7 +3423,7 @@ class ptyco_main_control(QMainWindow):
         # scaninfo.append('#I Y = ')
         # scaninfo.append(value)
         # self.write_scaninfo_to_logfile(scaninfo) 
-
+        print("In fly2d0")
         t0 = time.time()
 
         self.plotlabels = []
@@ -3445,29 +3450,14 @@ class ptyco_main_control(QMainWindow):
 
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
-        
-        # # logging datatype
-        # scaninfo = []
-        # scaninfo.append('#H')
-        # if self.detector[2] is not None: # if struck is selected
-        #     scaninfo.append("index")
-        #     scaninfo.append(self.detector[2].scaler.NM2)
-        #     scaninfo.append(self.detector[2].scaler.NM3)
-        #     scaninfo.append(self.detector[2].scaler.NM4)
-        # else: # if struck is not selected
-        #     scaninfo.append("index")
-        #     scaninfo.append('QDS1')
-        #     scaninfo.append('QDS2')
-        #     scaninfo.append('QDS3')
-        # self.write_scaninfo_to_logfile(scaninfo)  
-
 
         #expt = np.around(self.pts.hexapod.scantime/self.pts.hexapod.pulse_number*0.75, 3)
         period = self.pts.hexapod.pulse_step
+        print(self.pts.hexapod.pulse_number, "This is the number of pulses......")
         #expt = period-self.det_readout_time  JD
         expt = period*self.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
-        if period-expt < DETECTOR_READOUTTIME:
-            raise RuntimeError("expouretime is too short to readout DET images.")
+        #if period-expt < DETECTOR_READOUTTIME:
+        #    raise RuntimeError("expouretime is too short to readout DET images.")
 
         if expt <= 0:
             self.messages["recent error message"] = f"Note that after subtracting the detector readout time {self.det_readout_time:.3e} s, the exposure time becomes equal or less than 0."
@@ -3505,7 +3495,9 @@ class ptyco_main_control(QMainWindow):
         for det in self.detector:
             if det is not None:
                 try:
-                    det.fly_ready(expt, self.pts.hexapod.pulse_number_per_line, self.pts.hexapod.number_of_lines, period=period, 
+                    # det.fly_ready(expt, self.pts.hexapod.pulse_number_per_line, self.pts.hexapod.number_of_lines, period=period, 
+                    #                 isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
+                    det.fly_ready(expt, self.pts.hexapod.pulse_number, 1, period=period, 
                                     isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode))
         #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
                 except TimeoutError:
@@ -3528,9 +3520,11 @@ class ptyco_main_control(QMainWindow):
         # Update progress bar and status message.
         N_imgcollected = 0
         timeelapsed = time.time()-t0
-        TIMEOUT = period*2+1
+        #TIMEOUT = period*2+1
         timestart = time.time()
-        Nstep = self.pts.hexapod.pulse_number_per_line*self.pts.hexapod.number_of_lines
+        #Nstep = self.pts.hexapod.pulse_number_per_line*self.pts.hexapod.number_of_lines
+        Nstep = self.pts.hexapod.pulse_number
+        TIMEOUT = period*Nstep + 2
         while N_imgcollected<Nstep:
             for ndet, det in enumerate(self.detector):
                 if ndet>1: 
@@ -3572,7 +3566,7 @@ class ptyco_main_control(QMainWindow):
 
             updatetime = time.time()-timestart
             if updatetime>TIMEOUT:
-                self.messages["recent error message"] = f"Detector {det._prefix} data collection timeout after {TIMEOUT} seconds."
+                self.messages["recent error message"] = f"Data collection timeout after {TIMEOUT} seconds."
                 print(self.messages["recent error message"])
                 self.ui.statusbar.showMessage(self.messages["recent error message"])
                 return DETECTOR_NOT_STARTED_ERROR
@@ -3614,21 +3608,6 @@ class ptyco_main_control(QMainWindow):
         if not self.ui.cb_keepprevscan.isChecked():
             self.clearplot()
         
-        # # logging datatype
-        # scaninfo = []
-        # scaninfo.append('#H')
-        # if self.detector[2] is not None:
-        #     scaninfo.append(self.motornames[motornumber])
-        #     scaninfo.append(self.detector[2].scaler.NM2)
-        #     scaninfo.append(self.detector[2].scaler.NM3)
-        #     scaninfo.append(self.detector[2].scaler.NM4)
-        # else:
-        #     scaninfo.append(self.motornames[motornumber])
-        #     scaninfo.append('QDS1')
-        #     scaninfo.append('QDS2')
-        #     scaninfo.append('QDS3')
-        # self.write_scaninfo_to_logfile(scaninfo)  
-
         st = self.fly1d_st + self.fly1d_p0
         fe = self.fly1d_fe + self.fly1d_p0
         step = self.fly1d_step
@@ -3652,7 +3631,6 @@ class ptyco_main_control(QMainWindow):
 
             period = self.pts.hexapod.pulse_step  # pulse step time.
             expt = period*self.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
-            print(period, expt, step)
             if isTestRun:
                 print(f"{self.pts.hexapod.pulse_number} images will be collected every {period}s with exposure time of {expt}s.")
             
@@ -3680,7 +3658,6 @@ class ptyco_main_control(QMainWindow):
                     dg645_12ID.set_pilatus_fly(expt)
                 except:
                     raise DG645_Error
-                
 
             #SoftGlue ready for recording interferometer values
             movestep = abs(fe-st)/self.pts.hexapod.pulse_number*1000*self.parameters._ratio_exp_period
@@ -3772,16 +3749,56 @@ class ptyco_main_control(QMainWindow):
             print(f"pos is {pos:.3e} after the traj run done.")
         # fly scan with a constant velocity of motions.
         else: 
-            Nstep = round(tm/step) # step is the period.
-            expt = step*self.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
-            if step - expt < 0.015:
-                raise DET_MIN_READOUT_Error(f"Period - Exposure Time,{step-expt}s, should be longer than 50 microseconds.")
-            
+            print("Fly scan with phi.")
+            # fly for phi scan is unique.
+            # tm is the total time for the fly scan, which is determined by the user input.
+            # step is the angle step, which is determined by the user input.
+            Xstep = self.fly1d_step  # step angle (this was step time before)
+            # This was the total time before, but now we will use it as the exposure time
+            # a time for each step will be calculated.
+            Xtm = self.fly1d_tm
+
+            # step time calculation
+            step_time  = Xtm + self.det_readout_time
+            if step_time < 0.033:
+                step_time = 0.033
+            #self.parameters._ratio_exp_period = Xtm / step_time
+            # total time calculation
+            Nsteps = int((fe-st)/Xstep)
+            total_time = Nsteps * step_time
+            #expt = step_time*self.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
+            expt = Xtm
+            if step_time - expt < 0.015:
+                raise DET_MIN_READOUT_Error(f"Period - Exposure Time,{step_time-expt}s, should be longer than 50 microseconds.")
+
+            # set the delay generator
+            try:
+                dg645_12ID.set_pilatus2(expt, Nsteps, step_time)  # exposuretime, number of images, and time period for fly scan.
+            except:
+                raise DG645_Error
+            print(f"Exposure time: {expt:0.3e} s, number of steps: {Nsteps}, Step time: {step_time:.3e} s, Total time for the scan: {total_time:.3f} s.")
+            if self.ui.cb_reversescandir.isChecked():
+                if abs(st-pos)>abs(fe-pos):
+                    t = fe
+                    fe = st
+                    st = t 
+
+            if motornumber ==6:
+                # enable fit menu
+                self.ui.actionFit_QDS_phi.setEnabled(True)
+
+            self._prev_vel,self._prev_acc = self.pts.get_speed(axis)
+            self.pts.mv(axis, st, wait=True)
+            time.sleep(0.1)
+            #print(f"Setting speed for fly scan. Total time: {abs(fe-st)/total_time:.3f} s, acceleration: {abs(fe-st)/total_time*10:.3f}.")
+            self.pts.set_speed(axis, abs(fe-st)/total_time, abs(fe-st)/total_time*10)
+            time.sleep(0.02)
+
             # Need to make detectors ready
             for detN, det in enumerate(self.detector):
                 if det is not None:
                     try:
-                        det.fly_ready(expt, Nstep, period=step, 
+                        det.fly_ready(expt, Nsteps, period=step_time, 
                                         isTest = isTestRun, capture=(self.use_hdf_plugin, self.hdf_plugin_savemode),fn=self.hdf_plugin_name[detN])
             #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
                     except TimeoutError:
@@ -3797,29 +3814,6 @@ class ptyco_main_control(QMainWindow):
                 print(self.messages["recent error message"])
                 return DETECTOR_NOT_STARTED_ERROR
 
-
-            # set the delay generator
-            try:
-                dg645_12ID.set_pilatus2(expt, Nstep, step)
-            except:
-                raise DG645_Error
-
-            if self.ui.cb_reversescandir.isChecked():
-                if abs(st-pos)>abs(fe-pos):
-                    t = fe
-                    fe = st
-                    st = t 
-
-            if motornumber ==6:
-                # enable fit menu
-                self.ui.actionFit_QDS_phi.setEnabled(True)
-
-            self._prev_vel,self._prev_acc = self.pts.get_speed(axis)
-            self.pts.mv(axis, st, wait=True)
-            time.sleep(0.1)
-            self.pts.set_speed(axis, abs(fe-st)/tm, abs(fe-st)/tm*10)
-            time.sleep(0.02)
-
             scaninfo = []
             print("")
             print(f"{axis} scan started..")
@@ -3827,24 +3821,27 @@ class ptyco_main_control(QMainWindow):
             scaninfo.append(f'0,   {st},   {time.time()}')
             self.pts.mv(axis, fe, wait=False)
             
+            print("about to send out trigger.")
             # Start collect data while an axis is moving.
             dg645_12ID.trigger()
-            
+            print("Delay generator is triggered to start the fly scan.")
             # Update progress bar and status message.
             N_imgcollected = 0
             timeelapsed = time.time()-t0
-            TIMEOUT = step*2+1
+            TIMEOUT = total_time+5
             if TIMEOUT < 5:
                 TIMEOUT = 5
             timestart = time.time()
-            while N_imgcollected<Nstep:
+            val = 0
+            #print(N_imgcollected, Nsteps)
+            while N_imgcollected<Nsteps:
                 for ndet, det in enumerate(self.detector):
                     if ndet>1: 
                         continue
                     if det is not None:
                         val = det.ArrayCounter_RBV
                         break
-                prog = float(val)/float(Nstep)
+                prog = float(val)/float(Nsteps)
                 pos = self.pts.get_pos(axis)
                 scaninfo.append(f'{val},    {pos},  {time.time()}')
                 

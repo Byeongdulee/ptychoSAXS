@@ -20,8 +20,8 @@ try:
 
     acscontroller = Controller("ethernet", 1)
     acscontroller.connect(acsIP)
-
     phi = Axis(acscontroller, 0)
+    phi.enable()
     phi.connected = True
     acsc.commutate(phi.controller.hc, phi.axisno)
 except:
