@@ -986,7 +986,7 @@ class ptyco_main_control(QMainWindow):
         self.parameters.writeini()
 
     def set_fly_idletime(self):
-        val, ok = QInputDialog().getDouble(self, "Flyscan step time-exptime", "Time (s)", self.parameters._fly_idletime, decimals=2)
+        val, ok = QInputDialog().getDouble(self, "Flyscan step time-exptime", "Time (s)", self.parameters._fly_idletime, decimals=3)
         self.parameters._fly_idletime = val
         self.parameters.writeini()
 
@@ -3382,9 +3382,9 @@ class ptyco_main_control(QMainWindow):
         Xtm = self.fly1d_tm
 
         # step time calculation
-        flyidletime= self.parameters._flyidletime
+        flyidletime= self.parameters._fly_idletime
         if flyidletime < self.det_readout_time:
-            print("Note that the fly idle time per step %.3f s is too short to readout the detector images. It will be automatically set to %.3f s, which is the detector readout time."%(self.parameters._flyidletime, self.det_readout_time))
+            print("Note that the fly idle time per step %.3f s is too short to readout the detector images. It will be automatically set to %.3f s, which is the detector readout time."%(self.parameters._fly_idletime, self.det_readout_time))
             flyidletime = self.det_readout_time
         if Xtm + flyidletime < 0.033:
             print(f"Note that the step time is too short for the detector collection frequency. It will be automatically set to 0.033s.")
@@ -3414,9 +3414,15 @@ class ptyco_main_control(QMainWindow):
             self.Yf = Yfe
             self.Yaxis = Yaxis
 
-            self.pts.hexapod.set_traj_SNAKE(total_time, Xst, Xfe-Xst, Yst, Yfe, Ystep, step_time)
-            #self.pts.hexapod.set_traj_SNAKE2(step_time, Xst, Xfe-Xst, Xstep,Yst, Yfe, Ystep)
-
+            #self.pts.hexapod.set_traj_SNAKE(total_time, Xst, Xfe-Xst, Yst, Yfe, Ystep, step_time)
+            self.pts.hexapod.set_traj_SNAKE2(step_time, Xst, Xfe-Xst, Xstep,Yst, Yfe, Ystep)
+            minstep, commonstep = self.pts.hexapod.analyze_pulse_steps()
+            if minstep != commonstep:
+                binsize = 0.001 # convert index to second
+                print(f"Warning: The pulse steps is mostly {commonstep*binsize*1000:.1f} ms")
+                print(f"but there are some smaller steps of {minstep*binsize*1000:.3f} ms.")
+                print(f"This is likely due to the way the hexapod handles the trajectory.") 
+                print(f"You may want to adjust the fly step size to be a multiple of {commonstep*binsize*1000:.3f} ms to achieve more consistent step sizes.")
         else: # regular scan
             self.pts.hexapod.set_traj(Xaxis, total_time, Xfe-Xst, Xst, 1, abs(step_time), 50)
 
@@ -3495,6 +3501,7 @@ class ptyco_main_control(QMainWindow):
         # Scan start ............................
 #        print("Time to finish line 2182: %0.3f" % (time.time()-t0))
         axes = [self.Xaxis, self.Yaxis]
+        #axes = ["SNAKE_X", "SNAKE_Y"]
 #        print(axes)
         self.pts.hexapod.goto_start_pos(axes) # took 0.4 second
 #        print("Time to finish line 2184: %0.3f" % (time.time()-t0))
