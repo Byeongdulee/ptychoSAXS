@@ -100,6 +100,26 @@ class struck(Struck):
 		if self.PV('AcquireMode').get() == 1: # if scaler mode, then make counter ready
 			self.mcscounter_getready()
 		return 1
+		
+	def run_mcs_internal_trig(self, expt, imagN):
+		self.stop()
+		self.ChannelAdvance = 0 # internal trigger mode
+		self.scaler.CONT = 0
+		#self.SCAN = 2
+		self.CountOnStart = 1
+		self.Channel1Source = 0
+		self.UserLED = 0
+		self.Prescale = 1
+		self.InputMode = 0 # internal trigger mode and no gating
+		self.OutputMode = 0
+		self.OutputPolarity = 0
+		self.EraseAll = 1
+		self.StopAll = 1
+		self.AcquireMode = 0 # mcs mode
+		self.NuseAll = imagN
+		self.Dwell = expt
+		self.PresetReal = expt*imagN + 100
+		self.arm_mcs()
 
 	def arm_mcs(self):
 		self.start()

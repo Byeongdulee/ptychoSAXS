@@ -3137,6 +3137,7 @@ class ptyco_main_control(QMainWindow):
         # revsere scan disabled: always scan from start to final regardless of the initial position.
         self.pts.mv(axis, st)
         pos = np.arange(st, fe+step/2, step)
+        retried_dueto_timeout = 0
 
         if len(scanname):
             scanname=axis
