@@ -101,7 +101,8 @@ class struck(Struck):
 			self.mcscounter_getready()
 		return 1
 		
-	def run_mcs_internal_trig(self, expt, imagN):
+	def run_mcs_internal_trig(self, expt=0.1, Nstep=100):
+		imagN = Nstep
 		self.stop()
 		self.ChannelAdvance = 0 # internal trigger mode
 		self.scaler.CONT = 0
