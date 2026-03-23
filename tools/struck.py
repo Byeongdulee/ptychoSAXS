@@ -6,7 +6,7 @@ class struck(Struck):
 	_nonpvs  = ('_prefix', '_pvs', '_delim', '_nchan',
                'clockrate', 'scaler', 'mcas', 'basepath', 'FileNumber')
 	def __init__(self, prefix='12idc:'):
-		Struck.__init__(self, prefix+'3820:', scaler='%sscaler1' % prefix, nchan=12)
+		Struck.__init__(self, prefix+'3820:', scaler='%s3820:scaler1' % prefix, nchan=12)
 		self.basepath = "/net/micdata/data2/"
 		# self.add_pv('%sAcquireMode' % prefix, attr = 'AcquireMode')
 		# self.add_pv('%sInputMode' % prefix, attr = 'InputMode')
