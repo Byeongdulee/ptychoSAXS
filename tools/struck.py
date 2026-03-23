@@ -176,8 +176,8 @@ class struck(Struck):
 
 	def arm_mcs_counter(self):
 		self.scaler.Count()
+		time.sleep(0.1)
 		self.mcs_counter_waitstarted()
-		time.sleep(0.1)     
 		
 	def mcs_counter_wait(self,timeExp):
 		wait_time = timeExp + 1
