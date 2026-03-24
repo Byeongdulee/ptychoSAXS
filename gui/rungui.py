@@ -53,6 +53,7 @@ s12softglue = sgz_pty()
 #Delay generator
 import tools.dg645 as dg645
 from tools.dg645 import DG645_Error
+
 try:
     dg645_12ID = dg645.dg645_12ID.open_from_uri(dg645.ADDRESS_12IDC)
 except:
@@ -60,6 +61,7 @@ except:
 
 # struck
 from tools.struck import struck
+from tools import shutter
 
 # detectors
 from tools.detectors import pilatus, dante, SGstream, XSP, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
@@ -86,6 +88,7 @@ QDS_UNIT_DEFAULT = QDS_UNIT_UM  # default QDS output is um
 DEFAULTS = {'xmotor':0, 'ymotor':2, 'phimotor':6}  #vertical stage is Z in the scan_gui, change 'ymotor' from 1 to 2, JD
 inifilename = "pty-co-saxs.ini"
 STRUCK_CHANNELS = [2,3,4,5]
+
 def rstrip_from_char(string, char):
     """Removes characters from the right of the string starting from the first occurrence of 'char'."""
 #    print(f'{string=}')
@@ -195,66 +198,6 @@ class mover(QRunnable):
 #         struck.mcs_ready(self.pulseN, self.tm)
 #         struck.arm_mcs()
 #         self.signal.finished.emit(True)
-
-## shutter stuff.. Could be eventually separated out.
-def open_shutter(self):
-    epics.caput('12ida2:rShtrC:Open', 1)
-
-def close_shutter(self):
-    epics.caput('12ida2:rShtrC:Close', 1)
-
-class beamstatus(QObject):
-    onChange = QtCore.pyqtSignal()
-    def __init__(self):
-        # A station shutter..
-        self.shutter_val = epics.PV('PB:12ID:STA_A_FES_CLSD_PL', callback=self.check_A_shutter)
-        self.shutterA = epics.PV('12ida2:rShtrA:Open')
-        self.shutterC_open = epics.PV('12ida2:rShtrC:Open')
-        self.shutterC_close = epics.PV('12ida2:rShtrC:Close')
-
-    def check_A_shutter(self, value, **kws):
-        if value == 0:
-            self.signal.onChange.emit(False)
-        if value == 1:
-            self.signal.onChange.emit(True)
-
-    def open_shutter(self):
-        self.shutterA.put(1)
-
-#    def close_shutter(self):
-#        self.shutterA.put(0)
-
-    def open_shutterC(self):
-        self.shutterC_open.put(1)
-
-    def close_shutterC(self):
-        self.shutterC_close.put(1)
-
-class shutter():
-    def __init__(self):
-        self.shutterC_open = epics.PV('12ida2:rShtrC:Open')
-        self.shutterC_close = epics.PV('12ida2:rShtrC:Close')
-        self.status = epics.PV('PB:12ID:STA_C_SCS_CLSD_PL.VAL')
-    def get_status(self):
-        if self.status.get() == 1:
-            # shutter is in close status
-            return False
-        else:
-            # shutter is in open status
-            return True
-    def open(self):
-        timout = 5
-        self.shutterC_open.put(1)
-        t0 = time.time()
-        while not self.get_status():
-            time.sleep(0.1)
-            self.shutterC_open.put(1)
-            if time.time()-t0>timout:
-                print("Shutter won't open in timeout (5s).")
-                break
-
-    def close(self):
-        self.shutterC_close.put(1)
 
 class ptyco_main_control(QMainWindow):
 #    resized = QtCore.pyqtSignal()
@@ -503,9 +446,9 @@ class ptyco_main_control(QMainWindow):
         self.rpos = []
         self.mpos = []
         ## shutter control
-        self.shutter_status = epics.PV('PA:12ID:STA_A_BEAMREADY_PL.VAL', callback=self.checkshutter)
-        self.shutter = epics.PV('12ida2:rShtrA:Open')
-        self.shutterC = shutter()
+        #self.shutter_status = epics.PV('PA:12ID:STA_A_BEAMREADY_PL.VAL', callback=self.checkshutter)
+        #self.shutter = epics.PV('12ida2:rShtrA:Open')
+        self.shutter = shutter()
 
         # figure to plot
         # a figure instance to plot on
@@ -1165,7 +1108,7 @@ class ptyco_main_control(QMainWindow):
                 self.mv(key, self.motor_p0[key])
         if donedone:
             if self.shutter_close_after_scan:
-                self.shutterC.close()        
+                self.shutter.close()        
 
         self.messages["current status"] = f"stepscan done. {time.ctime()}"
         print(self.messages["current status"])
@@ -1568,7 +1511,7 @@ class ptyco_main_control(QMainWindow):
         if return_motor:
             # when 1D scan is done.
             #if self.shutter_close_after_scan:
-            #    self.shutterC.close()
+            #    self.shutter.close()
             for i, key in enumerate(self.motor_p0):
                 if self.motornames[key] == 'phi':
                     self.setphivel_default()
@@ -1700,7 +1643,7 @@ class ptyco_main_control(QMainWindow):
         if donedone:
             self.update_status_scan_time()
             if self.shutter_close_after_scan:
-                self.shutterC.close()        
+                self.shutter.close()        
 
 
     def flydone2d(self, value=0):
@@ -1721,7 +1664,7 @@ class ptyco_main_control(QMainWindow):
         self.isfly = False
         self.updateprogressbar(100)
         if self.shutter_close_after_scan:
-            self.shutterC.close()
+            self.shutter.close()
         self.update_status_scan_time()
 
     def flydone3d(self, value=0):
@@ -1738,7 +1681,7 @@ class ptyco_main_control(QMainWindow):
         self.isfly = False
         self.updateprogressbar(100)
         if self.shutter_close_after_scan:
-            self.shutterC.close()
+            self.shutter.close()
         self.update_status_scan_time()
 
     def update_status_scan_time(self, time=-1): 
@@ -1953,7 +1896,7 @@ class ptyco_main_control(QMainWindow):
 
         self.isscan = True
         if self.monitor_beamline_status:
-            self.shutterC.open()        
+            self.shutter.open()        
         self.threadpool.start(w)
 
     # def fly2d_SNAKE(self, xmotor=0, ymotor=1, scanname = "", snake=False):
@@ -2043,7 +1986,7 @@ class ptyco_main_control(QMainWindow):
     #     scaninfo.append(time.ctime())
     #     self.isscan = True
     #     if self.monitor_beamline_status:
-    #         self.shutterC.open()
+    #         self.shutter.open()
     #     w = Worker(self.fly2d0_SNAKE, xmotor, ymotor, scanname=scanname, 
     #                update_progress=None, update_status=None)
     #     w.signal.finished.connect(lambda: self.flydone(False))
@@ -2162,7 +2105,7 @@ class ptyco_main_control(QMainWindow):
 
         self.isscan = True
         if self.monitor_beamline_status:
-            self.shutterC.open()
+            self.shutter.open()
         w = Worker(self.fly3d0, xmotor, ymotor, phimotor, scanname=scanname, snake=snake,
             update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone3d)
@@ -2237,7 +2180,7 @@ class ptyco_main_control(QMainWindow):
             self.fly_traj(motornumber)
         self.isscan = True
         if self.monitor_beamline_status:
-            self.shutterC.open()
+            self.shutter.open()
         w = Worker(self.fly0, motornumber, update_progress=None, update_status=None)
         w.signal.finished.connect(self.flydone)
         w.signal.progress.connect(self.updateprogressbar)
@@ -2354,7 +2297,7 @@ class ptyco_main_control(QMainWindow):
 
         self.isscan = True
         if self.monitor_beamline_status:
-            self.shutterC.open()        
+            self.shutter.open()        
         self.threadpool.start(w)
 
 
@@ -2459,7 +2402,7 @@ class ptyco_main_control(QMainWindow):
 
         self.isscan = True
         if self.monitor_beamline_status:
-            self.shutterC.open()        
+            self.shutter.open()        
         self.threadpool.start(w)
 
 
@@ -2564,7 +2507,7 @@ class ptyco_main_control(QMainWindow):
 
         self.isscan = True
         if self.monitor_beamline_status:
-            self.shutterC.open()
+            self.shutter.open()
         w = Worker(self.stepscan3d0, xmotor, ymotor, phimotor, update_progress=None, update_status=None)
         #w.signal.finished.connect(self.scandone)
         w.signal.progress.connect(self.updateprogressbar)
@@ -3209,11 +3152,11 @@ class ptyco_main_control(QMainWindow):
             if self.isStopScanIssued:
                 break
         # Need some action after shutter back up
-        self.shutter.put(1)
+        self.shutter.open_A()
         self.messages["current status"] = f'Beam just came back. A-shutter open command was sent and run will resume in 10mins. {time.ctime()}'
         update_status(self.messages["current status"])
         time.sleep(60)
-        self.shutter.put(1)
+        self.shutter.open_A()
         time.sleep(60*9)
         scaninfo = []
         scaninfo.append('\n')
@@ -4392,7 +4335,7 @@ class ptyco_main_control(QMainWindow):
             except:
                 pass
         elif cmd == "shclose":
-            self.shutterC.close()
+            self.shutter.close()
         elif cmd == "setfolder":
             self.parameters.working_folder = folder
             self.update_workingfolder(self.parameters.working_folder)
