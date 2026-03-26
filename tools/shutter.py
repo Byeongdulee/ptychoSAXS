@@ -56,6 +56,10 @@ class shutter():
         else:
             # shutter is in open status
             return True
+    @property
+    def isClosed(self):
+        return not self.get_status()
+    
     def open(self):
         timout = 5
         self.shutterC_open.put(1)
