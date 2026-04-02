@@ -15,6 +15,7 @@ class AD_Pilatus(Device):
                 'FileName', 'FileName_RBV', 'FullFileName_RBV', 
                 'Acquire', 'Acquire_RBV', 'AcquireTime', 'AcquirePeriod',
                 'Armed', 'ArrayCounter', 'ArrayCounter_RBV',
+                'Energy', 'ThresholdEnergy',
                 'StatusMessage_RBV', 'StringToServer_RBV', 'StringFromServer_RBV')
 
     pathattrs = ('FileNumber', 'FileNumber_RBV', 
