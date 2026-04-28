@@ -7,7 +7,7 @@ import time
 BEAMLINE_12IDB = 0
 BEAMLINE_12IDC = 1
 
-ADDRESS_12IDB = "tcpip://164.54.122.66:5025" # 12idb
+ADDRESS_12IDB = "tcpip://10.54.122.66:5025" # 12idb
 ADDRESS_12IDC = "tcpip://dg645.xray.aps.anl.gov:5025" # 12idc 
 #DG = ik.srs.SRSDG645.open_from_uri(address)
 UBZ_SHUTTER_DEADTIME = 0.005   # 5 ms.
