@@ -514,5 +514,34 @@ class SGstream(AD_SG):
 
 	def refresh(self):
 		self.Acquire = 0
-		return 1 # scuccessfully refreshed		
+		return 1 # scuccessfully refreshed
+
+class PE(AD_Pilatus):
+	"""PerkinElmer flat-panel detector — saves TIFF, no HDF capture."""
+	def __init__(self, basename="12idbPE:"):
+		super().__init__(basename, filesaver='TIFF1:')
+
+	def step_ready(self, expt, N_image, fn="", TriggerMode=1, ImageMode=1):
+		self.setArrayCounter(0)
+		self.AcquireTime = expt
+		self.TriggerMode = TriggerMode
+		self.ImageMode   = ImageMode
+		self.NumImages   = N_image
+		if len(fn) > 0:
+			self.setFileName(fn)
+		self.filePut('AutoIncrement', 1)
+
+	def CCD_waitstarted(self):
+		timeout = 5
+		t0 = time.time()
+		while not self.Acquire_RBV:
+			self.Acquire = 1
+			time.sleep(0.01)
+			if time.time() - t0 > timeout:
+				print("PE CCD_waitstarted timeout")
+				break
+
+	def change2alignment_mode(self):
+		self.setArrayCounter(0)
+		self.TriggerMode = 0  # internal/software trigger
 
