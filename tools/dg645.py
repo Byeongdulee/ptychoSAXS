@@ -187,20 +187,16 @@ class _dg645Instrument(object):
 
     @delay.setter
     def delay(self, newval):
-        #self._ddg.channel[2*self.idx+1].delay = (self._ddg.channel[0], pq.Quantity(newval, "s"))
-        self._ddg.channel[2*self.idx].delay = (self._ddg.channel[0], newval)
+        self._ddg.channel[2*self.idx].delay = (self._ddg.channel[0], pq.Quantity(newval, "s"))
 
     @property
     def pulsewidth(self):
         endtime = self._ddg.channel[2*self.idx+1].delay
-#        if not (endtime[0] == self._ddg.Channels((2*self.idx+1))):
-#            self._ddg.channel[2*self.idx+1].delay = (self._ddg.channel[2*self.idx], endtime[1])
         return endtime[1]
-        
+
     @pulsewidth.setter
     def pulsewidth(self, newval):
-#        self._ddg.channel[2*self.idx+1].delay = (self._ddg.channel[2*self.idx], pq.Quantity(newval, "s"))
-        self._ddg.channel[2*self.idx+1].delay = (self._ddg.channel[2*self.idx], newval)
+        self._ddg.channel[2*self.idx+1].delay = (self._ddg.channel[2*self.idx], pq.Quantity(newval, "s"))
 
     @property
     def polarity(self):
