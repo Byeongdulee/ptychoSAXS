@@ -1,3 +1,6 @@
+"""
+Canonical UDP client using JSON protocol. Replaces client_json.py.
+"""
 import socket
 import sys
 import json
@@ -6,14 +9,14 @@ UDP_IP = "10.54.122.103"
 UDP_PORT = 20002
 # python client_json.py command [key value]
 # Input Format: command [key value]
-# example: 
+# example:
 #   mv X 1
 #   mv X 1 Y 2
 #   mvr X 1
 #   setrange axis X L -1 R 1 N 0.01 t 2
 #   setrange axis Y L -1 R 1 N 0.01 t 2
 #   fly2d
-#   fly2d xmotor 0 
+#   fly2d xmotor 0
 #   fly2d xmotor 0 ymotor 1 scanname test
 #   fly2d_snake xmotor 0 ymotor 1 scanname test
 #   fly3d xmotor 0 ymotor 1 phimotor 6 scanname test
@@ -35,6 +38,6 @@ def send_command(argv):
     print(msg)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.sendto(bytes(msg, 'utf-8'), (UDP_IP, UDP_PORT))
-    
+
 if __name__ == "__main__":
     send_command(sys.argv[1:])

@@ -1,0 +1,38 @@
+{
+  "osa": {
+    "in": {
+      "OSA Z": 0.0,
+      "OSA X": 0.0
+    },
+    "out": {
+      "OSA Z": 0.0,
+      "OSA X": 0.0
+    }
+  },
+  "bs": {
+    "in": {
+      "Optics 1": 0.0,
+      "Optics 2": 0.0
+    },
+    "out": {
+      "Optics 1": 0.0,
+      "Optics 2": 0.0
+    }
+  },
+  "zp": {
+    "out": {
+      "Optics 3": 0.0,
+      "Optics 4": 0.0
+    },
+    "positions": {
+      "test position 1": [
+        0.1,
+        0.0
+      ],
+      "abc": [
+        0.0,
+        0.7
+      ]
+    }
+  }
+}

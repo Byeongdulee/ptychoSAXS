@@ -1,3 +1,6 @@
+"""
+Canonical UDP server using JSON protocol. Replaces server_json.py.
+"""
 #https://stackoverflow.com/questions/61842432/pyqt5-and-asyncio
 
 import asyncio
@@ -33,7 +36,7 @@ class UDPserver(QtCore.QObject):
     def datagram_received(self, data, addr):
         self._counter_message += 1
         print("#Num of Mssg Received: {}".format(self._counter_message))
-        
+
         try:
             json_message = json.loads(data)
             print("JSON message received: " + str(json_message))
