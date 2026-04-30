@@ -61,7 +61,7 @@ except:
 
 # struck
 from tools.struck import struck
-from tools import shutter
+from tools.shutter import shutter
 
 # detectors
 from tools.detectors import pilatus, dante, SGstream, XSP, DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
