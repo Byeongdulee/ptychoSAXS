@@ -106,6 +106,8 @@ from PyQt5.QtCore import (
     QThreadPool,
     Qt,
     QPoint,
+    QMetaObject,
+    Q_ARG,
 )
 from asyncqt import QEventLoop
 
@@ -300,6 +302,7 @@ class workerSignals(QObject):
     finished = pyqtSignal(bool)
     progress = pyqtSignal(int)
     statusmessage = pyqtSignal(str)
+    error = pyqtSignal(str)
 
 
 # Step 1: Create a worker class
@@ -315,7 +318,12 @@ class Worker(QRunnable):
     def run(self):
         """Long-running task."""
         # print("Worker:", QThread.currentThread())
-        self.fn(*self.args, **self.kwargs)
+        try:
+            self.fn(*self.args, **self.kwargs)
+        except Exception as e:
+            import traceback
+            self.signal.error.emit(traceback.format_exc())
+            return
         self.signal.finished.emit(True)
 
 
@@ -331,7 +339,12 @@ class move(QRunnable):
     @pyqtSlot()
     def run(self):
         """Long-running task."""
-        self.pts.mv(self.axis, self.pos)
+        try:
+            self.pts.mv(self.axis, self.pos)
+        except Exception as e:
+            import traceback
+            self.signal.error.emit(traceback.format_exc())
+            return
         self.signal.finished.emit(True)
 
 
@@ -347,7 +360,12 @@ class mover(QRunnable):
     @pyqtSlot()
     def run(self):
         """Long-running task."""
-        self.pts.mvr(self.axis, self.pos)
+        try:
+            self.pts.mvr(self.axis, self.pos)
+        except Exception as e:
+            import traceback
+            self.signal.error.emit(traceback.format_exc())
+            return
         self.signal.finished.emit(True)
 
 
@@ -366,6 +384,19 @@ class mover(QRunnable):
 #         struck.mcs_ready(self.pulseN, self.tm)
 #         struck.arm_mcs()
 #         self.signal.finished.emit(True)
+
+
+class _ErrorDict(dict):
+    """dict subclass that fires a callback whenever 'recent error message' is set."""
+
+    def __init__(self, callback, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._callback = callback
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        if key == "recent error message":
+            self._callback(value)
 
 
 # ==========================================================================
@@ -411,7 +442,7 @@ class ptyco_main_control(QObject):
         self.scan_handler = ScanHandler(self)
         self.status_handler = StatusHandler(self)
 
-        self.messages = {}
+        self.messages = _ErrorDict(self._on_error_message)
         self.messages["recent error message"] = ""
         self.isOK2run = True
         self.is_softglue_savingdone = True
@@ -573,6 +604,7 @@ class ptyco_main_control(QObject):
         self.ui.actionScanStop.triggered.connect(self.stopscan)
         self.ui.pushButton_stopScan.clicked.connect(self.stopscan)
         self.ui.pushButton_stopScan.setEnabled(False)
+        self.ui.pushButton_resetError.clicked.connect(self.reset_error_status)
         self.ui.pushButton_stopScan.setStyleSheet(
             "background-color: rgb(230, 230, 230); color: rgb(150, 150, 150);"
         )
@@ -883,6 +915,7 @@ class ptyco_main_control(QObject):
         # print(f"Move {axis} to {val}")
         w = move(self.pts, axis, val)
         # w.signal.finished.connect(self.scandone)
+        w.signal.error.connect(self._on_worker_error)
         self.threadpool.start(w)
         self.updatepos(axis)
 
@@ -901,6 +934,7 @@ class ptyco_main_control(QObject):
             val = float(self.ui.findChild(QLineEdit, "ed_%i_tweak" % n).text())
 
         w = mover(self.pts, axis, sign * val)
+        w.signal.error.connect(self._on_worker_error)
         self.threadpool.start(w)
         self.updatepos(axis)
 
@@ -1202,8 +1236,8 @@ class ptyco_main_control(QObject):
         )
 
     # Scan lifecycle helpers
-    def scandone(self, update_scannumber=True, donedone=True):
-        return self.scan_handler.scandone(update_scannumber, donedone)
+    def scandone(self, update_scannumber=True, donedone=True, update_gui=True):
+        return self.scan_handler.scandone(update_scannumber, donedone, update_gui=update_gui)
 
     def check_start_position(self, n):
         return self.scan_handler.check_start_position(n)
@@ -1388,6 +1422,7 @@ class ptyco_main_control(QObject):
         self.signalmotor = axis
         self.signalmotorunit = self.motorunits[motornumber]
         w = mover(self.pts, axis, sign * step_mm)
+        w.signal.error.connect(self._on_worker_error)
         self.threadpool.start(w)
         self.updatepos(axis)
 
@@ -1409,6 +1444,7 @@ class ptyco_main_control(QObject):
         self.signalmotor = axis
         self.signalmotorunit = self.motorunits[motornumber]
         w = mover(self.pts, axis, sign * step_mm)
+        w.signal.error.connect(self._on_worker_error)
         self.threadpool.start(w)
         self.updatepos(axis)
 
@@ -1581,8 +1617,10 @@ class ptyco_main_control(QObject):
         """Update label_scan_status text and background.
 
         status: "Scanning"  → green  #C6EFCE
-                "Scan Error"→ pink   rgb(255, 199, 206)
-                "No Scan"   → pink   rgb(255, 199, 206)  (default/idle)
+                "Stopping"  → orange #FFA500
+                "Stopped"   → amber  #FFD700
+                "Scan Error"→ red    rgb(255, 0, 0)
+                "No Scan"   → yellow #fffde7  (default/idle)
         """
         scanning = status == "Scanning"
         self.ui.pushButton_stopScan.setEnabled(scanning)
@@ -1600,12 +1638,50 @@ class ptyco_main_control(QObject):
         if status == "Scanning":
             lbl.setText("Scanning")
             lbl.setStyleSheet("background-color: #C6EFCE; color: #000000")
+        elif status == "Stopping":
+            lbl.setText("Stopping\u2026")
+            lbl.setStyleSheet("background-color: #FFA500; color: #000000")
+        elif status == "Stopped":
+            lbl.setText("Stopped")
+            lbl.setStyleSheet("background-color: #FFD700; color: #000000")
         elif status == "Scan Error":
             lbl.setText("Scan Error")
             lbl.setStyleSheet("background-color: rgb(255, 0, 0); color: #FFFFFF")
         else:
             lbl.setText("Not Scanning")
             lbl.setStyleSheet("background-color: #fffde7; color: #000000")
+
+    def _on_error_message(self, msg: str) -> None:
+        if msg:
+            QMetaObject.invokeMethod(
+                self,
+                "_apply_error_status",
+                Qt.QueuedConnection,
+                Q_ARG(str, msg),
+            )
+
+    @pyqtSlot(str)
+    def _on_worker_error(self, traceback_str: str) -> None:
+        print(traceback_str)
+        self._apply_error_status(traceback_str)
+
+    @pyqtSlot(str)
+    def _apply_error_status(self, msg: str) -> None:
+        lbl = self.ui.findChild(QLabel, "label_scan_status")
+        if lbl is None:
+            return
+        lbl.setText("Error...")
+        lbl.setStyleSheet("background-color: rgb(200, 0, 0); color: #FFFFFF")
+        escaped = msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+        lbl.setToolTip(f"<pre style='white-space:pre; color: black;'>{escaped}</pre>")
+
+    def reset_error_status(self) -> None:
+        lbl = self.ui.findChild(QLabel, "label_scan_status")
+        if lbl is None:
+            return
+        lbl.setText("Not Scanning")
+        lbl.setStyleSheet("background-color: #fffde7; color: #000000")
+        lbl.setToolTip("")
 
     # ── Qt signal slots ────────────────────────────────────────────────────
     # Received from the UDP server (server_json.py) when running with --server.

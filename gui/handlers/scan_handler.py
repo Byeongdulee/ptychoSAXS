@@ -12,7 +12,6 @@ import re
 import traceback
 import datetime
 import pathlib
-import threading
 from PyQt5.QtWidgets import QMessageBox, QInputDialog, QLabel, QLineEdit, QFileDialog
 import pyqtgraph as pg
 
@@ -287,6 +286,7 @@ class ScanHandler:
             w.signal.finished.connect(done_signal)
         w.signal.progress.connect(self.w.updateprogressbar)
         w.signal.statusmessage.connect(self.w.update_status_bar)
+        w.signal.error.connect(self.w._on_worker_error)
         w.kwargs["update_progress"] = w.signal.progress.emit
         w.kwargs["update_status"] = w.signal.statusmessage.emit
         self.w.set_scan_status("Scanning")
@@ -626,7 +626,7 @@ class ScanHandler:
         self.w.parameters.scan_name = self.ui.edit_scanname.text()
         self.w.parameters.scan_number = int(self.ui.edit_scannumber.text())
         self.scannumberstring = "S%04d" % self.w.parameters.scan_number
-        txt = "%s_%0.3i" % (self.w.parameters.scan_name, self.w.parameters.scan_number)
+        txt = "%s_%0.4i" % (self.w.parameters.scan_name, self.w.parameters.scan_number)
         self.ui.lbl_scanname.setText(txt)
         self.update_label_scanCheck()
 
@@ -640,7 +640,7 @@ class ScanHandler:
         """
         scan_name = self.w.parameters.scan_name
         scan_number = self.w.parameters.scan_number
-        txt = "%s_%0.3i" % (scan_name, scan_number)
+        txt = "%s_%0.4i" % (scan_name, scan_number)
 
         p = pathlib.Path(self.ui.edit_workingfolder.text())
         wf_temp = p.parts
@@ -721,6 +721,7 @@ class ScanHandler:
             ).replace("\\", "/")
             det.filePut("FilePath", hdf_path)
             det.filePut("FileName", hdfname)
+            self.w.hdf_plugin_name[i] = hdfname
 
     def _push_filepaths_to_detectors(self):
         """Push updated FilePath and FileName to all detector IOCs.
@@ -735,9 +736,11 @@ class ScanHandler:
         """
         scan_name = self.w.parameters.scan_name
         scan_number = self.w.parameters.scan_number
-        txt = "%s_%0.3i" % (scan_name, scan_number)
+        txt = "%s_%0.4i" % (scan_name, scan_number)
+        scannumberstring = "S%04d" % scan_number
         workingfolder = self._workingfolder
         Windows_workingfolder = self._Windows_workingfolder
+
 
         for i, det in enumerate(self.w.detector):
             if i == 0:
@@ -783,15 +786,16 @@ class ScanHandler:
             hdfname = tp + txt
 
             Windows_hdf_path = os.path.join(
-                Windows_workingfolder, folder_type, self.scannumberstring
+                Windows_workingfolder, folder_type, scannumberstring
             ).replace("\\", "/")
             self.w.make_positions_folder(Windows_hdf_path)
 
             hdf_path = os.path.join(
-                basepath, workingfolder, folder_type, self.scannumberstring
+                basepath, workingfolder, folder_type, scannumberstring
             ).replace("\\", "/")
             det.filePut("FilePath", hdf_path)
             det.filePut("FileName", hdfname)
+            self.w.hdf_plugin_name[i] = hdfname
 
     def push_filepath_to_detectors(self):
         """Push the current working-folder path to each detector's HDF plugin FilePath PV.
@@ -957,6 +961,9 @@ class ScanHandler:
 
     def stopscan(self):
         self.isStopScanIssued = True
+        self.w.set_scan_status("Stopping")
+        self.ui.statusbar.showMessage("Stop requested \u2014 finishing current step\u2026")
+        self.ui.pushButton_stopScan.setEnabled(False)
 
     def set_exp_period_ratio(self):
         val, ok = QInputDialog().getDouble(
@@ -1027,7 +1034,7 @@ class ScanHandler:
         except Exception as e:
             print(f"[DEBUG] _debug_plot_scan error: {e}")
 
-    def scandone(self, update_scannumber=True, donedone=True):
+    def scandone(self, update_scannumber=True, donedone=True, update_gui=True):
         # return to the initial positions
         for i, key in enumerate(self.w.motor_p0):
             # put only x motors and ymotors back to initial positions
@@ -1040,8 +1047,14 @@ class ScanHandler:
         self.w.messages["current status"] = f"stepscan done. {time.ctime()}"
         print(self.w.messages["current status"])
         self.w.isscan = False
-        self.w.set_scan_status("Scan Error" if self.isStopScanIssued else "No Scan")
-        self.w.updatepos()
+        if update_gui:
+            if self.isStopScanIssued:
+                self.w.set_scan_status("Stopped")
+                self.ui.statusbar.showMessage("Scan stopped by user \u2014 motors returned.")
+            else:
+                self.w.set_scan_status("No Scan")
+                self.ui.statusbar.showMessage("Scan complete.")
+            self.w.updatepos()
 
         if self.w.DEBUG_MOTORS:
             self._debug_plot_scan()
@@ -1509,7 +1522,12 @@ class ScanHandler:
 
         self.w.isscan = False
         self.w.isfly = False
-        self.w.set_scan_status("Scan Error" if self.isStopScanIssued else "No Scan")
+        if self.isStopScanIssued:
+            self.w.set_scan_status("Stopped")
+            self.ui.statusbar.showMessage("Scan stopped by user \u2014 motors returned.")
+        else:
+            self.w.set_scan_status("No Scan")
+            self.ui.statusbar.showMessage("Fly scan complete.")
         self.w.s12softglue.flush()
         print(f"softglue flushed at {time.ctime()}")
 
@@ -1543,11 +1561,30 @@ class ScanHandler:
     def flydone2d(self, value=0):
         for key in self.w.motor_p0:
             self.w.mv(key, self.w.motor_p0[key])
+        self.w.isscan = False
+        self.w.isfly = False
+        if self.w.shutter_close_after_scan:
+            self.w.shutter.close()
+        if self.isStopScanIssued:
+            self.w.set_scan_status("Stopped")
+            self.ui.statusbar.showMessage("Scan stopped by user \u2014 motors returned.")
+        else:
+            self.w.set_scan_status("No Scan")
+            self.ui.statusbar.showMessage("2-D fly scan complete.")
         self.w.update_scanname()
+        self.w.update_status_scan_time()
 
     def flydone3d(self, value=0):
+        try:
+            self.w.pts.hexapod.stop_traj()
+        except Exception as e:
+            print(f"stop_traj warning: {e}")
+        time.sleep(1.0)
         for key in self.w.motor_p0:
-            self.w.mv(key, self.w.motor_p0[key])
+            try:
+                self.w.mv(key, self.w.motor_p0[key])
+            except Exception as e:
+                print(f"Motor return warning: {e}")
         print("")
         self.w.messages["current status"] = f"3D fly done. {time.ctime()}"
         print(self.w.messages["current status"])
@@ -1557,7 +1594,12 @@ class ScanHandler:
         self.w.isscan = False
         self.w.updatepos()
         self.w.isfly = False
-        self.w.set_scan_status("Scan Error" if self.isStopScanIssued else "No Scan")
+        if self.isStopScanIssued:
+            self.w.set_scan_status("Stopped")
+            self.ui.statusbar.showMessage("Scan stopped by user \u2014 motors returned.")
+        else:
+            self.w.set_scan_status("No Scan")
+            self.ui.statusbar.showMessage("3-D fly scan complete.")
         self.w.updateprogressbar(100)
         if self.w.shutter_close_after_scan:
             self.w.shutter.close()
@@ -1635,18 +1677,13 @@ class ScanHandler:
         # elif clicked == cancel_btn:
         #    return None
 
-    def fly2d(self, xmotor=0, ymotor=1, scanname="", snake=False, _slice_event=None):
+    def fly2d(self, xmotor=0, ymotor=1, scanname="", snake=False):
         """Entry point for a 2-D fly scan (GUI thread).
 
         snake=False: steps Y with pts.mv, then flies X with fly0 for each row.
         snake=True:  programs the entire XY boustrophedon path as a single
                      hexapod trajectory via fly_traj / set_traj_SNAKE2, then
                      launches fly2d0_SNAKE which waits for all frames to arrive.
-
-        _slice_event: optional threading.Event set by the done signal instead of
-                      flydone/flydone2d.  Used by fly3d0 to block until each
-                      phi slice completes without triggering motor-return or
-                      softglue-flush side effects.
 
         Why fly2d exists separately from fly2d0 / fly2d0_SNAKE: thread-safety —
         Qt widget reads must happen on the GUI thread.
@@ -1716,19 +1753,6 @@ class ScanHandler:
 
         self._log_scan_header(scan_name, [xax, yax])
 
-        if _slice_event is not None:
-
-            def _slice_done(success=True):
-                self.w.s12softglue.flush()
-                self._slice_retval = 1 if success else DETECTOR_NOT_STARTED_ERROR
-                _slice_event.set()
-
-            done_signal_snake = _slice_done
-            done_signal_non_snake = _slice_done
-        else:
-            done_signal_snake = self.w.flydone
-            done_signal_non_snake = self.w.flydone2d
-
         if snake:
             # Program the full 2-D snake trajectory on the hexapod controller
             # before the worker starts.  fly2d0_SNAKE then just triggers it.
@@ -1737,7 +1761,7 @@ class ScanHandler:
                 self.fly2d0_SNAKE,
                 xmotor,
                 ymotor,
-                done_signal=done_signal_snake,
+                done_signal=self.w.flydone,
                 scanname=scanname,
             )
         else:
@@ -1748,7 +1772,7 @@ class ScanHandler:
                 self.fly2d0,
                 xmotor,
                 ymotor,
-                done_signal=done_signal_non_snake,
+                done_signal=self.w.flydone2d,
                 scanname=scanname,
             )
 
@@ -2093,11 +2117,16 @@ class ScanHandler:
         # stepscan2d0 will re-configure it precisely per-step with set_pilatus().
         self.w.dg645_12ID.set_pilatus_fly(0.001)
 
-        # stepscan3d0 calls self.w.scandone() after each phi slice internally,
-        # so the finished signal is intentionally left unconnected (done_signal=None)
-        # to avoid a duplicate scandone call at the end of the outer phi loop.
+        # Per-slice scandone(True, False) calls inside stepscan3d0 handle per-slice
+        # detector cleanup and scan-number increment. The done_signal fires on the GUI
+        # thread after the worker exits and handles the final teardown (shutter, status
+        # label, scan time) without incrementing the scan number a second time.
         self._launch_worker(
-            self.stepscan3d0, xmotor, ymotor, phimotor, done_signal=None
+            self.stepscan3d0,
+            xmotor,
+            ymotor,
+            phimotor,
+            done_signal=lambda _ok: self.w.scandone(update_scannumber=False, donedone=True),
         )
 
     def run_stop_issued(self):
@@ -2193,11 +2222,11 @@ class ScanHandler:
         if self.w.parameters._pulses_per_step == 1:
             period = 0
         else:
-            period = max(expt + 0.020, 0.03)
+            period = round(max(expt + 0.020, 0.03), 6)
         self.w.dg645_12ID.set_pilatus(
             expt,
             trigger_source=5,
-            DGNimage=self.w.parameters._pulses_per_step,
+            DGNimage=int(self.w.parameters._pulses_per_step),
             Cycperiod=period,
         )
 
@@ -2217,8 +2246,6 @@ class ScanHandler:
                         len(pos),
                         pulsespershot=self.w.parameters._pulses_per_step,
                         fn=self.w.hdf_plugin_name[detN],
-                        capture_mode=self.w.use_hdf_plugin
-                        and (self.w.hdf_plugin_savemode_step == 2),
                     )
                 except TimeoutError:
                     self.w.messages["recent error message"] = (
@@ -2454,13 +2481,11 @@ class ScanHandler:
         if self.w.parameters._pulses_per_step == 1:
             period = 0
         else:
-            period = expt + 0.020  # in seconds
-            if period < 0.03:
-                period = 0.03
+            period = round(max(expt + 0.020, 0.03), 6)
         self.w.dg645_12ID.set_pilatus(
             expt,
             trigger_source=5,
-            DGNimage=self.w.parameters._pulses_per_step,
+            DGNimage=int(self.w.parameters._pulses_per_step),
             Cycperiod=period,
         )
 
@@ -2472,8 +2497,6 @@ class ScanHandler:
                     Nline,
                     pulsespershot=self.w.parameters._pulses_per_step,
                     fn=self.w.hdf_plugin_name[detN],
-                    capture_mode=self.w.use_hdf_plugin
-                    and (self.w.hdf_plugin_savemode_step == 2),
                 )  # Arm detector for multiple data.
                 print(f"step _ready, detector {detN}'s status: {det.Armed}")  # JD
 
@@ -2671,7 +2694,7 @@ class ScanHandler:
                 msg = f"Elapsed time = {time.time() - self.time_scanstart}s to finish {(i + 1) / len(pos) * 100}%."
                 update_status(msg)
 
-            self.w.scandone(True, False)
+            self.w.scandone(True, False, update_gui=False)
             if wait_long:
                 wait_for_det_recovery_s = 60  # extended wait after detector timeout to allow IOC recovery before retry
                 time.sleep(wait_for_det_recovery_s)
@@ -2792,16 +2815,31 @@ class ScanHandler:
             self.progress_3d = (i, len(pos))
             scan = f"{scanname}{i:03d}"
 
-            # Run the 2-D fly scan at this phi angle by calling the standalone
-            # fly2d entry point.  A threading.Event blocks this loop until the
-            # sub-scan's worker thread finishes.
-            slice_event = threading.Event()
-            self.w.fly2d(
-                xmotor, ymotor, scanname=scan, snake=snake, _slice_event=slice_event
-            )
-            slice_event.wait()
-
-            retval = getattr(self, "_slice_retval", 1)
+            # Program the hexapod trajectory for this phi slice, then run the
+            # 2-D executor directly on the current worker thread (no sub-worker).
+            if snake:
+                # Disable the wave generator before reprogramming; set_traj_SNAKE2
+                # fails with GCSError 73 if the generator output is still active.
+                if i > 0:
+                    self.w.pts.hexapod.stop_traj()
+                self.fly_traj(xmotor, ymotor)
+                retval = self.fly2d0_SNAKE(
+                    xmotor, ymotor, scanname=scan,
+                    update_progress=update_progress, update_status=update_status,
+                )
+            else:
+                self.fly_traj(xmotor)
+                retval = self.fly2d0(
+                    xmotor, ymotor, scanname=scan,
+                    update_progress=update_progress, update_status=update_status,
+                )
+            self.w.s12softglue.flush()
+            print(f"softglue flushed at {time.ctime()}")
+            txt = "%s_%0.4i" % (self.w.parameters.scan_name, self.w.parameters.scan_number)
+            self.ui.lbl_scanname.setText(txt)
+            if i < len(pos) - 1:
+                self.w.get_detectors_ready()
+                self._push_filepaths_to_detectors()
 
             # On detector failure, retry this phi angle up to 2 extra times.
             if retval == DETECTOR_NOT_STARTED_ERROR:
@@ -3289,6 +3327,7 @@ class ScanHandler:
                 print(self.w.messages["recent error message"])
                 return DETECTOR_NOT_STARTED_ERROR
 
+        self.w.pts.hexapod.wait()
         self.w.run_stop_issued()
         return 1
 
