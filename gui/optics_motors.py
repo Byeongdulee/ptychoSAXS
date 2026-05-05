@@ -18,6 +18,7 @@ from PyQt5.QtCore import (
     QRunnable,
     QThreadPool,
     QSize,
+    QSettings,
 )
 from threading import Lock
 import argparse
@@ -797,7 +798,17 @@ class motor_control(QMainWindow):
             self.timer = QTimer()
             self.timer.timeout.connect(self.updatepos)
             self.timer.start(100)
+        def _save_geom_and_close(event):
+            QSettings("ptychoSAXS", "ptychoSAXS").setValue(
+                "opticsMotorsWindow/geometry", self.ui.saveGeometry()
+            )
+            event.accept()
+
+        self.ui.closeEvent = _save_geom_and_close
         self.ui.show()
+        _geom = QSettings("ptychoSAXS", "ptychoSAXS").value("opticsMotorsWindow/geometry")
+        if _geom is not None:
+            self.ui.restoreGeometry(_geom)
         # self.resized.connect(self.resizeFunction)
 
     def _set_xrayeye_buttons(self, eye_in: bool):

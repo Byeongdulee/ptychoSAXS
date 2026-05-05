@@ -108,6 +108,7 @@ from PyQt5.QtCore import (
     QPoint,
     QMetaObject,
     Q_ARG,
+    QSettings,
 )
 from asyncqt import QEventLoop
 
@@ -148,6 +149,7 @@ except ImportError:
         _fly_idletime = 0.0
         _pulses_per_step = 1
         base_linux_datafolder = "/tmp"
+        _save_us_optics = True
 
         def readini(self):
             pass
@@ -485,6 +487,9 @@ class ptyco_main_control(QObject):
             self.parameters.saxsmode = 1  # 0 for ptychography, 1 for SAXS
             self.parameters.base_linux_datafolder = "/net/s12data/export/12id-c/"
 
+        if not hasattr(self.parameters, "_save_us_optics"):
+            self.parameters._save_us_optics = True
+
         self.isscan = False
         self.isfly = False
         self.hdf_plugin_savemode_step = 0  # step capture off by default
@@ -608,6 +613,8 @@ class ptyco_main_control(QObject):
         self.ui.pushButton_stopScan.setStyleSheet(
             "background-color: rgb(230, 230, 230); color: rgb(150, 150, 150);"
         )
+        for _lcd in (self.ui.lcd_X, self.ui.lcd_Z, self.ui.lcd_Z_2):
+            _lcd.setStyleSheet("background-color: rgb(240, 240, 240);")
         self.isStopScanIssued = False
         self.is_hexrecord_required = False
         self.shutter_close_after_scan = False
@@ -622,6 +629,9 @@ class ptyco_main_control(QObject):
         self.ui.pb_lup_step2d.clicked.connect(lambda: self.stepscan2d(xm, ym))
         self.ui.pb_SAXSscan_fly2d.clicked.connect(
             lambda: self.fly2d(xm, ym, snake=True)
+        )
+        self.ui.pushButton_checkFlyBlur.clicked.connect(
+            self.scan_handler.check_fly_blur
         )
         self.ui.pushButton_plotScanPositions.clicked.connect(
             lambda: self.scan_handler.plot_scan_positions_2d(xm, ym)
@@ -693,6 +703,9 @@ class ptyco_main_control(QObject):
         )
         self.ui.actionSet_basepaths.triggered.connect(self.set_basepaths)
         self.ui.actionPut_DET_alignmode.triggered.connect(self.set_det_alignmode)
+        self.ui.pushButton_setAlign.clicked.connect(lambda: self.set_det_alignmode(True))
+        self.ui.pushButton_setScan.clicked.connect(lambda: self.set_det_alignmode(False))
+        self.ui.pushButton_checkSAXS.clicked.connect(self.update_saxs_det_status)
         self.ui.actionSet_shot_number_per_a_step.triggered.connect(
             self.set_shotnumber_per_step
         )
@@ -814,6 +827,10 @@ class ptyco_main_control(QObject):
         self.ui.pushButton_exit.clicked.connect(self.exit_gui)
 
         self.ui.show()
+        _s = QSettings("ptychoSAXS", "ptychoSAXS")
+        _geom = _s.value("mainWindow/geometry")
+        if _geom is not None:
+            self.ui.restoreGeometry(_geom)
 
     # ── Motor widget enable/disable ────────────────────────────────────────
 
@@ -1065,7 +1082,14 @@ class ptyco_main_control(QObject):
         except Exception:
             pass
 
-        # 5. Quit the Qt event loop (also terminates the asyncio loop in main()).
+        # 5. Persist window position.
+        try:
+            _s = QSettings("ptychoSAXS", "ptychoSAXS")
+            _s.setValue("mainWindow/geometry", self.ui.saveGeometry())
+        except Exception:
+            pass
+
+        # 6. Quit the Qt event loop (also terminates the asyncio loop in main()).
         QApplication.quit()
 
     def closeEvent(self, event):
@@ -1289,6 +1313,9 @@ class ptyco_main_control(QObject):
 
     def set_det_alignmode(self, value=None):
         return self.scan_handler.set_det_alignmode(value)
+
+    def update_saxs_det_status(self):
+        return self.scan_handler.update_saxs_det_status()
 
     def set_basepaths(self, text=""):
         return self.scan_handler.set_basepaths(text)
@@ -1535,6 +1562,9 @@ class ptyco_main_control(QObject):
         dlg.checkBox_ptychoMode.setChecked(self.ui.actionPtychography_mode.isChecked())
         dlg.checkBox_scalars.setChecked(self.ui.actionStruck.isChecked())
         dlg.checkBox_xrfXSP3.setChecked(self.ui.actionXSP3.isChecked())
+        dlg.checkBox_usOpticsScanSave.setChecked(
+            getattr(self.parameters, "_save_us_optics", True)
+        )
 
         # Radio buttons — grouped by id matching set_softglue_in(val)
         btn_group = QButtonGroup(dlg)
@@ -1603,6 +1633,7 @@ class ptyco_main_control(QObject):
         self.set_shutter_close_after_scan(
             dlg.checkBox_closeShutterAfterScan.isChecked()
         )
+        self.parameters._save_us_optics = dlg.checkBox_usOpticsScanSave.isChecked()
 
         # Softglue collection speed
         speed_id = btn_group.checkedId()

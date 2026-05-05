@@ -6,13 +6,16 @@ Extracted from ptyco_main_control in rungui.py.
 
 import time
 import os
+import csv
 import json
 import numpy as np
 import re
 import traceback
 import datetime
 import pathlib
+from collections import deque
 from PyQt5.QtWidgets import QMessageBox, QInputDialog, QLabel, QLineEdit, QFileDialog
+from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
 import pyqtgraph as pg
 
 
@@ -39,11 +42,36 @@ def rstrip_from_char(string, char):
     return string
 
 
+class _QdsScatterWorker(QObject):
+    """Background worker that samples qds_array and emits it for scatter-plot updates."""
+
+    data_ready = pyqtSignal(object)  # carries a np.ndarray
+
+    def __init__(self, data_fn, interval_ms=100):
+        super().__init__()
+        self._data_fn = data_fn
+        self._interval_ms = interval_ms
+
+    def start(self):
+        # Called via thread.started so the QTimer is created inside the worker thread.
+        self._timer = QTimer()
+        self._timer.setInterval(self._interval_ms)
+        self._timer.timeout.connect(self._emit)
+        self._timer.start()
+
+    def _emit(self):
+        raw = self._data_fn()
+        if raw:
+            arr = np.asarray(list(raw))
+            if arr.ndim == 2 and arr.shape[1] >= 3:
+                self.data_ready.emit(arr)
+
+
 class ScanHandler:
     # Per-point overhead added to exposure time when estimating scan duration.
     # Fly scan overhead accounts for detector readout + SoftGlue latency.
     # Step scan overhead accounts for motor settle + readout.
-    OVERHEAD_FLY = 0.04  # seconds # 0.033 is the Pilatus 2M limit (30 Hz)
+    OVERHEAD_FLY = 0.033  # seconds — Pilatus 2M hard minimum (30 Hz)
     OVERHEAD_STEP = 0.5  # seconds
     # Show a confirmation dialog before starting scans larger than this.
     LARGE_SCAN_THRESHOLD = 200  # positions
@@ -131,6 +159,7 @@ class ScanHandler:
             return "%.1f min" % (t / 60) if t > 300 else "%.1f s" % t
 
         _set_label("label_estT", "%s\n%s" % (_fmt_time(step_est), _fmt_time(fly_est)))
+        self._refresh_scan_pos_plot()
 
     @staticmethod
     def _fmt_time(t):
@@ -225,8 +254,6 @@ class ScanHandler:
         p0+st is the scan start; p0+fe is the scan end.  The sign of *step* is
         corrected automatically so the direction matches st→fe.  If step==0 it is
         replaced by (fe-st) so a two-element array is still produced.
-        When arange yields only one element (st==fe), returns [p0+st, p0+fe]
-        so callers always get at least two positions.
         """
         ast = p0 + st
         afe = p0 + fe
@@ -234,7 +261,7 @@ class ScanHandler:
             step = (afe - ast) if (afe != ast) else 1.0
         step = -abs(step) if ast > afe else abs(step)
         pos = np.arange(ast, afe + step / 2, step)
-        return pos if len(pos) > 1 else np.array([ast, afe])
+        return pos
 
     def _pre_scan(self, scan_name: str) -> None:
         """Common setup called at the start of every scan entry point (GUI thread).
@@ -250,12 +277,20 @@ class ScanHandler:
         self.isStopScanIssued = False
         print(f"\n\n{scan_name} starting")
 
-    def _log_scan_header(self, scan_name: str, axes_params: list) -> None:
+    def _log_scan_header(self, scan_name: str, axes_params: list, is_fly_snake: bool = False) -> None:
         """Write the SPEC-style #S header line for this scan to the log file.
 
         axes_params is a list of dicts from _read_motor_params, in axis order
         (X first, then Y if 2-D, then phi if 3-D).
+        is_fly_snake: set True for snake fly scans so n_pos accounts for the
+        phantom trigger at the end of each X line and the even-Y-line rounding.
         """
+        position_arrays = [self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"]) for ax in axes_params]
+        n_pos = self._compute_n_positions(
+            position_arrays,
+            n_phantom_x=1 if is_fly_snake else 0,
+            round_y_to_even=is_fly_snake,
+        )
         scaninfo = ["\n#S", self.w.parameters.scan_number, scan_name]
         for ax in axes_params:
             n = ax["motor_index"] + 1
@@ -268,6 +303,292 @@ class ScanHandler:
         for key in m:
             scaninfo.append(m[key])
         self.w.write_scaninfo_to_logfile(scaninfo)
+        self._write_scan_summary_line(scan_name, axes_params, n_pos)
+
+    def _get_scan_summary_csv_path(self):
+        if len(self.w.parameters.logfilename) == 0:
+            return None
+        return pathlib.Path(self.w.parameters.logfilename).with_suffix(".csv")
+
+    def _get_scan_summary_header(self):
+        return [
+            "date",
+            "time",
+            "completed",
+            "scan",
+            "sample_name",
+            "scan_type",
+            "ExpTime",
+            "n_pos",
+            "monoE",
+            "phi",
+            "detectors_used",
+            "scan_center",
+            "scan_negative_edge",
+            "scan_positive_edge",
+            "scan_step_size",
+            "BS_ver",
+            "BS_hor",
+            "ZP_ver",
+            "ZP_hor",
+            "BSZP_Ztrans",
+            "OSA_X",
+            "OSA_Z",
+            "OSA_Y",
+        ]
+
+    def _format_scan_axis_string(self, axes_params, key):
+        mapping = {
+            "scan_center": "p0",
+            "scan_negative_edge": "st",
+            "scan_positive_edge": "fe",
+            "scan_step_size": "step",
+        }
+        if key not in mapping:
+            return ""
+        parts = []
+        for ax in axes_params:
+            val = ax.get(mapping[key], "")
+            try:
+                formatted = f"{float(val):f}"
+            except (TypeError, ValueError):
+                formatted = ""
+            parts.append(f"{ax['name']} {formatted} ")
+        return "".join(parts)
+
+    def _get_phi_angle(self, axes_params):
+        axis_names = [ax.get("name", "").lower() for ax in axes_params]
+        if "phi" in axis_names:
+            # If phi is in the scan axes, use its p0
+            for ax in axes_params:
+                if ax.get("name", "").lower() == "phi":
+                    return str(ax.get("p0", ""))
+        else:
+            # If not 3D and not 1D on phi axis, take from lb_7
+            # 3D would have phi in axes, 1D on phi would have only phi
+            # So if phi not in axes, it's not 3D and not 1D on phi, use lb_7
+            lb7_widget = self.ui.findChild(QLabel, "lb_7")
+            if lb7_widget:
+                return lb7_widget.text()
+        return ""
+
+    def _get_mono_energy(self):
+        try:
+            import epics
+        except ImportError:
+            return ""
+        try:
+            val = epics.caget("12ida2:EnCalc")
+        except Exception:
+            return ""
+        if val is None:
+            return ""
+        return str(val)
+
+    _US_OPTICS_PVS = [
+        ("BS_ver",      "12idc:m10.RBV"),
+        ("BS_hor",      "12idc:m11.RBV"),
+        ("ZP_ver",      "12idc:m12.RBV"),
+        ("ZP_hor",      "12idc:m13.RBV"),
+        ("BSZP_Ztrans", "12idc:m14.RBV"),
+        ("OSA_X",       "12idc:m9.RBV"),
+        ("OSA_Z",       "12idc:m15.RBV"),
+        ("OSA_Y",       "12idc:m16.RBV"),
+    ]
+
+    def _get_us_optics_positions(self):
+        try:
+            import epics
+        except ImportError:
+            return [""] * len(self._US_OPTICS_PVS)
+        values = []
+        for _, pv in self._US_OPTICS_PVS:
+            try:
+                val = epics.caget(pv)
+            except Exception:
+                val = None
+            values.append("" if val is None else str(val))
+        return values
+
+    def check_fly_blur(self):
+        """Estimate the sample blur during a fly scan exposure and show it in a dialog."""
+        from PyQt5.QtWidgets import QMessageBox
+
+        def _read(name):
+            w = self.ui.findChild(QLineEdit, name)
+            if w is None:
+                return None
+            try:
+                return float(w.text())
+            except ValueError:
+                return None
+
+        expt = _read("ed_lup_1_t")
+        step = _read("ed_lup_1_N")
+        if expt is None or step is None or expt <= 0 or step <= 0:
+            QMessageBox.warning(self.w.ui, "Fly Blur", "Exposure time and step size must both be > 0.")
+            return
+        step = abs(step)
+        flyidletime = getattr(self.w.parameters, "_fly_idletime", DETECTOR_READOUTTIME)
+        if flyidletime < DETECTOR_READOUTTIME:
+            flyidletime = DETECTOR_READOUTTIME
+        if expt + flyidletime < self.OVERHEAD_FLY:
+            flyidletime = self.OVERHEAD_FLY - expt
+        step_time = round((expt + flyidletime) * 1000) / 1000
+        velocity_mm_s = step / step_time
+        movestep_um = step * 1000.0 * expt / step_time
+        msg = (
+            f"Exposure time:     {expt * 1000:.2f} ms\n"
+            f"Step size:         {step * 1000:.3f} µm\n"
+            f"Step period:       {step_time * 1000:.2f} ms\n"
+            f"Velocity:          {velocity_mm_s * 1000:.3f} µm/s\n"
+            f"\n"
+            f"Motion during exposure:  {movestep_um:.3f} µm"
+        )
+        QMessageBox.information(self.w.ui, "Fly Blur Estimate", msg)
+
+    def _get_detectors_used(self):
+        det_names = []
+        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+            det_names.append("SAXS")
+        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+            det_names.append("WAXS")
+        if len(self.w.detector) > 2 and self.w.detector[2] is not None:
+            det_names.append("Struck")
+        if len(self.w.detector) > 3 and self.w.detector[3] is not None:
+            det_names.append("SG")
+        if len(self.w.detector) > 4 and self.w.detector[4] is not None:
+            if self.ui.actionDante.isChecked():
+                det_names.append("Dante")
+            elif self.ui.actionXSP3.isChecked():
+                det_names.append("XSP3")
+            else:
+                det_names.append("Other")
+        return ",".join(det_names)
+
+    def _compute_n_positions(self, position_arrays, n_phantom_x=0, round_y_to_even=False):
+        """Return the total number of collected data positions.
+
+        For snake fly scans pass n_phantom_x=1 (the hexapod fires one extra
+        trigger at the end of each X line) and round_y_to_even=True (the
+        hexapod trajectory requires an even number of Y lines, rounded up).
+        """
+        n_pos = 1
+        for i, pos in enumerate(position_arrays):
+            n = len(pos)
+            if i == 0:
+                n += n_phantom_x
+            elif i == 1 and round_y_to_even:
+                n += n % 2  # round up to nearest even
+            n_pos *= n
+        return n_pos
+
+    def _write_scan_summary_line(self, scan_name: str, axes_params: list, n_pos: int) -> None:
+        csv_path = self._get_scan_summary_csv_path()
+        if csv_path is None:
+            return
+        if not csv_path.parent.exists():
+            QMessageBox.warning(
+                self.w.ui,
+                "CSV Logging",
+                f"Scan summary directory does not exist: {csv_path.parent}",
+            )
+            return
+        write_header = not csv_path.exists()
+        timestamp = datetime.datetime.now()
+        scan_id = "S%04d" % self.w.parameters.scan_number
+        if getattr(self.w.parameters, "_save_us_optics", True):
+            optics_values = self._get_us_optics_positions()
+        else:
+            optics_values = [""] * len(self._US_OPTICS_PVS)
+        row = [
+            timestamp.strftime("%Y-%m-%d"),
+            timestamp.strftime("%H:%M:%S"),
+            "no",
+            scan_id,
+            self.w.parameters.scan_name,
+            scan_name,
+            axes_params[0].get("expt", "") if axes_params else "",
+            n_pos,
+            self._get_mono_energy(),
+            self._get_phi_angle(axes_params),
+            self._get_detectors_used(),
+            self._format_scan_axis_string(axes_params, "scan_center"),
+            self._format_scan_axis_string(axes_params, "scan_negative_edge"),
+            self._format_scan_axis_string(axes_params, "scan_positive_edge"),
+            self._format_scan_axis_string(axes_params, "scan_step_size"),
+            *optics_values,
+        ]
+        self._last_scan_summary_id = scan_id
+        try:
+            with open(csv_path, "a", newline="") as f:
+                writer = csv.writer(f)
+                if write_header:
+                    writer.writerow(self._get_scan_summary_header())
+                writer.writerow(row)
+        except Exception as exc:
+            QMessageBox.warning(
+                self.w.ui,
+                "CSV Logging",
+                f"Could not write scan summary CSV {csv_path}: {exc}",
+            )
+
+    def _update_scan_summary_completed(self, status: str, scan_id: str = None) -> None:
+        csv_path = self._get_scan_summary_csv_path()
+        if csv_path is None or not csv_path.exists():
+            return
+        if scan_id is None:
+            scan_id = getattr(self, "_last_scan_summary_id", None)
+        if not scan_id:
+            scan_id = "S%04d" % self.w.parameters.scan_number
+        try:
+            with open(csv_path, newline="") as f:
+                rows = list(csv.reader(f))
+            if not rows:
+                return
+            header = rows[0]
+            try:
+                completed_index = header.index("completed")
+                scan_index = header.index("scan")
+            except ValueError:
+                return
+            updated = False
+            for row in rows[1:]:
+                if len(row) > completed_index and row[scan_index] == scan_id:
+                    if row[completed_index] != status:
+                        row[completed_index] = status
+                        updated = True
+                    break
+            if updated:
+                with open(csv_path, "w", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerows(rows)
+        except Exception:
+            pass
+
+    def _log_3d_slice_start(self, scan_name, axes_params, phi_value, is_fly_snake: bool = False):
+        # Modify axes_params for phi to fixed value
+        modified_axes = []
+        for ax in axes_params:
+            if ax.get("name", "").lower() == "phi":
+                modified_ax = ax.copy()
+                modified_ax["p0"] = phi_value
+                modified_ax["st"] = 0
+                modified_ax["fe"] = 0
+                modified_ax["step"] = 0
+                modified_axes.append(modified_ax)
+            else:
+                modified_axes.append(ax)
+        position_arrays = [self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"]) for ax in modified_axes]
+        n_pos = self._compute_n_positions(
+            position_arrays,
+            n_phantom_x=1 if is_fly_snake else 0,
+            round_y_to_even=is_fly_snake,
+        )
+        self._write_scan_summary_line(scan_name, modified_axes, n_pos)
+
+    def _update_3d_slice_completed(self):
+        self._update_scan_summary_completed("yes")
 
     def _launch_worker(self, executor_fn, *args, done_signal=None, **kwargs):
         """Create, wire, and start a Worker thread for a scan executor function.
@@ -461,11 +782,12 @@ class ScanHandler:
         xname = self.w.motornames[xmotor] if xmotor < len(self.w.motornames) else "X"
         zname = self.w.motornames[ymotor] if ymotor < len(self.w.motornames) else "Z"
 
-        title = "2d scan positions using current lup scan parameters"
-        win = pg.PlotWidget(title=title)
-        win.setWindowTitle(title)
-        win.resize(600, 500)
-        plot = win.getPlotItem()
+        win = pg.GraphicsLayoutWidget()
+        win.setWindowTitle("2d scan positions / QDS scatter")
+        win.resize(600, 250)
+
+        # ── Left: scan positions ──────────────────────────────────────────────
+        plot = win.addPlot(row=0, col=0, title="2d scan positions")
         plot.setLabel("bottom", f"{xname} (mm)")
         plot.setLabel("left", f"{zname} (mm)")
         plot.getAxis("bottom").enableAutoSIPrefix(False)
@@ -492,9 +814,133 @@ class ScanHandler:
             symbolBrush=pg.mkBrush(None),
             symbolPen=pg.mkPen("b", width=2),
         )
+
+        # ── Right: QDS scatter (channel 2 vs channel 3) ───────────────────────
+        labels = getattr(self.w, "plotlabels", [])
+        xlabel = labels[1] if len(labels) > 1 else "QDS channel 2"
+        ylabel = labels[2] if len(labels) > 2 else "QDS channel 3"
+
+        scatter = win.addPlot(row=0, col=1, title="QDS scatter")
+        scatter.setLabel("bottom", xlabel)
+        scatter.setLabel("left", ylabel)
+        scatter.getAxis("bottom").enableAutoSIPrefix(False)
+        scatter.getAxis("left").enableAutoSIPrefix(False)
+
+        scatter_item = scatter.plot(
+            x=[], y=[],
+            pen=None,
+            symbol="o",
+            symbolSize=4,
+            symbolBrush=pg.mkBrush("c"),
+            symbolPen=pg.mkPen(None),
+        )
+
+        # Seed with whatever is already in qds_array.
+        _seed = deque(getattr(self.w, "qds_array", []), maxlen=500)
+        if _seed:
+            _arr = np.asarray(_seed)
+            if _arr.ndim == 2 and _arr.shape[1] >= 3:
+                scatter_item.setData(x=_arr[:, 1], y=_arr[:, 2])
+
+        # Worker thread: samples qds_array at the same 100 ms rate as the main
+        # QDS timer and updates the scatter via a cross-thread signal.
+        _w_ref = self.w
+
+        def _get_qds():
+            return deque(getattr(_w_ref, "qds_array", []), maxlen=500)
+
+        worker = _QdsScatterWorker(data_fn=_get_qds, interval_ms=100)
+        thread = QThread()
+        worker.moveToThread(thread)
+        thread.started.connect(worker.start)
+        worker.data_ready.connect(
+            lambda arr: scatter_item.setData(x=arr[:, 1], y=arr[:, 2])
+        )
+
+        def _on_close(event):
+            QSettings("ptychoSAXS", "ptychoSAXS").setValue(
+                "scanPositionsWindow/geometry", win.saveGeometry()
+            )
+            thread.quit()
+            thread.wait(500)
+            self.ui.pushButton_plotScanPositions.setEnabled(True)
+            event.accept()
+
+        win.closeEvent = _on_close
+        thread.start()
+
+        self.ui.pushButton_plotScanPositions.setEnabled(False)
         win.show()
-        # Keep reference so the window is not garbage-collected
+        _geom = QSettings("ptychoSAXS", "ptychoSAXS").value("scanPositionsWindow/geometry")
+        if _geom is not None:
+            win.restoreGeometry(_geom)
+        # Keep references so nothing is garbage-collected while the window is open.
         self._scan_pos_window = win
+        self._scan_pos_thread = thread
+        self._scan_pos_worker = worker
+        self._scan_pos_plot_item = plot
+        self._scan_pos_xmotor = xmotor
+        self._scan_pos_ymotor = ymotor
+
+    def _refresh_scan_pos_plot(self):
+        """Redraw the left (scan positions) panel if the positions window is open."""
+        win = getattr(self, "_scan_pos_window", None)
+        plot = getattr(self, "_scan_pos_plot_item", None)
+        if win is None or plot is None or not win.isVisible():
+            return
+
+        xmotor = getattr(self, "_scan_pos_xmotor", 0)
+        ymotor = getattr(self, "_scan_pos_ymotor", 2)
+        nx = xmotor + 1
+        nz = ymotor + 1
+
+        def _val(name, default=0.0):
+            w = self.ui.findChild(QLineEdit, name)
+            if w is None:
+                return default
+            try:
+                return float(w.text())
+            except ValueError:
+                return default
+
+        p0x = _val("ed_%i" % nx)
+        p0z = _val("ed_%i" % nz)
+        st_x = _val("ed_lup_%i_L" % nx)
+        fe_x = _val("ed_lup_%i_R" % nx)
+        step_x = _val("ed_lup_%i_N" % nx, 1.0)
+        st_z = _val("ed_lup_%i_L" % nz)
+        fe_z = _val("ed_lup_%i_R" % nz)
+        step_z = _val("ed_lup_%i_N" % nz, 1.0)
+
+        if step_x == 0 or step_z == 0:
+            return
+
+        x_positions = self._make_positions(p0x, st_x, fe_x, step_x)
+        z_positions = self._make_positions(p0z, st_z, fe_z, step_z)
+
+        if len(x_positions) == 1:
+            x_positions = np.array([p0x + st_x, p0x + fe_x])
+        if len(z_positions) == 1:
+            z_positions = np.array([p0z + st_z, p0z + fe_z])
+
+        coords = self._snake_positions(x_positions, z_positions)
+        xs, zs = coords[:, 0], coords[:, 1]
+
+        plot.clear()
+        plot.plot(
+            x=xs, y=zs,
+            pen=pg.mkPen("r", width=1),
+            symbol="o", symbolSize=5,
+            symbolBrush=pg.mkBrush("r"),
+            symbolPen=pg.mkPen(None),
+        )
+        plot.plot(
+            x=xs[:2], y=zs[:2],
+            pen=None,
+            symbol="x", symbolSize=12,
+            symbolBrush=pg.mkBrush(None),
+            symbolPen=pg.mkPen("b", width=2),
+        )
 
     @staticmethod
     def _snake_positions(x_positions, y_positions):
@@ -1047,6 +1493,9 @@ class ScanHandler:
         self.w.messages["current status"] = f"stepscan done. {time.ctime()}"
         print(self.w.messages["current status"])
         self.w.isscan = False
+        self._update_scan_summary_completed(
+            "partial" if self.isStopScanIssued else "yes"
+        )
         if update_gui:
             if self.isStopScanIssued:
                 self.w.set_scan_status("Stopped")
@@ -1164,6 +1613,40 @@ class ScanHandler:
                     det.filePut("AutoSave", 1)
                     det.TriggerMode = 3
                     det.Acquire = 0
+        self.update_saxs_det_status()
+
+    def get_saxs_det_mode(self):
+        """Read detector PVs and return 'align', 'scan', or 'unknown'."""
+        for i, det in enumerate(self.w.detector):
+            if i > 1:
+                continue
+            if det is not None:
+                try:
+                    autosave = det.fileGet("AutoSave")
+                    trigger = det.TriggerMode
+                    acquire = det.Acquire
+                    if autosave == 0 and trigger == 4 and acquire == 1:
+                        return "align"
+                    elif autosave == 1 and trigger == 3 and acquire == 0:
+                        return "scan"
+                    else:
+                        return "unknown"
+                except Exception:
+                    return "unknown"
+        return "unknown"
+
+    def update_saxs_det_status(self):
+        mode = self.get_saxs_det_mode()
+        btn = self.ui.pushButton_checkSAXS
+        if mode == "scan":
+            btn.setText("SAXS\nScan mode")
+            btn.setStyleSheet("background-color: green; color: white;")
+        elif mode == "align":
+            btn.setText("SAXS\nAlign mode")
+            btn.setStyleSheet("background-color: orange; color: white;")
+        else:
+            btn.setText("SAXS\nUnknown mode")
+            btn.setStyleSheet("background-color: red; color: white;")
 
     def set_basepaths(self, text=""):
         if type(text) == bool:
@@ -1522,6 +2005,9 @@ class ScanHandler:
 
         self.w.isscan = False
         self.w.isfly = False
+        self._update_scan_summary_completed(
+            "partial" if self.isStopScanIssued else "yes"
+        )
         if self.isStopScanIssued:
             self.w.set_scan_status("Stopped")
             self.ui.statusbar.showMessage("Scan stopped by user \u2014 motors returned.")
@@ -1563,6 +2049,9 @@ class ScanHandler:
             self.w.mv(key, self.w.motor_p0[key])
         self.w.isscan = False
         self.w.isfly = False
+        self._update_scan_summary_completed(
+            "partial" if self.isStopScanIssued else "yes"
+        )
         if self.w.shutter_close_after_scan:
             self.w.shutter.close()
         if self.isStopScanIssued:
@@ -1592,6 +2081,9 @@ class ScanHandler:
         if isTestRun:
             return
         self.w.isscan = False
+        self._update_scan_summary_completed(
+            "partial" if self.isStopScanIssued else "yes"
+        )
         self.w.updatepos()
         self.w.isfly = False
         if self.isStopScanIssued:
@@ -1751,7 +2243,7 @@ class ScanHandler:
         ):
             return
 
-        self._log_scan_header(scan_name, [xax, yax])
+        self._log_scan_header(scan_name, [xax, yax], is_fly_snake=snake)
 
         if snake:
             # Program the full 2-D snake trajectory on the hexapod controller
@@ -1761,7 +2253,7 @@ class ScanHandler:
                 self.fly2d0_SNAKE,
                 xmotor,
                 ymotor,
-                done_signal=self.w.flydone,
+                done_signal=self.w.flydone2d,
                 scanname=scanname,
             )
         else:
@@ -1851,7 +2343,7 @@ class ScanHandler:
         ):
             return
 
-        self._log_scan_header(scan_name, [xax, yax, phiax])
+        self.fly3d_axes_params = [xax, yax, phiax]
 
         self._launch_worker(
             self.fly3d0,
@@ -2111,7 +2603,7 @@ class ScanHandler:
         ):
             return
 
-        self._log_scan_header("stepscan3d", [xax, yax, phiax])
+        self.stepscan3d_axes_params = [xax, yax, phiax]
 
         # Initialise the DG645 so the detector IOC knows a scan is starting.
         # stepscan2d0 will re-configure it precisely per-step with set_pilatus().
@@ -2674,6 +3166,8 @@ class ScanHandler:
             self.w.pts.mv(axis, value)
             self._push_filepaths_to_detectors()
             self.progress_3d = (i, Npos)
+            scan = f"{axis}{i:03d}"
+            self._log_3d_slice_start(scan, self.stepscan3d_axes_params, value)
             retval = self.w.stepscan2d0(
                 xmotor=xmotor,
                 ymotor=ymotor,
@@ -2690,6 +3184,8 @@ class ScanHandler:
                     msg = f"Detector refresh failed 3 times. Aborting 3D scan."
                     update_status(msg)
                     break
+            else:
+                self._update_3d_slice_completed()
             if update_status:
                 msg = f"Elapsed time = {time.time() - self.time_scanstart}s to finish {(i + 1) / len(pos) * 100}%."
                 update_status(msg)
@@ -2814,6 +3310,7 @@ class ScanHandler:
 
             self.progress_3d = (i, len(pos))
             scan = f"{scanname}{i:03d}"
+            self._log_3d_slice_start(scan, self.fly3d_axes_params, value, is_fly_snake=snake)
 
             # Program the hexapod trajectory for this phi slice, then run the
             # 2-D executor directly on the current worker thread (no sub-worker).
@@ -2854,6 +3351,8 @@ class ScanHandler:
                     if update_status:
                         update_status("Detector failed 3 times. Aborting 3-D fly scan.")
                     break
+            
+            self._update_3d_slice_completed()
 
             if update_status:
                 elapsed = time.time() - self.time_scanstart
@@ -3283,7 +3782,10 @@ class ScanHandler:
 
         # Wait until all expected frames have been collected.
         Nstep = self.w.pts.hexapod.pulse_number
-        TIMEOUT = period * Nstep + 2  # generous: total scan time + 2 s buffer
+        TIMEOUT = period * Nstep + 2  # stall window: total scan time + 2 s buffer
+        # The last frame's ArrayCounter_RBV update is delayed by HDF5 finalization,
+        # which can take many seconds. Give it a much longer stall window.
+        LAST_FRAME_TIMEOUT = max(TIMEOUT, 30)
         N_imgcollected = 0
         t_since_last_frame = time.time()
         t0_scan = time.time()
@@ -3318,10 +3820,21 @@ class ScanHandler:
                 N_imgcollected = val
                 t_since_last_frame = time.time()
 
-            # Abort if no new frames arrived within the timeout window.
-            if time.time() - t_since_last_frame > TIMEOUT:
+            # When one frame short, Armed→0 is the reliable "all data written" signal.
+            # ArrayCounter_RBV lags while the HDF5 file is being finalised.
+            if N_imgcollected == Nstep - 1:
+                active_dets = [
+                    det for ndet, det in enumerate(self.w.detector)
+                    if ndet <= 1 and det is not None
+                ]
+                if active_dets and all(det.Armed == 0 for det in active_dets):
+                    break
+
+            # Stall timeout: use the longer window for the last frame.
+            stall_limit = LAST_FRAME_TIMEOUT if N_imgcollected == Nstep - 1 else TIMEOUT
+            if time.time() - t_since_last_frame > stall_limit:
                 self.w.messages["recent error message"] = (
-                    f"Data collection stalled after {TIMEOUT:.1f}s "
+                    f"Data collection stalled after {stall_limit:.1f}s "
                     f"({N_imgcollected}/{Nstep} frames). {time.ctime()}"
                 )
                 print(self.w.messages["recent error message"])
@@ -3458,7 +3971,7 @@ class ScanHandler:
                 * self.w.parameters._ratio_exp_period
             )
             print(
-                f"Actual exposure time: {expt:0.3e} s, during which {axis} will move {movestep:.3e} um."
+                f"Actual exposure time: {1000*expt:0.3f} ms, during which {axis} will move {movestep:.3f} um."
             )
 
             # If softglue SG is not selected, use prepare for the softglue.

@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>876</width>
+    <width>858</width>
     <height>720</height>
    </rect>
   </property>
@@ -48,9 +48,9 @@ Current</string>
    <widget class="QPushButton" name="pushButton_xrayEyeIn">
     <property name="geometry">
      <rect>
-      <x>430</x>
+      <x>420</x>
       <y>10</y>
-      <width>121</width>
+      <width>111</width>
       <height>28</height>
      </rect>
     </property>
@@ -66,9 +66,9 @@ Current</string>
    <widget class="QPushButton" name="pushButton_xrayEyeOut">
     <property name="geometry">
      <rect>
-      <x>430</x>
+      <x>420</x>
       <y>40</y>
-      <width>121</width>
+      <width>111</width>
       <height>28</height>
      </rect>
     </property>
@@ -84,7 +84,7 @@ Current</string>
    <widget class="QFrame" name="frame_OSA">
     <property name="geometry">
      <rect>
-      <x>429</x>
+      <x>419</x>
       <y>469</y>
       <width>241</width>
       <height>141</height>
@@ -422,9 +422,9 @@ QSlider::add-page:horizontal {
    <widget class="QPushButton" name="pushButton_exit">
     <property name="geometry">
      <rect>
-      <x>600</x>
+      <x>580</x>
       <y>10</y>
-      <width>71</width>
+      <width>81</width>
       <height>51</height>
      </rect>
     </property>
@@ -444,7 +444,7 @@ color: rgb(255, 255, 255);</string>
    <widget class="QLabel" name="label_6">
     <property name="geometry">
      <rect>
-      <x>430</x>
+      <x>420</x>
       <y>440</y>
       <width>111</width>
       <height>31</height>
@@ -468,7 +468,7 @@ color: rgb(255, 255, 255);</string>
    <widget class="QFrame" name="frame_BS">
     <property name="geometry">
      <rect>
-      <x>429</x>
+      <x>419</x>
       <y>109</y>
       <width>241</width>
       <height>141</height>
@@ -806,7 +806,7 @@ QSlider::add-page:horizontal {
    <widget class="QLabel" name="label_bsInOut">
     <property name="geometry">
      <rect>
-      <x>430</x>
+      <x>420</x>
       <y>80</y>
       <width>101</width>
       <height>31</height>
@@ -830,9 +830,9 @@ QSlider::add-page:horizontal {
    <widget class="QFrame" name="frame_ZP">
     <property name="geometry">
      <rect>
-      <x>429</x>
+      <x>419</x>
       <y>289</y>
-      <width>431</width>
+      <width>421</width>
       <height>141</height>
      </rect>
     </property>
@@ -1169,7 +1169,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>230</x>
        <y>40</y>
-       <width>191</width>
+       <width>181</width>
        <height>91</height>
       </rect>
      </property>
@@ -1187,7 +1187,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>230</x>
        <y>10</y>
-       <width>191</width>
+       <width>181</width>
        <height>21</height>
       </rect>
      </property>
@@ -1207,7 +1207,7 @@ QSlider::add-page:horizontal {
    <widget class="QLabel" name="label_zpInOut">
     <property name="geometry">
      <rect>
-      <x>430</x>
+      <x>420</x>
       <y>260</y>
       <width>101</width>
       <height>31</height>
@@ -1231,7 +1231,7 @@ QSlider::add-page:horizontal {
    <widget class="QPushButton" name="pushButton_exportPos">
     <property name="geometry">
      <rect>
-      <x>550</x>
+      <x>540</x>
       <y>70</y>
       <width>61</width>
       <height>31</height>
@@ -1252,7 +1252,7 @@ QSlider::add-page:horizontal {
    <widget class="QPushButton" name="pushButton_importPos">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>600</x>
       <y>70</y>
       <width>61</width>
       <height>31</height>
@@ -1273,9 +1273,9 @@ QSlider::add-page:horizontal {
    <widget class="QFrame" name="frame_osaXZ">
     <property name="geometry">
      <rect>
-      <x>680</x>
+      <x>670</x>
       <y>440</y>
-      <width>181</width>
+      <width>171</width>
       <height>131</height>
      </rect>
     </property>
@@ -1314,7 +1314,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>60</x>
        <y>50</y>
-       <width>41</width>
+       <width>31</width>
        <height>31</height>
       </rect>
      </property>
@@ -1360,7 +1360,7 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="label_osa_tweakUnit">
      <property name="geometry">
       <rect>
-       <x>100</x>
+       <x>90</x>
        <y>50</y>
        <width>31</width>
        <height>31</height>
@@ -1383,7 +1383,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>60</x>
        <y>10</y>
-       <width>61</width>
+       <width>51</width>
        <height>31</height>
       </rect>
      </property>
@@ -1401,7 +1401,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>60</x>
        <y>90</y>
-       <width>61</width>
+       <width>51</width>
        <height>31</height>
       </rect>
      </property>
@@ -1417,7 +1417,7 @@ QSlider::add-page:horizontal {
     <widget class="QPushButton" name="pb_osa_right">
      <property name="geometry">
       <rect>
-       <x>130</x>
+       <x>120</x>
        <y>50</y>
        <width>41</width>
        <height>31</height>
@@ -1465,9 +1465,9 @@ QSlider::add-page:horizontal {
    <widget class="QFrame" name="frame_bsXZ">
     <property name="geometry">
      <rect>
-      <x>680</x>
+      <x>670</x>
       <y>10</y>
-      <width>181</width>
+      <width>171</width>
       <height>131</height>
      </rect>
     </property>
@@ -1506,7 +1506,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>60</x>
        <y>50</y>
-       <width>41</width>
+       <width>31</width>
        <height>31</height>
       </rect>
      </property>
@@ -1552,7 +1552,7 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="label_bs_tweakUnit">
      <property name="geometry">
       <rect>
-       <x>100</x>
+       <x>90</x>
        <y>50</y>
        <width>31</width>
        <height>31</height>
@@ -1575,7 +1575,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>60</x>
        <y>10</y>
-       <width>61</width>
+       <width>51</width>
        <height>31</height>
       </rect>
      </property>
@@ -1593,7 +1593,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>60</x>
        <y>90</y>
-       <width>61</width>
+       <width>51</width>
        <height>31</height>
       </rect>
      </property>
@@ -1609,7 +1609,7 @@ QSlider::add-page:horizontal {
     <widget class="QPushButton" name="pb_bs_right">
      <property name="geometry">
       <rect>
-       <x>130</x>
+       <x>120</x>
        <y>50</y>
        <width>41</width>
        <height>31</height>
@@ -1657,9 +1657,9 @@ QSlider::add-page:horizontal {
    <widget class="QFrame" name="frame_zpXZ">
     <property name="geometry">
      <rect>
-      <x>680</x>
+      <x>670</x>
       <y>150</y>
-      <width>181</width>
+      <width>171</width>
       <height>131</height>
      </rect>
     </property>
@@ -1698,7 +1698,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>60</x>
        <y>50</y>
-       <width>41</width>
+       <width>31</width>
        <height>31</height>
       </rect>
      </property>
@@ -1744,7 +1744,7 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="label_zp_tweakUnit">
      <property name="geometry">
       <rect>
-       <x>100</x>
+       <x>90</x>
        <y>50</y>
        <width>31</width>
        <height>31</height>
@@ -1767,7 +1767,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>60</x>
        <y>10</y>
-       <width>61</width>
+       <width>51</width>
        <height>31</height>
       </rect>
      </property>
@@ -1785,7 +1785,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>60</x>
        <y>90</y>
-       <width>61</width>
+       <width>51</width>
        <height>31</height>
       </rect>
      </property>
@@ -1801,7 +1801,7 @@ QSlider::add-page:horizontal {
     <widget class="QPushButton" name="pb_zp_right">
      <property name="geometry">
       <rect>
-       <x>130</x>
+       <x>120</x>
        <y>50</y>
        <width>41</width>
        <height>31</height>
@@ -1849,9 +1849,9 @@ QSlider::add-page:horizontal {
    <widget class="QFrame" name="frame_allInOut">
     <property name="geometry">
      <rect>
-      <x>430</x>
+      <x>420</x>
       <y>620</y>
-      <width>431</width>
+      <width>421</width>
       <height>51</height>
      </rect>
     </property>
@@ -1888,7 +1888,7 @@ QSlider::add-page:horizontal {
     <widget class="QPushButton" name="pushButton_allOut">
      <property name="geometry">
       <rect>
-       <x>290</x>
+       <x>280</x>
        <y>11</y>
        <width>131</width>
        <height>28</height>
@@ -1909,9 +1909,9 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="label_allStatus">
      <property name="geometry">
       <rect>
-       <x>170</x>
+       <x>160</x>
        <y>10</y>
-       <width>91</width>
+       <width>101</width>
        <height>31</height>
       </rect>
      </property>
@@ -3448,7 +3448,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>90</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3487,7 +3487,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>195</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3508,7 +3508,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>125</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3547,7 +3547,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>230</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3568,7 +3568,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>265</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3607,7 +3607,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>335</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3628,7 +3628,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>160</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3784,7 +3784,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>370</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3805,7 +3805,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>300</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3826,7 +3826,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>405</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3847,7 +3847,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>440</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3868,7 +3868,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>510</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3889,7 +3889,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>35</y>
-      <width>61</width>
+      <width>51</width>
       <height>41</height>
      </rect>
     </property>
@@ -3908,7 +3908,7 @@ Position</string>
      <rect>
       <x>360</x>
       <y>475</y>
-      <width>61</width>
+      <width>51</width>
       <height>22</height>
      </rect>
     </property>
@@ -3930,7 +3930,7 @@ Position</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>876</width>
+     <width>858</width>
      <height>21</height>
     </rect>
    </property>

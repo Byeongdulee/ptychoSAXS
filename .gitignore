@@ -9,6 +9,7 @@
 *.user
 *.userosscache
 *.sln.docstates
+gui/ptychoSAXS_launch.bat
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -22,8 +23,6 @@ ptychoSAXS.egg-info
 mono_crash.*
 
 # Build results
-[Dd]ebug/
-!/debug/
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/

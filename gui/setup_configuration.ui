@@ -486,6 +486,28 @@ Sampling Rate:</string>
     <bool>true</bool>
    </property>
   </widget>
+  <widget class="QCheckBox" name="checkBox_usOpticsScanSave">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>260</y>
+     <width>151</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+   <property name="text">
+    <string>Save Upstream
+Optics on Scan</string>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+  </widget>
  </widget>
  <resources/>
  <connections>

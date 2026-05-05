@@ -14,8 +14,8 @@ def folder_ready(beamlinePV):
 
 def create_dir(dirname):
 	if not os.path.exists(dirname):  #create directory
-		os.makedirs(dirname, mode=0777)
-		os.chmod(dirname,0777)
+		os.makedirs(dirname, mode=0o777)
+		os.chmod(dirname,0o777)
 		print("Creating directory:"+dirname)
 	else:
 		print("The directory already exists!")

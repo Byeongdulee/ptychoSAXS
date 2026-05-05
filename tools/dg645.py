@@ -187,7 +187,8 @@ class _dg645Instrument(object):
 
     @delay.setter
     def delay(self, newval):
-        self._ddg.channel[2*self.idx].delay = (self._ddg.channel[0], pq.Quantity(newval, "s"))
+        chan = 2 * self.idx
+        self._ddg.sendcmd("DLAY {},{},{}".format(chan, 0, float(newval)))
 
     @property
     def pulsewidth(self):
@@ -196,7 +197,9 @@ class _dg645Instrument(object):
 
     @pulsewidth.setter
     def pulsewidth(self, newval):
-        self._ddg.channel[2*self.idx+1].delay = (self._ddg.channel[2*self.idx], pq.Quantity(newval, "s"))
+        chan = 2 * self.idx + 1
+        ref = 2 * self.idx
+        self._ddg.sendcmd("DLAY {},{},{}".format(chan, ref, float(newval)))
 
     @property
     def polarity(self):
@@ -279,7 +282,7 @@ class dg645_12ID(SRSDG645):
         self.trigger()
         
     def set_pilatus(self, DGexpt, trigger_source=TSRC_SINGLE_SHOT,DGNimage=1,Cycperiod=0):
-        delaytime = 0
+        delaytime = 0.0
         if (delaytime >= UBZ_SHUTTER_DEADTIME):
             delaytime = delaytime - UBZ_SHUTTER_DEADTIME
         self.instrument["struck"].polarity = 0

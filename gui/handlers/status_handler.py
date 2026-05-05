@@ -250,11 +250,11 @@ class StatusHandler:
             self.ui.lbl_qds_z3.setText(txt)
         if value > 3:
             txt = str(self.ui.lcd_Z_2.value())
-            if value == 1:
+            if value == 4:
                 self.ui.lbl_qds_z1_2.setText(txt)
-            if value == 2:
+            if value == 5:
                 self.ui.lbl_qds_z2_2.setText(txt)
-            if value == 3:
+            if value == 6:
                 self.ui.lbl_qds_z3_2.setText(txt)
 
     # ------------------------------------------------------------------
