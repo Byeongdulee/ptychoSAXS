@@ -633,6 +633,8 @@ class ptyco_main_control(QObject):
         self.ui.pushButton_checkFlyBlur.clicked.connect(
             self.scan_handler.check_fly_blur
         )
+        self.ui.pb_timeSeries.clicked.connect(self.scan_handler.time_series)
+        self.ui.pb_takeshot.clicked.connect(self.scan_handler.takeshot)
         self.ui.pushButton_plotScanPositions.clicked.connect(
             lambda: self.scan_handler.plot_scan_positions_2d(xm, ym)
         )

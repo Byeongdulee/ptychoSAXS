@@ -345,7 +345,7 @@ Current</string>
        <x>40</x>
        <y>10</y>
        <width>21</width>
-       <height>31</height>
+       <height>21</height>
       </rect>
      </property>
      <property name="font">
@@ -1082,6 +1082,9 @@ fly:</string>
       <pointsize>10</pointsize>
      </font>
     </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
+    </property>
     <property name="text">
      <string>step</string>
     </property>
@@ -1564,6 +1567,9 @@ Scan</string>
       <pointsize>10</pointsize>
      </font>
     </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
+    </property>
     <property name="text">
      <string>fly</string>
     </property>
@@ -1735,6 +1741,9 @@ Scan</string>
       <pointsize>10</pointsize>
      </font>
     </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
+    </property>
     <property name="text">
      <string>step</string>
     </property>
@@ -1752,6 +1761,9 @@ Scan</string>
      <font>
       <pointsize>10</pointsize>
      </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
     </property>
     <property name="text">
      <string>fly</string>
@@ -1855,6 +1867,9 @@ Scan</string>
      <font>
       <pointsize>10</pointsize>
      </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
     </property>
     <property name="text">
      <string>fly</string>
@@ -2083,6 +2098,9 @@ Scan</string>
       <pointsize>10</pointsize>
      </font>
     </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
+    </property>
     <property name="text">
      <string>fly</string>
     </property>
@@ -2148,6 +2166,9 @@ Scan</string>
      <font>
       <pointsize>10</pointsize>
      </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
     </property>
     <property name="text">
      <string>fly</string>
@@ -2301,6 +2322,9 @@ Position</string>
       <pointsize>10</pointsize>
      </font>
     </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
+    </property>
     <property name="text">
      <string>fly</string>
     </property>
@@ -2402,6 +2426,9 @@ Position</string>
      <font>
       <pointsize>10</pointsize>
      </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
     </property>
     <property name="text">
      <string>step</string>
@@ -2522,6 +2549,9 @@ Position</string>
      <font>
       <pointsize>10</pointsize>
      </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
     </property>
     <property name="text">
      <string>step</string>
@@ -2941,6 +2971,9 @@ Position</string>
       <pointsize>10</pointsize>
      </font>
     </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
+    </property>
     <property name="text">
      <string>step</string>
     </property>
@@ -3211,6 +3244,9 @@ Position</string>
      <font>
       <pointsize>10</pointsize>
      </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
     </property>
     <property name="text">
      <string>step</string>
@@ -3500,7 +3536,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>710</x>
-      <y>540</y>
+      <y>550</y>
       <width>31</width>
       <height>19</height>
      </rect>
@@ -3524,7 +3560,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>470</y>
+      <y>480</y>
       <width>51</width>
       <height>28</height>
      </rect>
@@ -3548,7 +3584,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>668</x>
-      <y>505</y>
+      <y>515</y>
       <width>71</width>
       <height>31</height>
      </rect>
@@ -3583,7 +3619,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>570</y>
+      <y>580</y>
       <width>51</width>
       <height>28</height>
      </rect>
@@ -3607,7 +3643,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>540</y>
+      <y>550</y>
       <width>41</width>
       <height>21</height>
      </rect>
@@ -3986,6 +4022,9 @@ optics gui</string>
      <enum>QFrame::Raised</enum>
     </property>
     <widget class="QPushButton" name="pushButton_setAlign">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
      <property name="geometry">
       <rect>
        <x>10</x>
@@ -4000,13 +4039,16 @@ optics gui</string>
       </font>
      </property>
      <property name="styleSheet">
-      <string notr="true">background-color: rgb(255, 180, 255);</string>
+      <string notr="true">background-color: rgb(180, 255, 255);</string>
      </property>
      <property name="text">
       <string>Align</string>
      </property>
     </widget>
     <widget class="QPushButton" name="pushButton_setScan">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
      <property name="geometry">
       <rect>
        <x>10</x>
@@ -4016,13 +4058,16 @@ optics gui</string>
       </rect>
      </property>
      <property name="styleSheet">
-      <string notr="true">background-color: rgb(255, 180, 255);</string>
+      <string notr="true">background-color: rgb(180, 255, 255);</string>
      </property>
      <property name="text">
       <string>Scan</string>
      </property>
     </widget>
     <widget class="QPushButton" name="pushButton_checkSAXS">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
      <property name="geometry">
       <rect>
        <x>60</x>
@@ -4037,7 +4082,7 @@ optics gui</string>
       </font>
      </property>
      <property name="styleSheet">
-      <string notr="true">background-color: rgb(255, 180, 255);</string>
+      <string notr="true">background-color: rgb(180, 255, 255);</string>
      </property>
      <property name="text">
       <string>Check
@@ -4062,6 +4107,71 @@ SAXS</string>
     <property name="text">
      <string>Check 2d Fly Blur</string>
     </property>
+   </widget>
+   <widget class="QFrame" name="frame_5">
+    <property name="geometry">
+     <rect>
+      <x>665</x>
+      <y>380</y>
+      <width>71</width>
+      <height>91</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: #fffde7;  /* very pale yellow */</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::Box</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QPushButton" name="pb_timeSeries">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>40</y>
+       <width>51</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>10</pointsize>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>time
+series</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_takeshot">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>51</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>takeshot</string>
+     </property>
+    </widget>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">

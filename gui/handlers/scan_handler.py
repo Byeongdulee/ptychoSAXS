@@ -1648,6 +1648,14 @@ class ScanHandler:
             btn.setText("SAXS\nUnknown mode")
             btn.setStyleSheet("background-color: red; color: white;")
 
+    def _update_saxs_buttons_enabled(self):
+        """Enable the SAXS check/align/scan buttons iff the SAXS detector is connected."""
+        enabled = len(self.w.detector) > 0 and self.w.detector[0] is not None
+        for name in ("pushButton_checkSAXS", "pushButton_setAlign", "pushButton_setScan"):
+            btn = getattr(self.ui, name, None)
+            if btn is not None:
+                btn.setEnabled(enabled)
+
     def set_basepaths(self, text=""):
         if type(text) == bool:
             text = ""
@@ -1683,6 +1691,7 @@ class ScanHandler:
             else:
                 self.ui.actionSAXS.setChecked(False)
                 self.w.detector[0] = None
+            self._update_saxs_buttons_enabled()
         if N == 2:
             basename = "12idcPIL:"
             if value is None:
@@ -2412,6 +2421,193 @@ class ScanHandler:
         # original fly() behaviour; other scan types advance on completion.
         self.w.run_stop_issued()
         self.w.update_status_scan_time()
+
+    def takeshot(self):
+        """Take a single detector image (mimics SPEC's `takeshot`, no dialog).
+
+        Reads exposure time from ed_lup_1_t, runs _pre_scan to advance the
+        scan name / file paths, writes a scan summary row, then launches
+        time_series_run with n_images=1 on a worker thread. Shutter open/close
+        is handled by _launch_worker and scandone, matching every other scan.
+        """
+        _t_widget = self.ui.findChild(QLineEdit, "ed_lup_1_t")
+        try:
+            expt = float(_t_widget.text()) if _t_widget else 0.0
+        except ValueError:
+            expt = 0.0
+        if expt <= 0:
+            QMessageBox.warning(self.w.ui, "Takeshot", "Exposure time must be > 0.")
+            return
+
+        period_s = max(expt + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
+
+        self._pre_scan("takeshot")
+        self.w.motor_p0 = {}
+        axes_params = [{"name": "time", "motor_index": 0, "expt": expt,
+                        "p0": 0.0, "st": 0.0, "fe": period_s, "step": period_s}]
+        self._write_scan_summary_line("takeshot", axes_params, 1)
+        self._launch_worker(
+            self.time_series_run, 1, period_s, expt, True,
+            done_signal=self.w.scandone,
+        )
+
+    def time_series(self):
+        """Entry point for a time-series acquisition (GUI thread).
+
+        Opens the Time Series Setup dialog, validates parameters, then launches
+        time_series_run on a Worker thread.  No motors are moved.
+        """
+        from PyQt5.QtWidgets import (
+            QDialog, QDialogButtonBox, QFormLayout, QCheckBox,
+            QLabel, QLineEdit, QMessageBox,
+        )
+
+        # Read exposure time from the main UI before opening the dialog.
+        _t_widget = self.ui.findChild(QLineEdit, "ed_lup_1_t")
+        try:
+            expt = float(_t_widget.text()) if _t_widget else 0.0
+        except ValueError:
+            expt = 0.0
+
+        # ── Build dialog ──────────────────────────────────────────────────────
+        dlg = QDialog(self.w.ui)
+        dlg.setWindowTitle("Time Series Setup")
+        layout = QFormLayout(dlg)
+
+        edit_n = QLineEdit("100")
+        edit_period = QLineEdit("100")
+        chk_multi = QCheckBox()
+        chk_multi.setChecked(True)
+        label_time = QLabel("Total time: 10.0 s")
+
+        layout.addRow("Number of images", edit_n)
+        layout.addRow("Frame period (ms)", edit_period)
+        layout.addRow("Capture multi-frames in one h5 file", chk_multi)
+        layout.addRow("", label_time)
+
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addRow(btn_box)
+        btn_box.rejected.connect(dlg.reject)
+
+        def _update_time_label():
+            try:
+                total_s = int(edit_n.text()) * int(edit_period.text()) / 1000.0
+                label_time.setText(f"Total time: {total_s:.1f} s")
+            except ValueError:
+                label_time.setText("Total time: —")
+
+        edit_n.textChanged.connect(_update_time_label)
+        edit_period.textChanged.connect(_update_time_label)
+        _update_time_label()
+
+        def _validate_and_accept():
+            try:
+                n = int(edit_n.text())
+                if n <= 0:
+                    raise ValueError
+            except ValueError:
+                QMessageBox.warning(dlg, "Time Series", "Number of images must be an integer > 0.")
+                return
+            try:
+                period_ms = int(edit_period.text())
+            except ValueError:
+                QMessageBox.warning(dlg, "Time Series", "Frame period must be an integer.")
+                return
+            if period_ms < self.OVERHEAD_FLY * 1000:
+                QMessageBox.warning(
+                    dlg, "Time Series",
+                    f"Frame period too short. Minimum is {self.OVERHEAD_FLY * 1000:.0f} ms.",
+                )
+                return
+            period_s = period_ms / 1000.0
+            if period_s - expt < DETECTOR_READOUTTIME:
+                QMessageBox.warning(
+                    dlg, "Time Series",
+                    f"Frame period minus exposure time ({(period_s - expt) * 1000:.1f} ms) "
+                    f"is less than the detector readout time ({DETECTOR_READOUTTIME * 1000:.0f} ms).",
+                )
+                return
+            dlg.accept()
+
+        btn_box.accepted.connect(_validate_and_accept)
+
+        if dlg.exec_() != QDialog.Accepted:
+            return
+
+        n_images = int(edit_n.text())
+        period_s = int(edit_period.text()) / 1000.0
+        multi_frame = chk_multi.isChecked()
+
+        self._pre_scan("timeseries")
+        self.w.motor_p0 = {}
+        axes_params = [{"name": "time", "motor_index": 0, "expt": expt,
+                        "p0": 0.0, "st": 0.0, "fe": n_images * period_s, "step": period_s}]
+        self._write_scan_summary_line("timeseries", axes_params, n_images)
+        self._launch_worker(
+            self.time_series_run, n_images, period_s, expt, multi_frame,
+            done_signal=self.w.scandone,
+        )
+
+    def time_series_run(self, n_images, period_s, expt, multi_frame,
+                        update_progress=None, update_status=None):
+        """Worker-thread executor for a time-series acquisition.
+
+        Arms all active detectors via fly_ready(), fires the DG645 in burst
+        mode, then waits for all frames to be collected.
+        """
+        if self.w.DEBUG_DEVICES:
+            for i in range(n_images):
+                if self.isStopScanIssued:
+                    break
+                time.sleep(min(period_s, 0.05))
+                if update_progress is not None:
+                    update_progress(int(100 * (i + 1) / n_images))
+            return
+
+        savemode = 1 if multi_frame else 0
+
+        # Configure DG645 for burst mode: one software trigger fires n_images pulses.
+        self.w.dg645_12ID.set_pilatus2(
+            expt, DGNimage=n_images, Cycperiod=period_s
+        )
+
+        # Arm all active detectors.
+        primary_det = None
+        for detN, det in enumerate(self.w.detector):
+            if det is None:
+                continue
+            det.fly_ready(
+                expt,
+                n_images,
+                period=period_s,
+                capture=(self.w.use_hdf_plugin, savemode),
+                fn=self.w.hdf_plugin_name[detN],
+            )
+            if primary_det is None and "3820" not in det._prefix:
+                primary_det = det
+
+        # Fire the DG645 once — burst mode delivers n_images triggers.
+        self.w.dg645_12ID.trigger()
+
+        # Wait for all frames to be collected.
+        timeout = (expt + 0.1) * n_images + 15
+        t0 = time.time()
+        while True:
+            if self.isStopScanIssued:
+                break
+            if time.time() - t0 > timeout:
+                if update_status is not None:
+                    update_status("Time series timed out.")
+                break
+            if primary_det is not None and primary_det.ArrayCounter_RBV >= n_images:
+                break
+            if update_progress is not None:
+                frames_done = primary_det.ArrayCounter_RBV if primary_det else 0
+                update_progress(int(100 * frames_done / n_images))
+            time.sleep(0.05)
+
+        if update_progress is not None:
+            update_progress(100)
 
     def write_scaninfo_to_logfile(self, strlist):
         if len(self.w.parameters.logfilename) == 0:
