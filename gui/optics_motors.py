@@ -551,7 +551,7 @@ class ZPPresetBlock(MotorPresetBlock):
 class motor_control(QMainWindow):
     #    resized = QtCore.pyqtSignal()
 
-    MOTOR_PREC = "%0.3f"
+    MOTOR_PREC = "%0.4f"
 
     # Direction button → (1-based motor label index, step sign, tweak QLineEdit name)
     # Step value is read from the named QLineEdit and treated as MICRONS.
@@ -559,8 +559,8 @@ class motor_control(QMainWindow):
     DIR_BUTTON_MAP = {
         "pb_osa_left":  (6, -1, "ed_osa_tweak"),
         "pb_osa_right": (6, +1, "ed_osa_tweak"),
-        "pb_osa_down":  (7, -1, "ed_osa_tweak"),
-        "pb_osa_up":    (7, +1, "ed_osa_tweak"),
+        "pb_osa_down":  (8, -1, "ed_osa_tweak"),
+        "pb_osa_up":    (8, +1, "ed_osa_tweak"),
         "pb_bs_left":   (2, -1, "ed_bs_tweak"),
         "pb_bs_right":  (2, +1, "ed_bs_tweak"),
         "pb_bs_down":   (1, -1, "ed_bs_tweak"),
@@ -720,14 +720,14 @@ class motor_control(QMainWindow):
         self.osa_block = MotorPresetBlock(
             self,
             "osa",
-            pos_lbl_indices=[7, 6],
-            in_lbl_names=["lbl_osazIn", "lbl_osaxIn"],
-            out_lbl_names=["lbl_osazOut", "lbl_osaxOut"],
+            pos_lbl_indices=[8, 6],
+            in_lbl_names=["lbl_osayIn", "lbl_osaxIn"],
+            out_lbl_names=["lbl_osayOut", "lbl_osaxOut"],
             extra_labels=[
                 "label_osaxInName",
                 "label_osaxOutName",
-                "label_osazInName",
-                "label_osazOutName",
+                "label_osayInName",
+                "label_osayOutName",
                 "label_3",
                 "label_2",
             ],

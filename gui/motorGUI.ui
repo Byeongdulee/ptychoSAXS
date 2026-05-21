@@ -247,7 +247,7 @@ QSlider::add-page:horizontal {
       <string>0</string>
      </property>
     </widget>
-    <widget class="QLabel" name="lbl_osazIn">
+    <widget class="QLabel" name="lbl_osayIn">
      <property name="geometry">
       <rect>
        <x>100</x>
@@ -265,7 +265,7 @@ QSlider::add-page:horizontal {
       <string>0</string>
      </property>
     </widget>
-    <widget class="QLabel" name="label_osazInName">
+    <widget class="QLabel" name="label_osayInName">
      <property name="geometry">
       <rect>
        <x>100</x>
@@ -280,7 +280,7 @@ QSlider::add-page:horizontal {
       </font>
      </property>
      <property name="text">
-      <string>OSA_Z</string>
+      <string>OSA_Y</string>
      </property>
     </widget>
     <widget class="QLabel" name="label_osaxOutName">
@@ -319,7 +319,7 @@ QSlider::add-page:horizontal {
       <string>0</string>
      </property>
     </widget>
-    <widget class="QLabel" name="label_osazOutName">
+    <widget class="QLabel" name="label_osayOutName">
      <property name="geometry">
       <rect>
        <x>170</x>
@@ -334,10 +334,10 @@ QSlider::add-page:horizontal {
       </font>
      </property>
      <property name="text">
-      <string>OSA_Z</string>
+      <string>OSA_Y</string>
      </property>
     </widget>
-    <widget class="QLabel" name="lbl_osazOut">
+    <widget class="QLabel" name="lbl_osayOut">
      <property name="geometry">
       <rect>
        <x>170</x>
@@ -1303,7 +1303,7 @@ QSlider::add-page:horizontal {
       </font>
      </property>
      <property name="text">
-      <string>OSA_Z</string>
+      <string>OSA_Y</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
