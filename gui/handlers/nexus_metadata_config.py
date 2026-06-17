@@ -145,11 +145,11 @@ DETECTOR_CONFIGS = {
             },
             "/entry/instrument/detector/detector_xrayE": {
                 "pv": "S12-PILATUS1:cam1:Energy_RBV",
-                "units": "eV",
+                "units": "keV",
             },
             "/entry/instrument/detector/detector_threshold1": {
                 "pv": "S12-PILATUS1:cam1:ThresholdEnergy_RBV",
-                "units": "eV",
+                "units": "keV",
             },
             "/entry/instrument/detector/acquire_time": {
                 "pv": "S12-PILATUS1:cam1:AcquirePeriod_RBV",
@@ -192,11 +192,11 @@ DETECTOR_CONFIGS = {
             },
             "/entry/instrument/detector/detector_xrayE": {
                 "pv": "S12-PILATUS2:cam1:Energy_RBV",
-                "units": "eV",
+                "units": "keV",
             },
             "/entry/instrument/detector/detector_threshold1": {
                 "pv": "S12-PILATUS2:cam1:ThresholdEnergy_RBV",
-                "units": "eV",
+                "units": "keV",
             },
             "/entry/instrument/detector/acquire_time": {
                 "pv": "S12-PILATUS2:cam1:AcquirePeriod_RBV",

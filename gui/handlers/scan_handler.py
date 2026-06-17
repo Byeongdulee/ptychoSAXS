@@ -2169,7 +2169,6 @@ class ScanHandler:
             # Create master file
             master_path = self._get_master_file_path(detector_type, sample_name)
             master_dir = os.path.dirname(master_path).replace("\\", "/")
-            # Create directory on Linux (may fail on Windows, but that's OK)
             try:
                 os.makedirs(master_dir, exist_ok=True)
             except (OSError, FileNotFoundError):
