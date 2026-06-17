@@ -277,6 +277,27 @@ class ScanHandler:
         self.isStopScanIssued = False
         print(f"\n\n{scan_name} starting")
 
+        # Query optics PVs once and cache for both CSV and master file (avoid duplicate queries)
+        self._cached_us_optics = self._get_us_optics_positions()
+        self._cached_zone_plate_optics = self._fetch_zone_plate_optics_metadata()
+
+        # Create NeXus master files before scan starts
+        try:
+            sample_name = self.w.parameters.scan_name
+            scan_positions_dict = self._compute_scan_positions()
+
+            # Create master file for each active detector
+            detectors_active = []
+            if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+                detectors_active.append('SAXS')
+            if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+                detectors_active.append('WAXS')
+
+            for detector_type in detectors_active:
+                self._write_master_file_metadata(detector_type, scan_positions_dict, sample_name)
+        except Exception as e:
+            print(f"Warning: Failed to create master file: {e}")
+
     def _log_scan_header(self, scan_name: str, axes_params: list, is_fly_snake: bool = False) -> None:
         """Write the SPEC-style #S header line for this scan to the log file.
 
@@ -497,10 +518,11 @@ class ScanHandler:
         write_header = not csv_path.exists()
         timestamp = datetime.datetime.now()
         scan_id = "S%04d" % self.w.parameters.scan_number
-        if getattr(self.w.parameters, "_save_us_optics", True):
-            optics_values = self._get_us_optics_positions()
+        # Use cached optics values if available (queried once in _pre_scan), otherwise get them now
+        if hasattr(self, '_cached_us_optics'):
+            optics_values = self._cached_us_optics
         else:
-            optics_values = [""] * len(self._US_OPTICS_PVS)
+            optics_values = self._get_us_optics_positions() if getattr(self.w.parameters, "_save_us_optics", True) else [""] * len(self._US_OPTICS_PVS)
         row = [
             timestamp.strftime("%Y-%m-%d"),
             timestamp.strftime("%H:%M:%S"),
@@ -1583,6 +1605,33 @@ class ScanHandler:
                 scaninfo.append("#D")
                 scaninfo.append(time.ctime())
 
+        # Link detector data to master files asynchronously (non-blocking)
+        # Compute full paths NOW while GUI state is frozen, pass to background thread
+        sample_name = self.w.parameters.scan_name
+
+        # Build master file paths for each active detector
+        master_paths = {}
+        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+            try:
+                master_paths['SAXS'] = self._get_master_file_path('SAXS', sample_name)
+            except Exception as e:
+                print(f"Warning: Could not compute SAXS master file path: {e}")
+
+        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+            try:
+                master_paths['WAXS'] = self._get_master_file_path('WAXS', sample_name)
+            except Exception as e:
+                print(f"Warning: Could not compute WAXS master file path: {e}")
+
+        if master_paths:
+            import threading
+            thread = threading.Thread(
+                target=self._link_detector_data_delayed,
+                args=(master_paths, 10.0),
+                daemon=True
+            )
+            thread.start()
+
         # when the measurement is all done, update the scan number.
         if update_scannumber:
             self.w.run_stop_issued()
@@ -1655,6 +1704,586 @@ class ScanHandler:
             btn = getattr(self.ui, name, None)
             if btn is not None:
                 btn.setEnabled(enabled)
+
+    # ==================== NeXus Master File Methods ====================
+
+    def _get_master_file_path_with_number(self, detector_type: str, sample_name: str, scan_number: int) -> str:
+        """Get the path to the master file given an explicit scan number.
+
+        Same as _get_master_file_path but takes scan_number as parameter instead of reading current.
+        Used by the background thread which may run after scan number has incremented.
+
+        Args:
+            detector_type: 'SAXS' or 'WAXS'
+            sample_name: Sample name extracted from detector filename
+            scan_number: Explicit scan number to use
+
+        Returns:
+            Full Windows path to master file.
+        """
+        # Determine detector index and mode
+        detector_index_map = {'SAXS': 0, 'WAXS': 1}
+        det_index = detector_index_map.get(detector_type)
+        if det_index is None:
+            raise ValueError(f"Unknown detector type: {detector_type}")
+
+        # Get detector object
+        if det_index >= len(self.w.detector) or self.w.detector[det_index] is None:
+            raise ValueError(f"Detector {detector_type} not initialized")
+
+        # Determine folder structure based on mode
+        if self.w.is_ptychomode and self.w.detector_mode[det_index] == "ptycho":
+            folder_type = "ptycho"
+        else:
+            # Scattering mode
+            tp_map = {'SAXS': 'S', 'WAXS': 'W'}
+            tp = tp_map.get(detector_type)
+            folder_type = tp + "AXS"
+
+        # Use Windows working folder path for file I/O on Windows machine
+        windows_workingfolder = (self._Windows_workingfolder if hasattr(self, '_Windows_workingfolder') else "").strip("/\\")
+
+        # Use provided scan_number to build scannumberstring
+        scannumberstring = f"S{scan_number:04d}"
+
+        # Build path using backslashes for Windows
+        path_parts = [windows_workingfolder, folder_type, scannumberstring]
+        detector_folder = "\\".join(p for p in path_parts if p)
+        filename = f"{sample_name}_{scan_number:04d}_master.h5"
+        return os.path.join(detector_folder, filename)
+
+    def _get_master_file_path(self, detector_type: str, sample_name: str) -> str:
+        """Get the path to the master file for a given detector and sample.
+
+        Uses Windows paths (Z:/) since file I/O happens on Windows machine.
+        The detector IOC will handle the Linux path mapping internally.
+
+        Args:
+            detector_type: 'SAXS' or 'WAXS'
+            sample_name: Sample name extracted from detector filename
+
+        Returns:
+            Full Windows path to master file.
+            - Ptycho mode: {Windows_workingfolder}/ptycho/{scannumberstring}/{sample_name}_{scan_num:04d}_master.h5
+            - Scattering mode: {Windows_workingfolder}/SAXS_or_WAXS/{scannumberstring}/{sample_name}_{scan_num:04d}_master.h5
+        """
+        scan_num = self.w.parameters.scan_number
+        return self._get_master_file_path_with_number(detector_type, sample_name, scan_num)
+
+    def _get_detector_config(self, detector_type: str) -> dict:
+        """Get the configuration dict for a detector type.
+
+        Args:
+            detector_type: 'SAXS', 'WAXS', etc.
+
+        Returns:
+            Configuration dictionary with PVs, constants, and metadata mapping
+        """
+        from .nexus_metadata_config import DETECTOR_CONFIGS
+
+        if detector_type not in DETECTOR_CONFIGS:
+            raise ValueError(f"Unknown detector type: {detector_type}")
+        return DETECTOR_CONFIGS[detector_type]
+
+    def _fetch_zone_plate_optics_metadata(self) -> dict:
+        """Query zone plate optics metadata (for caching to avoid duplicate queries).
+
+        Returns:
+            Dictionary {nexus_path: value} for zone plate PVs that succeeded.
+            Returns empty dict if PV query fails.
+        """
+        from .nexus_metadata_config import ZONE_PLATE_METADATA_MAP
+
+        try:
+            import epics
+        except ImportError:
+            return {}
+
+        zp_success = {}
+        for nexus_path, pv_info in ZONE_PLATE_METADATA_MAP.items():
+            pv_name = pv_info["pv"]
+            try:
+                value = epics.caget(pv_name)
+                if value is not None:
+                    zp_success[nexus_path] = value
+            except Exception as e:
+                print(f"Warning: Failed to query zone plate PV {pv_name}: {e}")
+
+        return zp_success if zp_success else {}
+
+    def _fetch_shared_epics_metadata(self, cached_zone_plate_optics: dict = None) -> dict:
+        """Query all shared EPICS metadata (same for all detectors).
+
+        Args:
+            cached_zone_plate_optics: Pre-fetched zone plate optics metadata to avoid duplicate queries.
+                                      If provided, use this instead of querying again.
+
+        Returns:
+            Dictionary {nexus_path: value} for all PVs that succeeded.
+            Skips any PV that returns None.
+        """
+        from .nexus_metadata_config import SHARED_METADATA_MAP, SLITS_METADATA_MAP, ZONE_PLATE_METADATA_MAP
+
+        try:
+            import epics
+        except ImportError:
+            print("Warning: pyepics not available, returning empty metadata")
+            return {}
+
+        metadata = {}
+
+        # Query shared metadata (beam, source, sample motors, scalars)
+        for nexus_path, pv_info in SHARED_METADATA_MAP.items():
+            pv_name = pv_info["pv"]
+            try:
+                value = epics.caget(pv_name)
+                if value is not None:
+                    metadata[nexus_path] = value
+            except Exception as e:
+                print(f"Warning: Failed to query PV {pv_name}: {e}")
+
+        # Query slits (conditional on checkbox)
+        save_us_optics = getattr(self.w.parameters, "_save_us_optics", False)
+        if save_us_optics:
+            slits_success = {}
+            for nexus_path, pv_info in SLITS_METADATA_MAP.items():
+                pv_name = pv_info["pv"]
+                try:
+                    value = epics.caget(pv_name)
+                    if value is not None:
+                        slits_success[nexus_path] = value
+                except Exception as e:
+                    print(f"Warning: Failed to query slit PV {pv_name}: {e}")
+            # Add slits only if at least one succeeded
+            if slits_success:
+                metadata.update(slits_success)
+
+        # Use cached zone plate optics if provided, otherwise query
+        if cached_zone_plate_optics is not None:
+            metadata.update(cached_zone_plate_optics)
+        elif save_us_optics:
+            zp_success = {}
+            for nexus_path, pv_info in ZONE_PLATE_METADATA_MAP.items():
+                pv_name = pv_info["pv"]
+                try:
+                    value = epics.caget(pv_name)
+                    if value is not None:
+                        zp_success[nexus_path] = value
+                except Exception as e:
+                    print(f"Warning: Failed to query zone plate PV {pv_name}: {e}")
+            # Add zone plate only if at least one succeeded
+            if zp_success:
+                metadata.update(zp_success)
+
+        return metadata
+
+    def _fetch_detector_epics_metadata(self, detector_config: dict) -> dict:
+        """Query detector-specific EPICS metadata.
+
+        Args:
+            detector_config: Configuration dict for this detector
+
+        Returns:
+            Dictionary {nexus_path: value} for all detector PVs that succeeded.
+            Skips any PV that returns None.
+        """
+        try:
+            import epics
+        except ImportError:
+            print("Warning: pyepics not available, returning empty metadata")
+            return {}
+
+        metadata = {}
+        detector_pvs = detector_config.get("detector_pvs", {})
+
+        for nexus_path, pv_info in detector_pvs.items():
+            pv_name = pv_info["pv"]
+            try:
+                value = epics.caget(pv_name)
+                if value is not None:
+                    metadata[nexus_path] = value
+            except Exception as e:
+                print(f"Warning: Failed to query detector PV {pv_name}: {e}")
+
+        return metadata
+
+    def _compute_scan_positions(self) -> dict:
+        """Extract intended scan positions from UI scan parameters.
+
+        Reads motor limits (L/R/N) from the UI and computes position arrays.
+        Only returns data if this is an actual motor scan (not takeshot/time_series).
+        Determines which motors are being scanned (1D, 2D, 3D, etc.).
+
+        Returns:
+            Dictionary {motor_name: np.ndarray} where each array contains
+            the intended positions for that motor in scan traversal order.
+            Empty dict if not a motor scan.
+            Example for 2D: {'X': array([...]), 'Z': array([...])}
+        """
+        positions = {}
+
+        # Read scan parameters from UI widgets using findChild (same as _update_lup_labels)
+        def _val(name, default=0.0):
+            from PyQt5.QtWidgets import QLineEdit
+            w = self.ui.findChild(QLineEdit, name)
+            if w is None:
+                return default
+            try:
+                return float(w.text())
+            except ValueError:
+                return default
+
+        lup_1_L = _val("ed_lup_1_L")
+        lup_1_R = _val("ed_lup_1_R")
+        lup_1_N = _val("ed_lup_1_N", 1.0)
+        lup_3_L = _val("ed_lup_3_L")
+        lup_3_R = _val("ed_lup_3_R")
+        lup_3_N = _val("ed_lup_3_N", 1.0)
+
+        # Only compute positions if motors are actually being scanned (N > 1)
+        if lup_1_N <= 1 and lup_3_N <= 1:
+            # Not a motor scan (takeshot, time_series, etc.)
+            return positions
+
+        # Motor 1 (X axis)
+        if lup_1_N > 1:
+            pos_array = np.linspace(lup_1_L, lup_1_R, int(lup_1_N))
+            positions['X'] = pos_array
+
+        # Motor 3 (Z axis)
+        if lup_3_N > 1:
+            pos_array = np.linspace(lup_3_L, lup_3_R, int(lup_3_N))
+            positions['Z'] = pos_array
+
+        print(f"Computed scan positions for {len(positions)} motors: {list(positions.keys())}")
+        return positions
+
+    def _populate_instrument_group(self, entry, shared_meta: dict, detector_meta: dict,
+                                   detector_config: dict) -> None:
+        """Create /entry/instrument hierarchy with metadata.
+
+        Args:
+            entry: HDF5 entry group
+            shared_meta: Shared metadata dict from _fetch_shared_epics_metadata
+            detector_meta: Detector metadata dict from _fetch_detector_epics_metadata
+            detector_config: Detector configuration dict
+        """
+        import h5py
+        from .nexus_metadata_config import SHARED_METADATA_MAP, SLITS_METADATA_MAP, ZONE_PLATE_METADATA_MAP
+
+        inst = entry.create_group('instrument')
+        inst.attrs['NX_class'] = b'NXinstrument'
+        inst.create_dataset('name', data=detector_config['name'].encode('utf-8'))
+
+        # Create beam group
+        beam = inst.create_group('beam')
+        beam.attrs['NX_class'] = b'NXbeam'
+        if '/entry/instrument/beam/incident_wavelength' in shared_meta:
+            val = shared_meta['/entry/instrument/beam/incident_wavelength']
+            beam.create_dataset('incident_wavelength', data=val)
+            beam['incident_wavelength'].attrs['units'] = b'angstrom'
+
+        # Create monochromator group
+        mono = inst.create_group('monochromator')
+        mono.attrs['NX_class'] = b'NXmonochromator'
+        if '/entry/instrument/monochromator/monoE' in shared_meta:
+            val = shared_meta['/entry/instrument/monochromator/monoE']
+            mono.create_dataset('monoE', data=val)
+            mono['monoE'].attrs['units'] = b'keV'
+
+        # Create source group
+        source = inst.create_group('source')
+        source.attrs['NX_class'] = b'NXsource'
+        source.create_dataset('facility_name', data=b'APS')
+        source.create_dataset('facility_beamline', data=b'12-ID-E')
+        source.create_dataset('facility_sector', data=b'12-ID')
+        source.create_dataset('facility_station', data=b'E')
+        source.create_dataset('name', data=b'Advanced Photon Source')
+        source.create_dataset('type', data=b'Synchrotron')
+        source.create_dataset('probe', data=b'x-ray')
+
+        if '/entry/instrument/source/current' in shared_meta:
+            val = shared_meta['/entry/instrument/source/current']
+            source.create_dataset('current', data=val)
+            source['current'].attrs['units'] = b'mA'
+
+        if '/entry/instrument/source/undE' in shared_meta:
+            val = shared_meta['/entry/instrument/source/undE']
+            source.create_dataset('undE', data=val)
+            source['undE'].attrs['units'] = b'keV'
+
+        # Create detector group
+        det = inst.create_group('detector')
+        det.attrs['NX_class'] = b'NXdetector'
+        det.create_dataset('description', data=detector_config['description'].encode('utf-8'))
+        det.create_dataset('type', data=detector_config['type'].encode('utf-8'))
+        det.create_dataset('sensor_material', data=detector_config['sensor_material'].encode('utf-8'))
+
+        det.create_dataset('sensor_thickness', data=detector_config['sensor_thickness'])
+        det['sensor_thickness'].attrs['units'] = b'mm'
+
+        det.create_dataset('x_pixel_size', data=detector_config['x_pixel_size'])
+        det['x_pixel_size'].attrs['units'] = b'mm'
+
+        det.create_dataset('y_pixel_size', data=detector_config['y_pixel_size'])
+        det['y_pixel_size'].attrs['units'] = b'mm'
+
+        det.create_dataset('bit_depth_image', data=detector_config['bit_depth_image'])
+        det.create_dataset('bit_depth_readout', data=detector_config['bit_depth_readout'])
+        det.create_dataset('saturation_value', data=detector_config['saturation_value'])
+
+        det.create_dataset('detector_readout_time', data=detector_config['detector_readout_time'])
+        det['detector_readout_time'].attrs['units'] = b'ms'
+
+        # Add detector-specific metadata
+        for nexus_path, value in detector_meta.items():
+            if nexus_path.startswith('/entry/instrument/detector/'):
+                # Extract dataset name from path
+                dataset_name = nexus_path.split('/')[-1]
+                det.create_dataset(dataset_name, data=value)
+                # Find units from config
+                for path, pv_info in detector_config['detector_pvs'].items():
+                    if path == nexus_path:
+                        units = pv_info.get('units', '')
+                        if units:
+                            det[dataset_name].attrs['units'] = units.encode('utf-8')
+
+        # Create slits group (only if at least one slit PV succeeded)
+        slits_data = {k: v for k, v in shared_meta.items() if k.startswith('/entry/instrument/slits/')}
+        if slits_data:
+            slits = inst.create_group('slits')
+            slits.attrs['NX_class'] = b'NXcollection'
+            for nexus_path, value in slits_data.items():
+                dataset_name = nexus_path.split('/')[-1]
+                slits.create_dataset(dataset_name, data=value)
+                slits[dataset_name].attrs['units'] = b'mm'
+
+        # Create zone plate group (only if at least one zone plate PV succeeded)
+        zp_data = {k: v for k, v in shared_meta.items() if k.startswith('/entry/instrument/zone_plate/')}
+        if zp_data:
+            zp = inst.create_group('zone_plate')
+            zp.attrs['NX_class'] = b'NXcollection'
+            for nexus_path, value in zp_data.items():
+                dataset_name = nexus_path.split('/')[-1]
+                zp.create_dataset(dataset_name, data=value)
+                zp[dataset_name].attrs['units'] = b'mm'
+
+    def _populate_sample_group(self, entry, shared_meta: dict, scan_positions_dict: dict) -> None:
+        """Create /entry/sample group with motor positions and scan position arrays.
+
+        Args:
+            entry: HDF5 entry group
+            shared_meta: Shared metadata dict (contains sth, stv, theta)
+            scan_positions_dict: {motor_name: np.ndarray} from _compute_scan_positions
+        """
+        from .nexus_metadata_config import SHARED_METADATA_MAP
+
+        sample = entry.create_group('sample')
+        sample.attrs['NX_class'] = b'NXsample'
+
+        # Write sample name (will be set by caller)
+        sample.create_dataset('sample_name', data=b'')
+
+        # Write constant motor positions from EPICS
+        if '/entry/sample/sth' in shared_meta:
+            val = shared_meta['/entry/sample/sth']
+            sample.create_dataset('sth', data=val)
+            sample['sth'].attrs['units'] = b'mm'
+
+        if '/entry/sample/stv' in shared_meta:
+            val = shared_meta['/entry/sample/stv']
+            sample.create_dataset('stv', data=val)
+            sample['stv'].attrs['units'] = b'mm'
+
+        if '/entry/sample/theta' in shared_meta:
+            val = shared_meta['/entry/sample/theta']
+            sample.create_dataset('theta', data=val)
+            sample['theta'].attrs['units'] = b'degree'
+
+        # Write scan position arrays (1D arrays per motor)
+        motor_units = {'X': 'mm', 'Z': 'mm', 'Y': 'mm', 'phi': 'degree', 'omega': 'degree'}
+
+        for motor_name, pos_array in scan_positions_dict.items():
+            sample.create_dataset(motor_name, data=pos_array)
+            units = motor_units.get(motor_name, 'mm')
+            sample[motor_name].attrs['units'] = units.encode('utf-8')
+
+    def _populate_data_group(self, entry, sample_name: str) -> None:
+        """Create /entry/data group structure (links added post-scan).
+
+        Args:
+            entry: HDF5 entry group
+            sample_name: Sample name to be stored
+        """
+        data = entry.create_group('data')
+        data.attrs['NX_class'] = b'NXdata'
+        data.attrs['signal'] = b'data'
+        data.attrs['axes'] = b'. .'
+
+        # Store sample name
+        data.create_dataset('sample_name', data=sample_name.encode('utf-8'))
+
+        # Constant metadata
+        data.create_dataset('local_name', data=b'APS')
+        data.create_dataset('make', data=b'Dectris')
+        data.create_dataset('model', data=b'Pilatus')
+
+    def _populate_scalars_group(self, entry, shared_meta: dict) -> None:
+        """Create /entry/scalars group with detector scalars.
+
+        Args:
+            entry: HDF5 entry group
+            shared_meta: Shared metadata dict (contains IC, BS, BS2, IfCRL)
+        """
+        scalars_data = {k: v for k, v in shared_meta.items() if k.startswith('/entry/scalars/')}
+
+        if scalars_data:
+            scalars = entry.create_group('scalars')
+            scalars.attrs['NX_class'] = b'NXcollection'
+
+            for nexus_path, value in scalars_data.items():
+                dataset_name = nexus_path.split('/')[-1]
+                scalars.create_dataset(dataset_name, data=value)
+                scalars[dataset_name].attrs['units'] = b'counts'
+
+    def _write_master_file_metadata(self, detector_type: str, scan_positions_dict: dict, sample_name: str) -> str:
+        """Create master file with metadata before scan starts.
+
+        Args:
+            detector_type: 'SAXS' or 'WAXS'
+            scan_positions_dict: Dict of {motor_name: np.ndarray} for scan axes
+            sample_name: Sample name string (from detector filename)
+
+        Returns:
+            Path to created master .h5 file
+        """
+        import h5py
+
+        try:
+            # Fetch metadata (use cached zone plate optics to avoid duplicate queries)
+            cached_zp = self._cached_zone_plate_optics if hasattr(self, '_cached_zone_plate_optics') else None
+            shared_metadata = self._fetch_shared_epics_metadata(cached_zone_plate_optics=cached_zp)
+            detector_config = self._get_detector_config(detector_type)
+            detector_metadata = self._fetch_detector_epics_metadata(detector_config)
+
+            # Create master file
+            master_path = self._get_master_file_path(detector_type, sample_name)
+            master_dir = os.path.dirname(master_path).replace("\\", "/")
+            # Create directory on Linux (may fail on Windows, but that's OK)
+            try:
+                os.makedirs(master_dir, exist_ok=True)
+            except (OSError, FileNotFoundError):
+                print(f"Warning: Could not create directory {master_dir}; assuming it exists")
+
+            with h5py.File(master_path, 'w') as f:
+                entry = f.create_group('entry')
+                entry.attrs['NX_class'] = b'NXentry'
+                entry.attrs['default'] = b'data'
+
+                # Basic metadata
+                entry.create_dataset('definition', data=b'NXmx')
+                entry['definition'].attrs['version'] = b'1.4'
+                entry.create_dataset('Detector_program_name', data=b'EPICS areaDetector')
+
+                # Build hierarchy
+                self._populate_instrument_group(entry, shared_metadata, detector_metadata, detector_config)
+                self._populate_sample_group(entry, shared_metadata, scan_positions_dict)
+                self._populate_data_group(entry, sample_name)
+                self._populate_scalars_group(entry, shared_metadata)
+
+                # Write sample name to sample group
+                entry['sample']['sample_name'][()] = sample_name.encode('utf-8')
+
+            print(f"Created master file: {master_path}")
+            return master_path
+
+        except Exception as e:
+            print(f"Error creating master file for {detector_type}: {e}")
+            traceback.print_exc()
+            return ""
+
+    def _link_detector_data_delayed(self, master_paths: dict, wait_seconds: float = 10.0) -> None:
+        """Wait for detector file write to complete, then link to master file.
+
+        Runs in a background thread (non-blocking). Completely independent from GUI state.
+
+        Args:
+            master_paths: Dict {detector_type: full_master_file_path} (pre-computed in scandone)
+            wait_seconds: Seconds to wait before attempting to link (allows file write to complete)
+        """
+        time.sleep(wait_seconds)
+
+        for detector_type, master_path in master_paths.items():
+            try:
+                self._link_detector_data_to_master_by_path(master_path)
+            except Exception as e:
+                print(f"Warning: Failed to link {detector_type} detector data: {e}")
+
+    def _link_detector_data_to_master_by_path(self, master_path: str) -> None:
+        """Link detector data files into master file after scan.
+
+        Takes explicit master file path (computed in scandone, not reconstructed here).
+        Completely independent from GUI state.
+
+        Args:
+            master_path: Full path to master file
+        """
+        import h5py
+        import glob
+
+        try:
+            if not os.path.exists(master_path):
+                print(f"Master file not found: {master_path}")
+                return
+
+            # Extract sample_name from master_path filename
+            # Master file is named: {sample_name}_{scan_num:04d}_master.h5
+            # We want to extract {sample_name}
+            master_filename = os.path.basename(master_path)
+            # Find the last occurrence of _master.h5
+            if '_master.h5' in master_filename:
+                # sample_name is everything before the last _XXXX_master.h5 pattern
+                # e.g., "test_0020_master.h5" -> "test"
+                parts = master_filename.replace('_master.h5', '').split('_')
+                # The last part is the scan number, everything else is sample_name
+                sample_name = '_'.join(parts[:-1]) if len(parts) > 1 else parts[0]
+            else:
+                print(f"Error: Master file does not match expected naming pattern: {master_filename}")
+                return
+
+            # Glob detector folder for h5 files using Windows path
+            detector_folder = os.path.dirname(master_path)
+
+            # Pattern specifically for frame files: sample_name_####_##### (5-digit frame number, not _master)
+            pattern = os.path.join(detector_folder, f'{sample_name}_[0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9].h5')
+            all_files = sorted(glob.glob(pattern))
+            detector_files = all_files
+
+            if not detector_files:
+                print(f"No detector files found in {detector_folder}")
+                return
+
+            # Sort by final number in filename
+            detector_files.sort(key=lambda f: int(re.search(r'_(\d{5})\.h5$', f).group(1)))
+
+            # Create links
+            with h5py.File(master_path, 'r+') as master:
+                entry_data = master['/entry/data']
+
+                for file_index, det_h5_path in enumerate(detector_files, start=1):
+                    link_name = f'data{file_index:05d}'
+                    # Relative path for HDF5 external link - use forward slashes
+                    rel_path = os.path.relpath(det_h5_path, detector_folder).replace("\\", "/")
+
+                    # Create external link
+                    entry_data[link_name] = h5py.ExternalLink(rel_path, '/entry/data/data')
+                    print(f"Linked {link_name} -> {rel_path}")
+
+            print(f"Successfully linked {len(detector_files)} detector files to master file")
+
+        except Exception as e:
+            print(f"Error linking detector data for master file {master_path}: {e}")
+            traceback.print_exc()
 
     def set_basepaths(self, text=""):
         if type(text) == bool:
