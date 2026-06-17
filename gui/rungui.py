@@ -247,6 +247,11 @@ DEFAULTS = {
 inifilename = "pty-co-saxs.ini"
 STRUCK_CHANNELS = [2, 3, 4, 5]
 
+# Detector attribute/layout PVs (PILATUS1). The attributes XML drives
+# NDAttributes; the layout XML drives the HDF1 file writer.
+PV_PILATUS_ATTRIBUTES = "S12-PILATUS1:cam1:NDAttributesFile"
+PV_PILATUS_LAYOUT = "S12-PILATUS1:HDF1:XMLFileName"
+
 
 # ==========================================================================
 # Utility functions
@@ -512,20 +517,45 @@ class ptyco_main_control(QObject):
 
         # checking only the connected motors..
         # if not done, later it will try to update the position of disconnected motors
+        # self.motorconnected[i] tracks whether self.motornames[i] is live.
+        # phi is optional: when it isn't connected we still keep its entry (so
+        # the motors after it don't shift slots) but mark it disconnected so we
+        # never query its position. Every other motor must connect or we raise.
         self.motornames = []
         self.motorunits = []
+        self.motorconnected = []
+        phi_not_connected = False
         #        print(motornames, " line 241")
         for i, name in enumerate(motornames):
             try:
-                if self.pts.isconnected(name):
-                    self.motornames.append(name)
-                    self.motorunits.append(motorunits[i])
-                else:
-                    raise RuntimeError(f"Motor '{name}' failed to connect.")
-            except RuntimeError:
-                raise
+                connected = self.pts.isconnected(name)
             except Exception as exc:
-                raise RuntimeError(f"Motor '{name}' failed to connect: {exc}") from exc
+                if name == "phi":
+                    connected = False
+                else:
+                    raise RuntimeError(
+                        f"Motor '{name}' failed to connect: {exc}"
+                    ) from exc
+            if connected:
+                self.motornames.append(name)
+                self.motorunits.append(motorunits[i])
+                self.motorconnected.append(True)
+            elif name == "phi":
+                # Keep phi's slot as a disabled placeholder.
+                self.motornames.append(name)
+                self.motorunits.append(motorunits[i])
+                self.motorconnected.append(False)
+                phi_not_connected = True
+            else:
+                raise RuntimeError(f"Motor '{name}' failed to connect.")
+
+        if phi_not_connected:
+            QMessageBox.warning(
+                self.ui,
+                "Warning",
+                "Warning: tomography phi stage not connected",
+                QMessageBox.Ok,
+            )
         #        print(motornames, " line 252")
         # motors for 2d and 3d scans.....
         xm = DEFAULTS["xmotor"]  # JD
@@ -563,7 +593,7 @@ class ptyco_main_control(QObject):
                 self.ui.findChild(QPushButton, "pb_SAXSscan_%i" % n).clicked.connect(
                     lambda: self.fly(-1)
                 )
-            enable = pts is not None and self.pts.isconnected(name)
+            enable = pts is not None and self.motorconnected[i]
             self._set_motor_widgets_enabled(n, enable)
 
         self.read_motor_scan_range()
@@ -887,22 +917,28 @@ class ptyco_main_control(QObject):
 
     def get_pos_all(self):
         motors = {}
-        for name in self.motornames:
+        for i, name in enumerate(self.motornames):
+            if not self.motorconnected[i]:
+                continue  # skip disconnected placeholders (e.g. phi)
             motors[name] = self.pts.get_pos(name)
         return motors
 
     def updatepos(self, axis="", val=None):
         if len(axis) == 0:
             for i, name in enumerate(self.motornames):
+                if not self.motorconnected[i]:
+                    continue  # skip disconnected placeholders (e.g. phi)
                 if val is None:
                     val = self.pts.get_pos(name)
                 # self.ui.findChild(QLineEdit, "ed_%i"%(i+1)).setText("%0.4f"%val)
                 self.ui.findChild(QLabel, "lb_%i" % (i + 1)).setText("%0.6f" % val)
                 val = None
         else:
+            i = self.motornames.index(axis)
+            if not self.motorconnected[i]:
+                return  # disconnected placeholder (e.g. phi) — nothing to update
             if val is None:
                 val = self.pts.get_pos(axis)
-            i = self.motornames.index(axis)
             # self.ui.findChild(QLineEdit, "ed_%i"%(i+1)).setText("%0.4f"%val)
             self.ui.findChild(QLabel, "lb_%i" % (i + 1)).setText("%0.6f" % val)
 
@@ -1593,6 +1629,19 @@ class ptyco_main_control(QObject):
 
         dlg.pushButton_logFname.clicked.connect(_browse_logfile)
 
+        # Detector attribute/layout buttons — these act immediately (independent
+        # of the dialog's OK/Cancel), so they are wired to their own handlers.
+        dlg.pushButton_setLayout.clicked.connect(
+            lambda: self._set_attr_filepaths_dialog(dlg)
+        )
+        dlg.pushButton_setPtychoLayout.clicked.connect(
+            lambda: self._apply_detector_layout("ptycho")
+        )
+        dlg.pushButton_setSAXSLayout.clicked.connect(
+            lambda: self._apply_detector_layout("saxs")
+        )
+        dlg.pushButton_checkLayout.clicked.connect(self._check_detector_layout)
+
         # ── Apply settings only on OK ──────────────────────────────────────
         if dlg.exec_() != QDialog.Accepted:
             return
@@ -1643,6 +1692,101 @@ class ptyco_main_control(QObject):
             self.set_softglue_in(speed_id)
 
         self.parameters.writeini()
+
+    # ── Detector attribute / layout filepaths ──────────────────────────────
+
+    @staticmethod
+    def _attr_filepaths():
+        """Return the (ptycho, saxs) attribute filepaths persisted between sessions."""
+        s = QSettings("ptychoSAXS", "ptychoSAXS")
+        return (
+            s.value("layout/ptychoAttributesPath", "", type=str),
+            s.value("layout/saxsAttributesPath", "", type=str),
+        )
+
+    @staticmethod
+    def _layout_path_from_attributes(attr_path):
+        """Derive the layout filepath from an attributes filepath.
+
+        /path/to/attributes_suffix.xml  ->  /path/to/layout_suffix.xml
+
+        Only the first 'attributes' in the basename is replaced, so a parent
+        directory named 'attributes' is left untouched. Forward slashes are
+        preserved (these are remote Linux paths on the detector IOC).
+        """
+        idx = attr_path.rfind("/")
+        dirname = attr_path[: idx + 1]
+        basename = attr_path[idx + 1 :]
+        return dirname + basename.replace("attributes", "layout", 1)
+
+    def _set_attr_filepaths_dialog(self, parent=None):
+        """pushButton_setLayout: edit and persist the two attribute filepaths."""
+        ptycho_path, saxs_path = self._attr_filepaths()
+
+        dlg = QDialog(parent or self.ui)
+        dlg.setWindowTitle("Set Attribute Filepaths")
+        layout = QFormLayout(dlg)
+        ed_ptycho = QLineEdit(ptycho_path, dlg)
+        ed_saxs = QLineEdit(saxs_path, dlg)
+        ed_ptycho.setMinimumWidth(400)
+        ed_saxs.setMinimumWidth(400)
+        layout.addRow("Ptychography attributes filepath", ed_ptycho)
+        layout.addRow("SAXS attributes filepath", ed_saxs)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dlg)
+        layout.addWidget(bb)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        s = QSettings("ptychoSAXS", "ptychoSAXS")
+        s.setValue("layout/ptychoAttributesPath", ed_ptycho.text().strip())
+        s.setValue("layout/saxsAttributesPath", ed_saxs.text().strip())
+
+    def _apply_detector_layout(self, which):
+        """pushButton_setPtychoLayout / pushButton_setSAXSLayout.
+
+        Push the (ptycho|saxs) attributes filepath to the NDAttributes PV and
+        the derived layout filepath to the HDF1 XML PV.
+        """
+        ptycho_path, saxs_path = self._attr_filepaths()
+        attr_path = ptycho_path if which == "ptycho" else saxs_path
+        if not attr_path:
+            QMessageBox.warning(
+                self.ui,
+                "Set Layout",
+                "No %s attributes filepath set.\nUse 'Set Layout' to configure it first."
+                % which,
+            )
+            return
+        layout_path = self._layout_path_from_attributes(attr_path)
+
+        if self.DEBUG_DEVICES:
+            print("[DEBUG] would set %s = %s" % (PV_PILATUS_ATTRIBUTES, attr_path))
+            print("[DEBUG] would set %s = %s" % (PV_PILATUS_LAYOUT, layout_path))
+            return
+
+        import epics
+
+        epics.caput(PV_PILATUS_ATTRIBUTES, attr_path)
+        epics.caput(PV_PILATUS_LAYOUT, layout_path)
+        print("Set %s layout:" % which)
+        print("  %s = %s" % (PV_PILATUS_ATTRIBUTES, attr_path))
+        print("  %s = %s" % (PV_PILATUS_LAYOUT, layout_path))
+
+    def _check_detector_layout(self):
+        """pushButton_checkLayout: print the current attributes and layout PVs."""
+        if self.DEBUG_DEVICES:
+            print("[DEBUG] PV reads unavailable in debug mode.")
+            return
+
+        import epics
+
+        attr = epics.caget(PV_PILATUS_ATTRIBUTES, as_string=True)
+        layout = epics.caget(PV_PILATUS_LAYOUT, as_string=True)
+        print("Current detector layout PVs:")
+        print("  %s = %s" % (PV_PILATUS_ATTRIBUTES, attr))
+        print("  %s = %s" % (PV_PILATUS_LAYOUT, layout))
 
     # ── Scan status label ──────────────────────────────────────────────────
 
