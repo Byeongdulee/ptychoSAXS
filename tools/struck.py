@@ -1,5 +1,6 @@
 beamlinePV = "12idc:"
 from epics.devices.struck import Struck
+from epics import caput
 import time
 
 class struck(Struck):
@@ -92,7 +93,9 @@ class struck(Struck):
 		self.Channel1Source = 0
 		self.UserLED = 0
 		self.Prescale = 1
-		self.InputMode = 2
+		# InputMode is not a registered pyepics Struck attr (mutable=False), so
+		# `self.InputMode = 2` does not reach EPICS — caput the PV directly.
+		caput("%sInputMode" % self._prefix, 2)   # external channel advance (area detectors)
 		self.OutputMode = 0
 		self.OutputPolarity = 0
 		self.EraseAll = 1
@@ -111,7 +114,7 @@ class struck(Struck):
 		self.Channel1Source = 0
 		self.UserLED = 0
 		self.Prescale = 1
-		self.InputMode = 0 # internal trigger mode and no gating
+		caput("%sInputMode" % self._prefix, 0) # internal trigger mode and no gating
 		self.OutputMode = 0
 		self.OutputPolarity = 0
 		self.EraseAll = 1
@@ -167,6 +170,8 @@ class struck(Struck):
 		self.scaler.CONT = 0
 		self.SCAN = 0
 		self.Prescale = 1
+		# Area-detector counter acquisition uses external channel advance.
+		caput("%sInputMode" % self._prefix, 2)
 		return 2
 		
 	def mcs_counter_ready(self,expt):
