@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1127</width>
-    <height>785</height>
+    <height>811</height>
    </rect>
   </property>
   <property name="font">
@@ -3274,7 +3274,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>710</x>
-      <y>140</y>
+      <y>160</y>
       <width>31</width>
       <height>19</height>
      </rect>
@@ -3298,7 +3298,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>668</x>
-      <y>70</y>
+      <y>110</y>
       <width>71</width>
       <height>31</height>
      </rect>
@@ -3333,7 +3333,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>110</y>
+      <y>80</y>
       <width>51</width>
       <height>28</height>
      </rect>
@@ -3357,7 +3357,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>350</y>
+      <y>330</y>
       <width>51</width>
       <height>28</height>
      </rect>
@@ -3381,7 +3381,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>320</y>
+      <y>300</y>
       <width>41</width>
       <height>21</height>
      </rect>
@@ -3405,7 +3405,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>170</y>
+      <y>180</y>
       <width>51</width>
       <height>28</height>
      </rect>
@@ -3429,7 +3429,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>140</y>
+      <y>150</y>
       <width>41</width>
       <height>21</height>
      </rect>
@@ -3453,7 +3453,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>668</x>
-      <y>285</y>
+      <y>265</y>
       <width>71</width>
       <height>31</height>
      </rect>
@@ -3488,7 +3488,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>250</y>
+      <y>230</y>
       <width>51</width>
       <height>28</height>
      </rect>
@@ -3512,7 +3512,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>710</x>
-      <y>320</y>
+      <y>310</y>
       <width>31</width>
       <height>19</height>
      </rect>
@@ -3536,7 +3536,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>710</x>
-      <y>550</y>
+      <y>540</y>
       <width>31</width>
       <height>19</height>
      </rect>
@@ -3560,7 +3560,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>480</y>
+      <y>460</y>
       <width>51</width>
       <height>28</height>
      </rect>
@@ -3584,7 +3584,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>668</x>
-      <y>515</y>
+      <y>495</y>
       <width>71</width>
       <height>31</height>
      </rect>
@@ -3619,7 +3619,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>580</y>
+      <y>560</y>
       <width>51</width>
       <height>28</height>
      </rect>
@@ -3643,7 +3643,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>670</x>
-      <y>550</y>
+      <y>530</y>
       <width>41</width>
       <height>21</height>
      </rect>
@@ -3899,7 +3899,7 @@ folder is free</string>
     <property name="geometry">
      <rect>
       <x>580</x>
-      <y>620</y>
+      <y>600</y>
       <width>151</width>
       <height>28</height>
      </rect>
@@ -3954,7 +3954,7 @@ folder is free</string>
     <property name="geometry">
      <rect>
       <x>580</x>
-      <y>653</y>
+      <y>630</y>
       <width>151</width>
       <height>51</height>
      </rect>
@@ -3976,7 +3976,7 @@ optics gui</string>
     <property name="geometry">
      <rect>
       <x>580</x>
-      <y>710</y>
+      <y>680</y>
       <width>151</width>
       <height>28</height>
      </rect>
@@ -4112,7 +4112,7 @@ SAXS</string>
     <property name="geometry">
      <rect>
       <x>665</x>
-      <y>380</y>
+      <y>360</y>
       <width>71</width>
       <height>91</height>
      </rect>
@@ -4173,6 +4173,27 @@ series</string>
      </property>
     </widget>
    </widget>
+   <widget class="QPushButton" name="pb_helix_scan">
+    <property name="geometry">
+     <rect>
+      <x>580</x>
+      <y>710</y>
+      <width>71</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
+    </property>
+    <property name="text">
+     <string>helix fly</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -4180,7 +4201,7 @@ series</string>
      <x>0</x>
      <y>0</y>
      <width>1127</width>
-     <height>21</height>
+     <height>26</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">

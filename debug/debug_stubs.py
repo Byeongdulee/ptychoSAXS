@@ -302,8 +302,14 @@ class PilatusStub:
     def filePut(self, key: str, val) -> None:
         pass
 
-    def fileGet(self, key: str):
-        return 1
+    def fileGet(self, key: str, as_string=False):
+        if key == "FileNumber_RBV":
+            return 1 if not as_string else "1"
+        elif key == "FullFileName_RBV":
+            return "/debug/image_0001.h5" if as_string else b"/debug/image_0001.h5"
+        elif key == "WriteFile_RBV":
+            return 0
+        return 1 if not as_string else "1"
 
     def setNDArrayPort(self) -> None:
         pass
@@ -652,6 +658,51 @@ class _HexapodInfo:
         return {ax: self._pos.get(ax, 0.0) for ax in self.axes}
 
     def handle_error(self) -> bool:
+        return True
+
+    def set_traj(self, axis, total_time, distance, start_pos, direction, step_time, samples) -> None:
+        """Stub for setting a 1-D trajectory."""
+        print(f"[DEBUG] _HexapodInfo.set_traj({axis}, total_time={total_time}, distance={distance}, start_pos={start_pos})")
+
+    def set_traj_SNAKE2(self, step_time, Xst, Xdist, Xstep, Yst, Yfe, Ystep) -> None:
+        """Stub for setting a 2-D SNAKE trajectory."""
+        print(f"[DEBUG] _HexapodInfo.set_traj_SNAKE2(step_time={step_time}, X=[{Xst}, {Xst+Xdist}], Xstep={Xstep}, Y=[{Yst}, {Yfe}], Ystep={Ystep})")
+
+    def analyze_pulse_steps(self):
+        """Stub for analyzing pulse steps."""
+        return 1, 1
+
+    def assign_axis2wavtable(self, axis, wave_id) -> None:
+        """Stub for assigning axis to waveform table."""
+        print(f"[DEBUG] _HexapodInfo.assign_axis2wavtable({axis}, {wave_id})")
+
+    def goto_start_pos(self, axis) -> None:
+        """Stub for moving to start position."""
+        print(f"[DEBUG] _HexapodInfo.goto_start_pos({axis})")
+
+    def run_traj(self, axis) -> None:
+        """Stub for running trajectory."""
+        print(f"[DEBUG] _HexapodInfo.run_traj({axis})")
+
+    def istraj_running(self) -> bool:
+        """Stub for checking if trajectory is running."""
+        return False
+
+    def stop_traj(self) -> None:
+        """Stub for stopping trajectory."""
+        print("[DEBUG] _HexapodInfo.stop_traj()")
+
+    def wait(self) -> None:
+        """Stub for waiting."""
+        print("[DEBUG] _HexapodInfo.wait()")
+
+    def get_records(self):
+        """Stub for getting trajectory records."""
+        return []
+
+    def mv(self, *args, wait=True):
+        """Stub for moving axes."""
+        print(f"[DEBUG] _HexapodInfo.mv({args}, wait={wait})")
         return True
 
 

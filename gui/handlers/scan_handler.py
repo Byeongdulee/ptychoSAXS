@@ -17,6 +17,9 @@ from collections import deque
 from PyQt5.QtWidgets import QMessageBox, QInputDialog, QLabel, QLineEdit, QFileDialog
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
 import pyqtgraph as pg
+from tools.detectors import DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
+from tools.dg645 import DG645_Error
+from tools.softglue import SOFTGLUE_Setup_Error
 
 
 # Constants mirrored from rungui.py
@@ -1559,7 +1562,7 @@ class ScanHandler:
                         if len(fn) == 0:
                             fnum = det.fileGet("FileNumber_RBV")
                             fn = det.fileGet("FullFileName_RBV", as_string=True)
-                            if str(fnum - 1) not in fn:
+                            if fnum is not None and str(fnum - 1) not in fn:
                                 fn = det.fileGet("FullFileName_RBV", as_string=True)
 
                         # when the measurement is all done, reset the file number to 0.
@@ -1627,7 +1630,7 @@ class ScanHandler:
             import threading
             thread = threading.Thread(
                 target=self._link_detector_data_delayed,
-                args=(master_paths, 10.0),
+                args=(master_paths, 6.0),
                 daemon=True
             )
             thread.start()
@@ -2253,10 +2256,16 @@ class ScanHandler:
             # Glob detector folder for h5 files using Windows path
             detector_folder = os.path.dirname(master_path)
 
-            # Pattern specifically for frame files: sample_name_####_##### (5-digit frame number, not _master)
-            pattern = os.path.join(detector_folder, f'{sample_name}_[0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9].h5')
+            # Pattern: detector files are prefixed with S (SAXS), W (WAXS), or no prefix (ptycho)
+            # Frame files: [S|W]?sample_name_####_##### (5-digit frame number, not _master)
+            pattern = os.path.join(detector_folder, f'[SW]?{sample_name}_[0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9].h5')
             all_files = sorted(glob.glob(pattern))
             detector_files = all_files
+
+            if not detector_files:
+                # Also try without prefix in case files don't have one
+                pattern_no_prefix = os.path.join(detector_folder, f'{sample_name}_[0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9].h5')
+                detector_files = sorted(glob.glob(pattern_no_prefix))
 
             if not detector_files:
                 print(f"No detector files found in {detector_folder}")
@@ -2656,6 +2665,19 @@ class ScanHandler:
 
         self.w.update_scanname()
 
+        # Link detector data to master files asynchronously (non-blocking)
+        # Use pre-computed master paths from fly() to ensure correct scan number
+        # (scan number is already incremented by the time flydone runs)
+        master_paths = getattr(self, '_current_scan_master_paths', {})
+        if master_paths:
+            import threading
+            thread = threading.Thread(
+                target=self._link_detector_data_delayed,
+                args=(master_paths, 6.0),
+                daemon=True
+            )
+            thread.start()
+
         # if len(self.w.parameters.logfilename)>0:
         #     if self.w.detector[2] is not None:
         #         # save struck data.
@@ -2681,6 +2703,56 @@ class ScanHandler:
         #     self.w.write_scaninfo_to_logfile(scaninfo)
         # success=False
 
+    def helixdone(self, return_motor=True, reset_scannumber=True, donedone=True):
+        """Completion handler for helix fly scan: restore both phi and Z motors."""
+        if return_motor:
+            for i, key in enumerate(self.w.motor_p0):
+                if self.w.motornames[key] == "phi":
+                    self.w.setphivel_default()
+                    if hasattr(self, "_prev_vel_phi"):
+                        self.w.pts.set_speed(
+                            self.w.motornames[key], self._prev_vel_phi, self._prev_acc_phi
+                        )
+                elif self.w.motornames[key] == "Z":
+                    if hasattr(self, "_prev_vel_z"):
+                        self.w.pts.set_speed(
+                            self.w.motornames[key], self._prev_vel_z, None
+                        )
+                self.w.mv(key, self.w.motor_p0[key])
+
+        self.w.messages["current status"] = f"helix done. {time.ctime()}"
+        print(self.w.messages["current status"])
+
+        isTestRun = self.ui.actionTestFly.isChecked()
+        if isTestRun:
+            return
+
+        self.w.isscan = False
+        self.w.isfly = False
+        self._update_scan_summary_completed(
+            "partial" if self.isStopScanIssued else "yes"
+        )
+        if self.isStopScanIssued:
+            self.w.set_scan_status("Stopped")
+            self.ui.statusbar.showMessage("Scan stopped by user — motors returned.")
+        else:
+            self.w.set_scan_status("No Scan")
+            self.ui.statusbar.showMessage("Helix scan complete.")
+        self.w.s12softglue.flush()
+        print(f"softglue flushed at {time.ctime()}")
+
+        self.w.update_scanname()
+
+        master_paths = getattr(self, '_current_scan_master_paths', {})
+        if master_paths:
+            import threading
+            thread = threading.Thread(
+                target=self._link_detector_data_delayed,
+                args=(master_paths, 6.0),
+                daemon=True
+            )
+            thread.start()
+
     def flydone2d(self, value=0):
         for key in self.w.motor_p0:
             self.w.mv(key, self.w.motor_p0[key])
@@ -2699,6 +2771,30 @@ class ScanHandler:
             self.ui.statusbar.showMessage("2-D fly scan complete.")
         self.w.update_scanname()
         self.w.update_status_scan_time()
+
+        # Link detector data to master files asynchronously (non-blocking)
+        sample_name = self.w.parameters.scan_name
+        master_paths = {}
+        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+            try:
+                master_paths['SAXS'] = self._get_master_file_path('SAXS', sample_name)
+            except Exception as e:
+                print(f"Warning: Could not compute SAXS master file path: {e}")
+
+        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+            try:
+                master_paths['WAXS'] = self._get_master_file_path('WAXS', sample_name)
+            except Exception as e:
+                print(f"Warning: Could not compute WAXS master file path: {e}")
+
+        if master_paths:
+            import threading
+            thread = threading.Thread(
+                target=self._link_detector_data_delayed,
+                args=(master_paths, 6.0),
+                daemon=True
+            )
+            thread.start()
 
     def flydone3d(self, value=0):
         try:
@@ -2734,6 +2830,30 @@ class ScanHandler:
             self.w.shutter.close()
         self.w.update_scanname()
         self.w.update_status_scan_time()
+
+        # Link detector data to master files asynchronously (non-blocking)
+        sample_name = self.w.parameters.scan_name
+        master_paths = {}
+        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+            try:
+                master_paths['SAXS'] = self._get_master_file_path('SAXS', sample_name)
+            except Exception as e:
+                print(f"Warning: Could not compute SAXS master file path: {e}")
+
+        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+            try:
+                master_paths['WAXS'] = self._get_master_file_path('WAXS', sample_name)
+            except Exception as e:
+                print(f"Warning: Could not compute WAXS master file path: {e}")
+
+        if master_paths:
+            import threading
+            thread = threading.Thread(
+                target=self._link_detector_data_delayed,
+                args=(master_paths, 6.0),
+                daemon=True
+            )
+            thread.start()
 
     def check_start_position(self, n):
         # Compare p0 and p0_move_to at 4 digits
@@ -3043,10 +3163,86 @@ class ScanHandler:
         if ax["name"] in self.w.pts.hexapod.axes:
             self.w.fly_traj(motornumber)
 
+        # Compute master file paths NOW (before scan number is incremented)
+        # so flydone can use the correct paths for linking detector data.
+        sample_name = self.w.parameters.scan_name
+        master_paths_1d_fly = {}
+        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+            try:
+                master_paths_1d_fly['SAXS'] = self._get_master_file_path('SAXS', sample_name)
+            except Exception as e:
+                print(f"Warning: Could not compute SAXS master file path: {e}")
+        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+            try:
+                master_paths_1d_fly['WAXS'] = self._get_master_file_path('WAXS', sample_name)
+            except Exception as e:
+                print(f"Warning: Could not compute WAXS master file path: {e}")
+        self._current_scan_master_paths = master_paths_1d_fly
+
         self._launch_worker(self.fly0, motornumber, done_signal=self.w.flydone)
 
         # Advance the scan number immediately after launch.  Preserves the
         # original fly() behaviour; other scan types advance on completion.
+        self.w.run_stop_issued()
+        self.w.update_status_scan_time()
+
+    def helix_fly(self, zmotor=2, phimotor=6):
+        """Entry point for a helix fly scan: phi flies with simultaneous Z constant-velocity motion (GUI thread).
+
+        Reads parameters from UI for both phi and Z axes, validates, logs scan header,
+        then launches helix_fly0 on a Worker thread. Both axes move simultaneously at
+        constant velocity over the same total_time, with images acquired at DG645-triggered
+        intervals synchronized to phi's step timing.
+        """
+        self._pre_scan("helix_fly")
+
+        self.isMCS_ready = False
+        if self.w.detector[2] is not None:
+            self.w.detector[2].mcs_init()
+
+        try:
+            phi_ax = self._read_motor_params(phimotor)
+            z_ax = self._read_motor_params(zmotor)
+        except (ValueError, TypeError):
+            QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
+            return
+
+        self.helix_phi_p0 = phi_ax["p0"]
+        self.helix_phi_st = phi_ax["st"]
+        self.helix_phi_fe = phi_ax["fe"]
+        self.helix_phi_tm = phi_ax["expt"]
+        self.helix_phi_step = phi_ax["step"]
+
+        self.helix_z_p0 = z_ax["p0"]
+        self.helix_z_st = z_ax["st"]
+        self.helix_z_fe = z_ax["fe"]
+
+        self.w.signalmotor = f"{phi_ax['name']},{z_ax['name']}"
+        self.w.motor_p0 = {phimotor: phi_ax["p0"], zmotor: z_ax["p0"]}
+        self.time_scanstart = time.time()
+
+        pos = self._make_positions(phi_ax["p0"], phi_ax["st"], phi_ax["fe"], phi_ax["step"])
+        if not self._confirm_large_scan(len(pos), phi_ax["expt"], self.OVERHEAD_FLY):
+            return
+
+        self._log_scan_header("helix_fly", [phi_ax, z_ax])
+
+        sample_name = self.w.parameters.scan_name
+        master_paths_helix_fly = {}
+        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+            try:
+                master_paths_helix_fly['SAXS'] = self._get_master_file_path('SAXS', sample_name)
+            except Exception as e:
+                print(f"Warning: Could not compute SAXS master file path: {e}")
+        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+            try:
+                master_paths_helix_fly['WAXS'] = self._get_master_file_path('WAXS', sample_name)
+            except Exception as e:
+                print(f"Warning: Could not compute WAXS master file path: {e}")
+        self._current_scan_master_paths = master_paths_helix_fly
+
+        self._launch_worker(self.helix_fly0, phimotor, zmotor, done_signal=self.w.helixdone)
+
         self.w.run_stop_issued()
         self.w.update_status_scan_time()
 
@@ -3557,6 +3753,7 @@ class ScanHandler:
                     f"Arming detector {detN} ({det._prefix}) for {len(pos)} positions."
                 )
                 try:
+                    det.setFileTemplate('%s%s_%5.5d.h5')
                     det.step_ready(
                         expt,
                         len(pos),
@@ -3808,6 +4005,7 @@ class ScanHandler:
         ## prepre detectors ............
         for detN, det in enumerate(self.w.detector):  # JD
             if det is not None:  # JD
+                det.setFileTemplate('%s%s_%5.5d.h5')
                 det.step_ready(
                     expt,
                     Nline,
@@ -5068,6 +5266,224 @@ class ScanHandler:
                 if self.isStopScanIssued:
                     break
             self.w.write_scaninfo_to_logfile(scaninfo)
+
+        return 1
+
+    def helix_fly0(self, phimotor=6, zmotor=2, update_progress=None, update_status=None):
+        """Worker-thread executor for helix fly scan: phi + Z simultaneous constant-velocity fly."""
+        t0 = time.time()
+        phi_axis = self.w.motornames[phimotor]
+        z_axis = self.w.motornames[zmotor]
+        self.w.signalmotor = f"{phi_axis},{z_axis}"
+        self.w.signalmotorunit = self.w.motorunits[phimotor]
+
+        if self.ui.actionckTime_reset_before_scan.isChecked():
+            if self.w.s12softglue.isConnected:
+                self.w.s12softglue.ckTime_reset()
+        if self.ui.actionMemory_clear_before_scan.isChecked():
+            try:
+                if self.w.s12softglue.isConnected:
+                    self.w.s12softglue.memory_clear()
+            except TimeoutError:
+                self.w.messages["recent error message"] = "softglue memory_clear timeout"
+                print(self.w.messages["recent error message"])
+
+        print("")
+        isTestRun = self.ui.actionTestFly.isChecked()
+        if isTestRun:
+            print("**** Test Run (helix):")
+        self.w.isfly = True
+        self.w.isscan = True
+
+        self.ui.actionFit_QDS_phi.setEnabled(False)
+
+        if not self.ui.chk_keep_prev_scan.isChecked():
+            self.w.clearplot()
+
+        phi_st = self.helix_phi_st + self.helix_phi_p0
+        phi_fe = self.helix_phi_fe + self.helix_phi_p0
+        phi_step = self.helix_phi_step
+        phi_tm = self.helix_phi_tm
+
+        z_st = self.helix_z_st + self.helix_z_p0
+        z_fe = self.helix_z_fe + self.helix_z_p0
+
+        if self.w.DEBUG_MOTORS:
+            phi_mpos_data = []
+            z_mpos_data = []
+            if phi_st > phi_fe:
+                phi_step = -abs(phi_step)
+            else:
+                phi_step = abs(phi_step)
+            phi_positions = np.arange(phi_st, phi_fe + phi_step / 2, phi_step)
+            if len(phi_positions) == 1:
+                phi_positions = np.array([phi_st, phi_fe])
+            N = len(phi_positions)
+            z_step_debug = (z_fe - z_st) / (N - 1) if N > 1 else 0
+            self.isStopScanIssued = False
+            for i, p in enumerate(phi_positions):
+                if self.isStopScanIssued:
+                    break
+                z_p = z_st + i * z_step_debug
+                self.w.pts.mv(phi_axis, p)
+                self.w.pts.mv(z_axis, z_p)
+                time.sleep(min(phi_tm, 0.05))
+                phi_mpos_data.append(self.w.pts.get_pos(phi_axis))
+                z_mpos_data.append(self.w.pts.get_pos(z_axis))
+                if update_progress is not None:
+                    update_progress(int(100 * (i + 1) / N))
+            self.w.mpos = phi_mpos_data
+            self.w.zpos = z_mpos_data
+            return
+
+        phi_pos = self.w.pts.get_pos(phi_axis)
+        z_pos = self.w.pts.get_pos(z_axis)
+
+        Xstep = self.helix_phi_step
+        Xtm = self.helix_phi_tm
+
+        step_time = Xtm + self.det_readout_time
+        if step_time < self.OVERHEAD_FLY:
+            step_time = self.OVERHEAD_FLY
+        Nsteps = int((phi_fe - phi_st) / Xstep)
+        total_time = Nsteps * step_time
+        expt = Xtm
+        if step_time - expt < 0.015:
+            raise DET_MIN_READOUT_Error(
+                f"Period - Exposure Time,{step_time - expt}s, should be longer than 50 microseconds."
+            )
+
+        try:
+            self.w.dg645_12ID.set_pilatus2(expt, Nsteps, step_time)
+        except:
+            raise DG645_Error
+        print(
+            f"Exposure time: {expt:0.3e} s, number of steps: {Nsteps}, Step time: {step_time:.3e} s, Total time for the scan: {total_time:.3f} s."
+        )
+
+        if self.ui.chk_reverse_scan_dir.isChecked():
+            if abs(phi_st - phi_pos) > abs(phi_fe - phi_pos):
+                t = phi_fe
+                phi_fe = phi_st
+                phi_st = t
+            if abs(z_st - z_pos) > abs(z_fe - z_pos):
+                t = z_fe
+                z_fe = z_st
+                z_st = t
+
+        self._prev_vel_phi, self._prev_acc_phi = self.w.pts.get_speed(phi_axis)
+        self._prev_vel_z, _ = self.w.pts.get_speed(z_axis)
+
+        self.w.pts.mv(phi_axis, phi_st, wait=True)
+        self.w.pts.mv(z_axis, z_st, wait=True)
+        wait_for_motor_settle_s = 0.1
+        time.sleep(wait_for_motor_settle_s)
+
+        phi_vel = abs(phi_fe - phi_st) / total_time
+        z_vel = abs(z_fe - z_st) / total_time
+
+        self.w.pts.set_speed(phi_axis, phi_vel, phi_vel * 10)
+        self.w.pts.set_speed(z_axis, z_vel, None)
+        wait_for_speed_set_s = 0.02
+        time.sleep(wait_for_speed_set_s)
+
+        for detN, det in enumerate(self.w.detector):
+            if det is not None:
+                try:
+                    det.fly_ready(
+                        expt,
+                        Nsteps,
+                        period=step_time,
+                        isTest=isTestRun,
+                        capture=(
+                            self.w.use_hdf_plugin,
+                            self.w.hdf_plugin_savemode_fly,
+                        ),
+                        fn=self.w.hdf_plugin_name[detN],
+                    )
+                except TimeoutError:
+                    self.w.messages["recent error message"] = (
+                        f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
+                    )
+                    print(self.w.messages["recent error message"])
+                    self.ui.statusbar.showMessage(
+                        self.w.messages["recent error message"]
+                    )
+                    return
+
+        timeout_occurred, TIMEOUT = self.w.is_arming_detecotors_timedout()
+        if timeout_occurred:
+            self.w.messages["recent error message"] = (
+                f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to be Armed. {time.ctime()}"
+            )
+            print(self.w.messages["recent error message"])
+            return DETECTOR_NOT_STARTED_ERROR
+
+        scaninfo = []
+        print("")
+        print(f"{phi_axis},{z_axis} helix scan started..")
+        scaninfo.append(f"FileIndex, {phi_axis}, {z_axis},    time(s)")
+        scaninfo.append(f"0,   {phi_st},   {z_st},   {time.time()}")
+
+        self.w.pts.mv(phi_axis, phi_fe, wait=False)
+        self.w.pts.mv(z_axis, z_fe, wait=False)
+
+        print("about to send out trigger.")
+        self.w.dg645_12ID.trigger()
+        print("Delay generator is triggered to start the helix fly scan.")
+
+        N_imgcollected = 0
+        timeelapsed = time.time() - t0
+        TIMEOUT = total_time + 5
+        if TIMEOUT < 5:
+            TIMEOUT = 5
+        timestart = time.time()
+        val = 0
+
+        while N_imgcollected < Nsteps:
+            for ndet, det in enumerate(self.w.detector):
+                if ndet > 1:
+                    continue
+                if det is not None:
+                    val = det.ArrayCounter_RBV
+                    break
+            prog = float(val) / float(Nsteps)
+            phi_pos = self.w.pts.get_pos(phi_axis)
+            z_pos = self.w.pts.get_pos(z_axis)
+            scaninfo.append(f"{val},    {phi_pos},   {z_pos},  {time.time()}")
+
+            if update_progress:
+                update_progress(int(prog * 100))
+            msg1 = f"Elapsed time = {int(timeelapsed)}s since the start."
+            if prog > 0:
+                remainingtime = timeelapsed / prog - timeelapsed
+            else:
+                remainingtime = 999
+            msg2 = f"; Remaining time for the current helix scan is {np.round(remainingtime, 2)}s\n"
+            self.w.messages["current status"] = "%s%s" % (msg1, msg2)
+            if update_status:
+                update_status(self.w.messages["current status"])
+
+            wait_for_det_progress_s = 0.1
+            time.sleep(wait_for_det_progress_s)
+            if val > N_imgcollected:
+                N_imgcollected = val
+                timestart = time.time()
+
+            updatetime = time.time() - timestart
+            if updatetime > TIMEOUT:
+                self.w.messages["recent error message"] = (
+                    f"Detector {det._prefix} data collection timeout after {TIMEOUT} seconds."
+                )
+                print(self.w.messages["recent error message"])
+                self.ui.statusbar.showMessage(
+                    self.w.messages["recent error message"]
+                )
+                return DETECTOR_NOT_STARTED_ERROR
+            timeelapsed = time.time() - t0
+            if self.isStopScanIssued:
+                break
+        self.w.write_scaninfo_to_logfile(scaninfo)
 
         return 1
 

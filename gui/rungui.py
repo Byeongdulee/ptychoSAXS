@@ -596,6 +596,8 @@ class ptyco_main_control(QObject):
             enable = pts is not None and self.motorconnected[i]
             self._set_motor_widgets_enabled(n, enable)
 
+        self.ui.pb_helix_scan.setEnabled(pts is not None and self.motorconnected[ym] and self.motorconnected[phim])
+
         self.read_motor_scan_range()
 
         # Wire up menu actions
@@ -681,6 +683,7 @@ class ptyco_main_control(QObject):
         self.ui.pb_SAXSscan_fly3d.clicked.connect(
             lambda: self.fly3d(xm, ym, phim, snake=True)
         )
+        self.ui.pb_helix_scan.clicked.connect(lambda: self.scan_handler.helix_fly(ym, phim))
         self.ui.actionSelect_time_intervals.triggered.connect(self.select_timeintervals)
         self.ui.actionTrigout.triggered.connect(lambda: self.set_softglue_in(1))
         self.ui.actionDetout.triggered.connect(lambda: self.set_softglue_in(2))
@@ -1218,6 +1221,9 @@ class ptyco_main_control(QObject):
 
     def flydone(self, return_motor=True, reset_scannumber=True, donedone=True):
         return self.scan_handler.flydone(return_motor, reset_scannumber, donedone)
+
+    def helixdone(self, return_motor=True, reset_scannumber=True, donedone=True):
+        return self.scan_handler.helixdone(return_motor, reset_scannumber, donedone)
 
     def flydone2d(self, value=0):
         return self.scan_handler.flydone2d(value)
