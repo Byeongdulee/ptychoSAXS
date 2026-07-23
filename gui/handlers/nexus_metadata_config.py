@@ -139,6 +139,10 @@ DETECTOR_CONFIGS = {
         "saturation_value": 1048575,
         "detector_readout_time": 2.3,
         "detector_pvs": {
+            "/entry/instrument/detector/ExposureTime": {
+                "pv": "S12-PILATUS1:cam1:AcquireTime_RBV",
+                "units": "s",
+            },
             "/entry/instrument/detector/distance": {
                 "pv": "12idcACS1:m1.RBV",
                 "units": "mm",

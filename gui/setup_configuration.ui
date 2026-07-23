@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>659</width>
-    <height>322</height>
+    <height>346</height>
    </rect>
   </property>
   <property name="font">
@@ -22,7 +22,7 @@
    <property name="geometry">
     <rect>
      <x>190</x>
-     <y>270</y>
+     <y>300</y>
      <width>171</width>
      <height>28</height>
     </rect>
@@ -314,9 +314,9 @@
   <widget class="QLineEdit" name="lineEdit_nBursts">
    <property name="geometry">
     <rect>
-     <x>590</x>
+     <x>580</x>
      <y>90</y>
-     <width>41</width>
+     <width>51</width>
      <height>20</height>
     </rect>
    </property>
@@ -341,7 +341,7 @@
   <widget class="QLabel" name="label_nBursts">
    <property name="geometry">
     <rect>
-     <x>430</x>
+     <x>420</x>
      <y>90</y>
      <width>161</width>
      <height>21</height>
@@ -354,9 +354,9 @@
   <widget class="QLineEdit" name="lineEdit_scanWait">
    <property name="geometry">
     <rect>
-     <x>590</x>
+     <x>580</x>
      <y>120</y>
-     <width>41</width>
+     <width>51</width>
      <height>20</height>
     </rect>
    </property>
@@ -381,7 +381,7 @@
   <widget class="QLabel" name="label_scanWait">
    <property name="geometry">
     <rect>
-     <x>430</x>
+     <x>420</x>
      <y>120</y>
      <width>161</width>
      <height>21</height>
@@ -395,7 +395,7 @@
    <property name="geometry">
     <rect>
      <x>570</x>
-     <y>150</y>
+     <y>180</y>
      <width>71</width>
      <height>20</height>
     </rect>
@@ -408,7 +408,7 @@
    <property name="geometry">
     <rect>
      <x>570</x>
-     <y>170</y>
+     <y>200</y>
      <width>71</width>
      <height>20</height>
     </rect>
@@ -421,7 +421,7 @@
    <property name="geometry">
     <rect>
      <x>570</x>
-     <y>190</y>
+     <y>220</y>
      <width>71</width>
      <height>20</height>
     </rect>
@@ -433,8 +433,8 @@
   <widget class="QLabel" name="label_qdsSampleRate">
    <property name="geometry">
     <rect>
-     <x>430</x>
-     <y>150</y>
+     <x>420</x>
+     <y>180</y>
      <width>121</width>
      <height>41</height>
     </rect>
@@ -512,7 +512,7 @@ Optics on Scan</string>
    <property name="geometry">
     <rect>
      <x>420</x>
-     <y>190</y>
+     <y>220</y>
      <width>141</width>
      <height>111</height>
     </rect>
@@ -621,6 +621,46 @@ Layout</string>
 Layout</string>
     </property>
    </widget>
+  </widget>
+  <widget class="QLabel" name="label_acqTime">
+   <property name="geometry">
+    <rect>
+     <x>420</x>
+     <y>150</y>
+     <width>161</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>After scan wait (s):</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="lineEdit_acqTime">
+   <property name="geometry">
+    <rect>
+     <x>580</x>
+     <y>150</y>
+     <width>51</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+   <property name="toolTip">
+    <string>Experiment log file will be saved in this folder.  QDS softglue data will be saved under /positions.</string>
+   </property>
+   <property name="text">
+    <string/>
+   </property>
+   <property name="maxLength">
+    <number>500</number>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+   </property>
   </widget>
  </widget>
  <resources/>

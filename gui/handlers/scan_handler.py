@@ -147,7 +147,9 @@ class ScanHandler:
         Ntot = Nx * Ny
 
         step_est = Ntot * (lup_1_t + self.OVERHEAD_STEP)
-        fly_est = Ntot * (lup_1_t + self.OVERHEAD_FLY)
+        fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
+        fly_period = max(fly_acq_time, lup_1_t + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
+        fly_est = Ntot * fly_period
 
         def _set_label(name, text):
             lbl = self.ui.findChild(QLabel, name)
@@ -280,6 +282,10 @@ class ScanHandler:
         self.isStopScanIssued = False
         print(f"\n\n{scan_name} starting")
 
+        # Store the scan number at scan start time so background linking thread uses the
+        # same number even if user changes scan_number before linking completes
+        self._scan_number_at_start = self.w.parameters.scan_number
+
         # Query optics PVs once and cache for both CSV and master file (avoid duplicate queries)
         self._cached_us_optics = self._get_us_optics_positions()
         self._cached_zone_plate_optics = self._fetch_zone_plate_optics_metadata()
@@ -301,20 +307,26 @@ class ScanHandler:
         except Exception as e:
             print(f"Warning: Failed to create master file: {e}")
 
-    def _log_scan_header(self, scan_name: str, axes_params: list, is_fly_snake: bool = False) -> None:
+    def _log_scan_header(self, scan_name: str, axes_params: list, is_fly_snake: bool = False, is_helix: bool = False) -> None:
         """Write the SPEC-style #S header line for this scan to the log file.
 
         axes_params is a list of dicts from _read_motor_params, in axis order
         (X first, then Y if 2-D, then phi if 3-D).
         is_fly_snake: set True for snake fly scans so n_pos accounts for the
         phantom trigger at the end of each X line and the even-Y-line rounding.
+        is_helix: set True for helix scans so n_pos is the length of the Z axis
+        (both axes move in parallel, not a grid).
         """
         position_arrays = [self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"]) for ax in axes_params]
-        n_pos = self._compute_n_positions(
-            position_arrays,
-            n_phantom_x=1 if is_fly_snake else 0,
-            round_y_to_even=is_fly_snake,
-        )
+        if is_helix:
+            # For helix scans, both axes move in parallel, so n_pos is the number of Z steps (second axis)
+            n_pos = len(position_arrays[1]) if len(position_arrays) > 1 else len(position_arrays[0])
+        else:
+            n_pos = self._compute_n_positions(
+                position_arrays,
+                n_phantom_x=1 if is_fly_snake else 0,
+                round_y_to_even=is_fly_snake,
+            )
         scaninfo = ["\n#S", self.w.parameters.scan_number, scan_name]
         for ax in axes_params:
             n = ax["motor_index"] + 1
@@ -453,21 +465,18 @@ class ScanHandler:
             QMessageBox.warning(self.w.ui, "Fly Blur", "Exposure time and step size must both be > 0.")
             return
         step = abs(step)
-        flyidletime = getattr(self.w.parameters, "_fly_idletime", DETECTOR_READOUTTIME)
-        if flyidletime < DETECTOR_READOUTTIME:
-            flyidletime = DETECTOR_READOUTTIME
-        if expt + flyidletime < self.OVERHEAD_FLY:
-            flyidletime = self.OVERHEAD_FLY - expt
-        step_time = round((expt + flyidletime) * 1000) / 1000
+        fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
+        step_time = max(fly_acq_time, expt + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
+        step_time = round(step_time * 1000) / 1000
         velocity_mm_s = step / step_time
         movestep_um = step * 1000.0 * expt / step_time
         msg = (
             f"Exposure time:     {expt * 1000:.2f} ms\n"
             f"Step size:         {step * 1000:.3f} µm\n"
-            f"Step period:       {step_time * 1000:.2f} ms\n"
+            f"Acquisition time:  {step_time * 1000:.2f} ms\n"
             f"Velocity:          {velocity_mm_s * 1000:.3f} µm/s\n"
             f"\n"
-            f"Motion during exposure:  {movestep_um:.3f} µm"
+            f"Motion during exposure:  {movestep_um * 1000:d} nm"
         )
         QMessageBox.information(self.w.ui, "Fly Blur Estimate", msg)
 
@@ -1447,16 +1456,19 @@ class ScanHandler:
         self.w.parameters._ratio_exp_period = val
         self.w.parameters.writeini()
 
-    def set_fly_idletime(self):
+    def set_fly_acquisition_time(self):
         val, ok = QInputDialog().getDouble(
-            self,
-            "Flyscan step time-exptime",
-            "Time (s)",
-            self.w.parameters._fly_idletime,
+            self.w.ui,
+            "Fly scan acquisition time",
+            "Acquisition time (s)",
+            self.w.parameters._fly_acq_time,
             decimals=3,
         )
-        self.w.parameters._fly_idletime = val
-        self.w.parameters.writeini()
+        if ok:
+            val = max(val, self.OVERHEAD_FLY)
+            self.w.parameters._fly_acq_time = val
+            self.w.parameters.writeini()
+            self.update_scan_estimate()
 
     def _debug_plot_scan(self):
         """Plot scan trajectory and sample current lb_1/lb_3 positions."""
@@ -1611,18 +1623,21 @@ class ScanHandler:
         # Link detector data to master files asynchronously (non-blocking)
         # Compute full paths NOW while GUI state is frozen, pass to background thread
         sample_name = self.w.parameters.scan_name
+        # Use the scan number from when _pre_scan was called, not the current one
+        # (user may have changed it since scan started)
+        scan_number = getattr(self, '_scan_number_at_start', self.w.parameters.scan_number)
 
         # Build master file paths for each active detector
         master_paths = {}
         if len(self.w.detector) > 0 and self.w.detector[0] is not None:
             try:
-                master_paths['SAXS'] = self._get_master_file_path('SAXS', sample_name)
+                master_paths['SAXS'] = self._get_master_file_path_with_number('SAXS', sample_name, scan_number)
             except Exception as e:
                 print(f"Warning: Could not compute SAXS master file path: {e}")
 
         if len(self.w.detector) > 1 and self.w.detector[1] is not None:
             try:
-                master_paths['WAXS'] = self._get_master_file_path('WAXS', sample_name)
+                master_paths['WAXS'] = self._get_master_file_path_with_number('WAXS', sample_name, scan_number)
             except Exception as e:
                 print(f"Warning: Could not compute WAXS master file path: {e}")
 
@@ -2773,20 +2788,9 @@ class ScanHandler:
         self.w.update_status_scan_time()
 
         # Link detector data to master files asynchronously (non-blocking)
-        sample_name = self.w.parameters.scan_name
-        master_paths = {}
-        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
-            try:
-                master_paths['SAXS'] = self._get_master_file_path('SAXS', sample_name)
-            except Exception as e:
-                print(f"Warning: Could not compute SAXS master file path: {e}")
-
-        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
-            try:
-                master_paths['WAXS'] = self._get_master_file_path('WAXS', sample_name)
-            except Exception as e:
-                print(f"Warning: Could not compute WAXS master file path: {e}")
-
+        # Use pre-computed master paths from fly2d() to ensure correct scan number
+        # (scan number may be incremented by the time flydone2d runs)
+        master_paths = getattr(self, '_current_scan_master_paths', {})
         if master_paths:
             import threading
             thread = threading.Thread(
@@ -2832,20 +2836,9 @@ class ScanHandler:
         self.w.update_status_scan_time()
 
         # Link detector data to master files asynchronously (non-blocking)
-        sample_name = self.w.parameters.scan_name
-        master_paths = {}
-        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
-            try:
-                master_paths['SAXS'] = self._get_master_file_path('SAXS', sample_name)
-            except Exception as e:
-                print(f"Warning: Could not compute SAXS master file path: {e}")
-
-        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
-            try:
-                master_paths['WAXS'] = self._get_master_file_path('WAXS', sample_name)
-            except Exception as e:
-                print(f"Warning: Could not compute WAXS master file path: {e}")
-
+        # Use pre-computed master paths from fly3d() to ensure correct scan number
+        # (scan number may be incremented by the time flydone3d runs)
+        master_paths = getattr(self, '_current_scan_master_paths', {})
         if master_paths:
             import threading
             thread = threading.Thread(
@@ -3002,6 +2995,23 @@ class ScanHandler:
 
         self._log_scan_header(scan_name, [xax, yax], is_fly_snake=snake)
 
+        # Compute master file paths NOW (before scan number may be incremented)
+        # so flydone2d can use the correct paths for linking detector data.
+        sample_name = self.w.parameters.scan_name
+        scan_number = getattr(self, '_scan_number_at_start', self.w.parameters.scan_number)
+        master_paths_2d_fly = {}
+        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+            try:
+                master_paths_2d_fly['SAXS'] = self._get_master_file_path_with_number('SAXS', sample_name, scan_number)
+            except Exception as e:
+                print(f"Warning: Could not compute SAXS master file path: {e}")
+        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+            try:
+                master_paths_2d_fly['WAXS'] = self._get_master_file_path_with_number('WAXS', sample_name, scan_number)
+            except Exception as e:
+                print(f"Warning: Could not compute WAXS master file path: {e}")
+        self._current_scan_master_paths = master_paths_2d_fly
+
         if snake:
             # Program the full 2-D snake trajectory on the hexapod controller
             # before the worker starts.  fly2d0_SNAKE then just triggers it.
@@ -3102,6 +3112,25 @@ class ScanHandler:
 
         self.fly3d_axes_params = [xax, yax, phiax]
 
+        self._log_scan_header(scan_name, [xax, yax, phiax], is_fly_snake=snake)
+
+        # Compute master file paths NOW (before scan number may be incremented)
+        # so flydone3d can use the correct paths for linking detector data.
+        sample_name = self.w.parameters.scan_name
+        scan_number = getattr(self, '_scan_number_at_start', self.w.parameters.scan_number)
+        master_paths_3d_fly = {}
+        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+            try:
+                master_paths_3d_fly['SAXS'] = self._get_master_file_path_with_number('SAXS', sample_name, scan_number)
+            except Exception as e:
+                print(f"Warning: Could not compute SAXS master file path: {e}")
+        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+            try:
+                master_paths_3d_fly['WAXS'] = self._get_master_file_path_with_number('WAXS', sample_name, scan_number)
+            except Exception as e:
+                print(f"Warning: Could not compute WAXS master file path: {e}")
+        self._current_scan_master_paths = master_paths_3d_fly
+
         self._launch_worker(
             self.fly3d0,
             xmotor,
@@ -3166,15 +3195,16 @@ class ScanHandler:
         # Compute master file paths NOW (before scan number is incremented)
         # so flydone can use the correct paths for linking detector data.
         sample_name = self.w.parameters.scan_name
+        scan_number = getattr(self, '_scan_number_at_start', self.w.parameters.scan_number)
         master_paths_1d_fly = {}
         if len(self.w.detector) > 0 and self.w.detector[0] is not None:
             try:
-                master_paths_1d_fly['SAXS'] = self._get_master_file_path('SAXS', sample_name)
+                master_paths_1d_fly['SAXS'] = self._get_master_file_path_with_number('SAXS', sample_name, scan_number)
             except Exception as e:
                 print(f"Warning: Could not compute SAXS master file path: {e}")
         if len(self.w.detector) > 1 and self.w.detector[1] is not None:
             try:
-                master_paths_1d_fly['WAXS'] = self._get_master_file_path('WAXS', sample_name)
+                master_paths_1d_fly['WAXS'] = self._get_master_file_path_with_number('WAXS', sample_name, scan_number)
             except Exception as e:
                 print(f"Warning: Could not compute WAXS master file path: {e}")
         self._current_scan_master_paths = master_paths_1d_fly
@@ -3225,18 +3255,21 @@ class ScanHandler:
         if not self._confirm_large_scan(len(pos), phi_ax["expt"], self.OVERHEAD_FLY):
             return
 
-        self._log_scan_header("helix_fly", [phi_ax, z_ax])
+        self._log_scan_header("helix_fly", [phi_ax, z_ax], is_helix=True)
 
+        # Compute master file paths NOW (before scan number may be incremented)
+        # so helixdone can use the correct paths for linking detector data.
         sample_name = self.w.parameters.scan_name
+        scan_number = getattr(self, '_scan_number_at_start', self.w.parameters.scan_number)
         master_paths_helix_fly = {}
         if len(self.w.detector) > 0 and self.w.detector[0] is not None:
             try:
-                master_paths_helix_fly['SAXS'] = self._get_master_file_path('SAXS', sample_name)
+                master_paths_helix_fly['SAXS'] = self._get_master_file_path_with_number('SAXS', sample_name, scan_number)
             except Exception as e:
                 print(f"Warning: Could not compute SAXS master file path: {e}")
         if len(self.w.detector) > 1 and self.w.detector[1] is not None:
             try:
-                master_paths_helix_fly['WAXS'] = self._get_master_file_path('WAXS', sample_name)
+                master_paths_helix_fly['WAXS'] = self._get_master_file_path_with_number('WAXS', sample_name, scan_number)
             except Exception as e:
                 print(f"Warning: Could not compute WAXS master file path: {e}")
         self._current_scan_master_paths = master_paths_helix_fly
@@ -4580,16 +4613,12 @@ class ScanHandler:
         Xstep = self.fly1d_step  # step distance (mm)
         Xtm = self.fly1d_tm  # user exposure time (s)
 
-        # Compute step_time = exposure + idle.
-        # The idle time must be at least as long as the detector readout so that
-        # the next trigger does not arrive before the previous frame is read out.
-        flyidletime = getattr(self.w.parameters, "_fly_idletime", DETECTOR_READOUTTIME)
-        if flyidletime < DETECTOR_READOUTTIME:
-            flyidletime = DETECTOR_READOUTTIME
-        if Xtm + flyidletime < self.OVERHEAD_FLY:
-            # Enforce a minimum period of 33 ms (Pilatus 2M limit of 30 Hz).
-            flyidletime = self.OVERHEAD_FLY - Xtm
-        step_time = Xtm + flyidletime
+        # Compute step_time from the user-set acquisition time, clamped to safe floors.
+        # The period must be at least as long as the detector readout so that
+        # the next trigger does not arrive before the previous frame is read out,
+        # and at least 33 ms (Pilatus 2M limit of 30 Hz).
+        fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
+        step_time = max(fly_acq_time, Xtm + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
         # The hexapod wavetable clock is 1 ms/bin. Round step_time to the nearest
         # whole millisecond so that the pulse_period passed to make_pulse_arrays is
         # an exact integer number of bins. Without this, floating-point accumulation
@@ -5121,9 +5150,8 @@ class ScanHandler:
             Xtm = self.fly1d_tm
 
             # step time calculation
-            step_time = Xtm + self.det_readout_time
-            if step_time < self.OVERHEAD_FLY:
-                step_time = self.OVERHEAD_FLY
+            fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
+            step_time = max(fly_acq_time, Xtm + self.det_readout_time, self.OVERHEAD_FLY)
             # self.w.parameters._ratio_exp_period = Xtm / step_time
             # total time calculation
             Nsteps = int((fe - st) / Xstep)
@@ -5342,9 +5370,8 @@ class ScanHandler:
         Xstep = self.helix_phi_step
         Xtm = self.helix_phi_tm
 
-        step_time = Xtm + self.det_readout_time
-        if step_time < self.OVERHEAD_FLY:
-            step_time = self.OVERHEAD_FLY
+        fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
+        step_time = max(fly_acq_time, Xtm + self.det_readout_time, self.OVERHEAD_FLY)
         Nsteps = int((phi_fe - phi_st) / Xstep)
         total_time = Nsteps * step_time
         expt = Xtm

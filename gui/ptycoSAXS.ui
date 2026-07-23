@@ -4626,7 +4626,7 @@ series</string>
   </action>
   <action name="actionRatio_of_exptime_period_for_Flyscan">
    <property name="text">
-    <string>Fly step time - exposure time(s)</string>
+    <string>Fly scan acquisition time</string>
    </property>
   </action>
   <action name="actionRecord_traj_during_scan">

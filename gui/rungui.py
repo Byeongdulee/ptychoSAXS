@@ -146,7 +146,7 @@ except ImportError:
         scan_time = -1
         saxsmode = 0
         _ratio_exp_period = 0.2
-        _fly_idletime = 0.0
+        _fly_acq_time = 0.033
         _pulses_per_step = 1
         base_linux_datafolder = "/tmp"
         _save_us_optics = True
@@ -486,7 +486,7 @@ class ptyco_main_control(QObject):
             self.parameters.scan_number = 0
             self.parameters.scan_name = ""
             self.parameters._ratio_exp_period = FRACTION_EXPOSURE_PERIOD
-            self.parameters._fly_idletime = 0.033
+            self.parameters._fly_acq_time = 0.033
             self.parameters.scan_time = -1
             self.parameters._pulses_per_step = 1
             self.parameters.saxsmode = 1  # 0 for ptychography, 1 for SAXS
@@ -747,9 +747,8 @@ class ptyco_main_control(QObject):
         self.parameters.scan_number += 1
         # self.ui.edit_scannumber.setText(str(int(self.parameters.scan_number)+1))
         self.update_scannumber()
-        # self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(self.set_exp_period_ratio)
         self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(
-            self.set_fly_idletime
+            self.set_fly_acquisition_time
         )
 
         if os.name != "nt":
@@ -1352,8 +1351,8 @@ class ptyco_main_control(QObject):
     def set_exp_period_ratio(self):
         return self.scan_handler.set_exp_period_ratio()
 
-    def set_fly_idletime(self):
-        return self.scan_handler.set_fly_idletime()
+    def set_fly_acquisition_time(self):
+        return self.scan_handler.set_fly_acquisition_time()
 
     def set_det_alignmode(self, value=None):
         return self.scan_handler.set_det_alignmode(value)
@@ -1586,6 +1585,7 @@ class ptyco_main_control(QObject):
         dlg.lineEdit_nBursts.setValidator(QIntValidator(1, 9999, dlg))
         dlg.lineEdit_nBursts.setText(str(int(self.parameters._pulses_per_step)))
         dlg.lineEdit_scanWait.setText(str(self.parameters._waittime_between_scans))
+        dlg.lineEdit_acqTime.setText(str(self.parameters._fly_acq_time))
 
         dlg.checkBox_SAXS.setChecked(self.ui.actionSAXS.isChecked())
         dlg.checkBox_WAXS.setChecked(self.ui.actionWAXS.isChecked())
@@ -1673,6 +1673,12 @@ class ptyco_main_control(QObject):
             )
         except ValueError:
             pass
+        try:
+            acq_time = float(dlg.lineEdit_acqTime.text())
+            acq_time = max(acq_time, self.scan_handler.OVERHEAD_FLY)
+            self.parameters._fly_acq_time = acq_time
+        except ValueError:
+            pass
 
         # Detectors
         self.select_detectors(1, dlg.checkBox_SAXS.isChecked())
@@ -1698,6 +1704,7 @@ class ptyco_main_control(QObject):
             self.set_softglue_in(speed_id)
 
         self.parameters.writeini()
+        self.scan_handler.update_scan_estimate()
 
     # ── Detector attribute / layout filepaths ──────────────────────────────
 
