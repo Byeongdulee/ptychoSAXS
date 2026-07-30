@@ -3288,9 +3288,9 @@ class ScanHandler:
             # both. Abort before the worker starts on a mismatch.
             try:
                 self._reconcile_hexapod_snake_positions(write_to_master=True)
-            except HexapodPositionCountMismatchError as e:
-                QMessageBox.critical(self.w.ui, "Hexapod Mismatch", str(e))
-                return
+            # except HexapodPositionCountMismatchError as e:
+            #     QMessageBox.critical(self.w.ui, "Hexapod Mismatch", str(e))
+                # return
             self._launch_worker(
                 self.fly2d0_SNAKE,
                 xmotor,
