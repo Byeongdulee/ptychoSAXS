@@ -772,21 +772,20 @@ class ptyco_main_control(QObject):
         self.ui.pbar_scan.setValue(0)
 
         # ── Hexapod navigation panel ───────────────────────────────────────
-        self.ui.pb_hp_left.clicked.connect(lambda: self._hp_tweak(0, -1))
-        self.ui.pb_hp_right.clicked.connect(lambda: self._hp_tweak(0, 1))
+        # self.ui.pb_hp_left.clicked.connect(lambda: self._hp_tweak(0, -1))
+        # self.ui.pb_hp_right.clicked.connect(lambda: self._hp_tweak(0, 1))
         self.ui.pb_hp_down.clicked.connect(lambda: self._hp_tweak(2, -1))
         self.ui.pb_hp_up.clicked.connect(lambda: self._hp_tweak(2, 1))
 
         # ── Translation navigation panel ───────────────────────────────────
         self.ui.pb_trans_left.clicked.connect(lambda: self._trans_tweak(False, -1))
         self.ui.pb_trans_right.clicked.connect(lambda: self._trans_tweak(False, 1))
-        self.ui.pb_trans_down.clicked.connect(lambda: self._trans_tweak(True, -1))
-        self.ui.pb_trans_up.clicked.connect(lambda: self._trans_tweak(True, 1))
 
         def _on_trans_flip(checked):
             self.ui.label_trans.setText("trans2" if checked else "trans1")
-            self.ui.label_trans_2.setText("trans1" if checked else "trans2")
+            # self.ui.label_trans_2.setText("trans1" if checked else "trans2")
 
+        self.ui.checkBox_transFlip.setChecked(True)
         self.ui.checkBox_transFlip.toggled.connect(_on_trans_flip)
         _on_trans_flip(self.ui.checkBox_transFlip.isChecked())
 
@@ -1497,14 +1496,14 @@ class ptyco_main_control(QObject):
         self.updatepos(axis)
 
     def _trans_tweak(self, is_ud, sign):
-        """Move a translation motor by the step entered in ed_trans_tweak (microns → mm).
+        """Move a translation motor by the step entered in ed_hp_tweak (microns → mm).
 
         is_ud=False → left/right axis (motor 8, index 7).
         is_ud=True  → up/down axis   (motor 9, index 8).
         When checkBox_transFlip is checked the two axes are swapped.
         """
         try:
-            step_mm = float(self.ui.ed_trans_tweak.text()) / 1000.0
+            step_mm = float(self.ui.ed_hp_tweak.text()) / 1000.0
         except ValueError:
             return
         if self.ui.checkBox_transFlip.isChecked():

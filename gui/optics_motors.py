@@ -161,19 +161,18 @@ class MotorPresetBlock:
         btn = self._w(QPushButton, f"pushButton_{p}Enable")
         if btn:
             if enabled:
-                btn.setText("Disable")
-                btn.setStyleSheet("background-color: #ffcccc;")
-            else:
-                btn.setText("Enable")
+                btn.setText("Yes")
                 btn.setStyleSheet("background-color: #ccffcc;")
+            else:
+                btn.setText("No")
+                btn.setStyleSheet("background-color: #ffcccc;")
 
-        # gray out / restore all descriptive labels
+        # gray out / restore all descriptive labels (but keep status label readable)
         text_color = "black" if enabled else self.DISABLED_TEXT_COLOR
         all_text_labels = (
             self._in_lbl_names
             + self._out_lbl_names
             + self._extra_labels
-            + [f"label_{p}Status"]
         )
         for name in all_text_labels:
             lbl = self._w(QLabel, name)
@@ -181,6 +180,8 @@ class MotorPresetBlock:
                 lbl.setStyleSheet(f"color: {text_color};")
 
         self._enabled = enabled
+        if hasattr(self._parent, '_update_all_buttons'):
+            self._parent._update_all_buttons()
 
     def _toggle(self):
         self._apply_enabled(not self._enabled)
@@ -215,6 +216,8 @@ class MotorPresetBlock:
             self._save_ini()
 
     def _on_out(self):
+        if self._parent._is_xrayeye_out() and not self._parent._confirm_xrayeye_guard():
+            return
         if self._slider_mode() == 0:
             for idx, lbl_name in zip(self._pos_lbl_indices, self._out_lbl_names):
                 lbl = self._w(QLabel, lbl_name)
@@ -793,6 +796,7 @@ class motor_control(QMainWindow):
             btn_all_in.clicked.connect(self._all_in)
         if btn_all_out:
             btn_all_out.clicked.connect(self._all_out)
+        self._update_all_buttons()
 
         if os.name == "nt":
             self.timer = QTimer()
@@ -831,6 +835,22 @@ class motor_control(QMainWindow):
         self.ui.actionIn.setEnabled(True)
         self._set_xrayeye_buttons(eye_in=True)
         self.put_xrayeye(False)
+
+    def _is_xrayeye_out(self):
+        """Return True if the X-ray eye is currently OUT."""
+        action_in = self.ui.actionIn
+        return action_in and action_in.isEnabled()
+
+    def _confirm_xrayeye_guard(self):
+        """Show confirmation dialog warning about X-ray eye position. Return True if user confirms."""
+        reply = QMessageBox.warning(
+            self.ui,
+            "X-ray Eye Out",
+            "The X-ray eye is currently OUT.\nAre you sure you want to proceed?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        return reply == QMessageBox.Yes
 
     def put_xrayeye(self, ins=True):
         if self.debug_mode:
@@ -955,8 +975,22 @@ class motor_control(QMainWindow):
             block._on_in()
 
     def _all_out(self):
+        if self._is_xrayeye_out() and not self._confirm_xrayeye_guard():
+            return
         for block in (self.osa_block, self.bs_block, self.zp_block):
             block._on_out()
+
+    def _update_all_buttons(self):
+        """Enable All In/All Out buttons only if all three blocks are enabled."""
+        if not hasattr(self, 'osa_block') or not hasattr(self, 'bs_block') or not hasattr(self, 'zp_block'):
+            return
+        all_enabled = all(block._enabled for block in (self.osa_block, self.bs_block, self.zp_block))
+        btn_all_in = self.ui.findChild(QPushButton, "pushButton_allIn")
+        btn_all_out = self.ui.findChild(QPushButton, "pushButton_allOut")
+        if btn_all_in:
+            btn_all_in.setEnabled(all_enabled)
+        if btn_all_out:
+            btn_all_out.setEnabled(all_enabled)
 
     def _update_all_status(self):
         """Aggregate OSA / BS / ZP status labels into label_allStatus."""

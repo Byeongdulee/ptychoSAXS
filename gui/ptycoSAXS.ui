@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1127</width>
-    <height>811</height>
+    <width>1167</width>
+    <height>804</height>
    </rect>
   </property>
   <property name="font">
@@ -28,42 +28,23 @@
    <widget class="QWidget" name="verticalLayoutWidget">
     <property name="geometry">
      <rect>
-      <x>740</x>
+      <x>770</x>
       <y>100</y>
       <width>371</width>
       <height>641</height>
      </rect>
     </property>
-    <layout class="QVBoxLayout" name="verticalLayout_2"/>
-   </widget>
-   <widget class="QProgressBar" name="pbar_scan">
-    <property name="geometry">
-     <rect>
-      <x>210</x>
-      <y>580</y>
-      <width>311</width>
-      <height>20</height>
-     </rect>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>1050</width>
-      <height>16777215</height>
-     </size>
-    </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
-    <property name="value">
-     <number>24</number>
-    </property>
+    <layout class="QVBoxLayout" name="verticalLayout_2"/>
    </widget>
    <widget class="QPushButton" name="pushButton_setup">
     <property name="geometry">
      <rect>
-      <x>830</x>
+      <x>850</x>
       <y>10</y>
       <width>61</width>
       <height>28</height>
@@ -71,7 +52,7 @@
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -89,7 +70,7 @@
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -101,234 +82,33 @@
      <rect>
       <x>130</x>
       <y>577</y>
-      <width>71</width>
+      <width>91</width>
       <height>41</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
     </property>
     <property name="text">
      <string>Copy
 Current</string>
     </property>
    </widget>
-   <widget class="QFrame" name="frame_trans12">
-    <property name="geometry">
-     <rect>
-      <x>400</x>
-      <y>610</y>
-      <width>171</width>
-      <height>131</height>
-     </rect>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">background-color: rgb(230, 230, 230);</string>
-    </property>
-    <property name="frameShape">
-     <enum>QFrame::Box</enum>
-    </property>
-    <property name="frameShadow">
-     <enum>QFrame::Raised</enum>
-    </property>
-    <widget class="QCheckBox" name="checkBox_transFlip">
-     <property name="geometry">
-      <rect>
-       <x>120</x>
-       <y>10</y>
-       <width>41</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>flip</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_trans">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>80</y>
-       <width>51</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>12</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>trans1</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="pb_trans_left">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>50</y>
-       <width>41</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>←</string>
-     </property>
-    </widget>
-    <widget class="QLineEdit" name="ed_trans_tweak">
-     <property name="geometry">
-      <rect>
-       <x>60</x>
-       <y>50</y>
-       <width>31</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>100</width>
-       <height>16777215</height>
-      </size>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-      </font>
-     </property>
-     <property name="toolTip">
-      <string>Hit enter to update.</string>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">background-color: rgb(255, 255, 255);</string>
-     </property>
-     <property name="text">
-      <string>1</string>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="pb_trans_down">
-     <property name="geometry">
-      <rect>
-       <x>60</x>
-       <y>90</y>
-       <width>51</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>↓</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_trans_tweakUnit">
-     <property name="geometry">
-      <rect>
-       <x>90</x>
-       <y>50</y>
-       <width>31</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>um</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="pb_trans_right">
-     <property name="geometry">
-      <rect>
-       <x>120</x>
-       <y>50</y>
-       <width>41</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>→</string>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="pb_trans_up">
-     <property name="geometry">
-      <rect>
-       <x>60</x>
-       <y>10</y>
-       <width>51</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>↑</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_trans_2">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>10</y>
-       <width>51</width>
-       <height>21</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>12</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>trans2</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
-    <zorder>checkBox_transFlip</zorder>
-    <zorder>label_trans</zorder>
-    <zorder>ed_trans_tweak</zorder>
-    <zorder>pb_trans_down</zorder>
-    <zorder>label_trans_tweakUnit</zorder>
-    <zorder>pb_trans_right</zorder>
-    <zorder>label_trans_2</zorder>
-    <zorder>pb_trans_left</zorder>
-    <zorder>pb_trans_up</zorder>
-   </widget>
    <widget class="QFrame" name="frame">
     <property name="geometry">
      <rect>
-      <x>210</x>
-      <y>610</y>
-      <width>171</width>
+      <x>230</x>
+      <y>570</y>
+      <width>231</width>
       <height>131</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
     </property>
     <property name="styleSheet">
      <string notr="true">background-color: rgb(230, 230, 230);</string>
@@ -342,7 +122,7 @@ Current</string>
     <widget class="QLabel" name="label_hp">
      <property name="geometry">
       <rect>
-       <x>40</x>
+       <x>90</x>
        <y>10</y>
        <width>21</width>
        <height>21</height>
@@ -350,7 +130,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>12</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -363,7 +143,7 @@ Current</string>
     <widget class="QLineEdit" name="ed_hp_tweak">
      <property name="geometry">
       <rect>
-       <x>60</x>
+       <x>110</x>
        <y>50</y>
        <width>31</width>
        <height>31</height>
@@ -377,7 +157,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="toolTip">
@@ -390,28 +170,10 @@ Current</string>
       <string>1</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="pb_hp_left">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>50</y>
-       <width>41</width>
-       <height>31</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>←</string>
-     </property>
-    </widget>
     <widget class="QLabel" name="label_hp_tweakUnit">
      <property name="geometry">
       <rect>
-       <x>90</x>
+       <x>140</x>
        <y>50</y>
        <width>31</width>
        <height>31</height>
@@ -419,7 +181,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -432,7 +194,7 @@ Current</string>
     <widget class="QPushButton" name="pb_hp_up">
      <property name="geometry">
       <rect>
-       <x>60</x>
+       <x>110</x>
        <y>10</y>
        <width>51</width>
        <height>31</height>
@@ -440,7 +202,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -450,7 +212,7 @@ Current</string>
     <widget class="QPushButton" name="pb_hp_down">
      <property name="geometry">
       <rect>
-       <x>60</x>
+       <x>110</x>
        <y>90</y>
        <width>51</width>
        <height>31</height>
@@ -458,47 +220,106 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
       <string>↓</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="pb_hp_right">
+    <widget class="QPushButton" name="pb_trans_left">
      <property name="geometry">
       <rect>
-       <x>120</x>
+       <x>170</x>
        <y>50</y>
-       <width>41</width>
+       <width>51</width>
        <height>31</height>
       </rect>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
       <string>→</string>
      </property>
     </widget>
-    <widget class="QLabel" name="label_hp_2">
+    <widget class="QPushButton" name="pb_trans_right">
      <property name="geometry">
       <rect>
-       <x>10</x>
+       <x>50</x>
+       <y>50</y>
+       <width>51</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>←</string>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="checkBox_transFlip">
+     <property name="geometry">
+      <rect>
+       <x>170</x>
+       <y>10</y>
+       <width>51</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>flip
+trans</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_trans">
+     <property name="geometry">
+      <rect>
+       <x>50</x>
        <y>80</y>
-       <width>21</width>
+       <width>51</width>
        <height>21</height>
       </rect>
      </property>
      <property name="font">
       <font>
-       <pointsize>12</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
-      <string>X</string>
+      <string>trans1</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_hp_2">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>5</y>
+       <width>71</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Sample
+Movement</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -508,19 +329,26 @@ Current</string>
     <zorder>ed_hp_tweak</zorder>
     <zorder>label_hp_tweakUnit</zorder>
     <zorder>pb_hp_down</zorder>
-    <zorder>pb_hp_right</zorder>
-    <zorder>label_hp_2</zorder>
-    <zorder>pb_hp_left</zorder>
     <zorder>pb_hp_up</zorder>
+    <zorder>pb_trans_left</zorder>
+    <zorder>pb_trans_right</zorder>
+    <zorder>checkBox_transFlip</zorder>
+    <zorder>label_trans</zorder>
+    <zorder>label_hp_2</zorder>
    </widget>
    <widget class="QFrame" name="frame_2">
     <property name="geometry">
      <rect>
-      <x>361</x>
+      <x>371</x>
       <y>290</y>
       <width>301</width>
       <height>101</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
     </property>
     <property name="styleSheet">
      <string notr="true">background-color: #fffde7;  /* very pale yellow */</string>
@@ -542,7 +370,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -561,7 +389,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -580,7 +408,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="styleSheet">
@@ -601,7 +429,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="styleSheet">
@@ -622,7 +450,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -641,7 +469,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -660,7 +488,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -679,7 +507,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -698,12 +526,12 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
       <string>2D
-</string>
+step</string>
      </property>
     </widget>
     <widget class="QLabel" name="label_25">
@@ -717,7 +545,7 @@ Current</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -736,7 +564,7 @@ time:</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -759,11 +587,16 @@ fly:</string>
    <widget class="QFrame" name="frame_3">
     <property name="geometry">
      <rect>
-      <x>530</x>
+      <x>540</x>
       <y>500</y>
       <width>131</width>
       <height>91</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
     </property>
     <property name="styleSheet">
      <string notr="true">background-color: #fffde7;  /* very pale yellow */</string>
@@ -785,7 +618,7 @@ fly:</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -804,7 +637,7 @@ fly:</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="text">
@@ -823,7 +656,7 @@ fly:</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="styleSheet">
@@ -844,7 +677,7 @@ fly:</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="styleSheet">
@@ -866,7 +699,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -884,13 +717,13 @@ fly:</string>
      <rect>
       <x>130</x>
       <y>46</y>
-      <width>201</width>
+      <width>191</width>
       <height>20</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -900,7 +733,7 @@ fly:</string>
    <widget class="QLabel" name="label_13">
     <property name="geometry">
      <rect>
-      <x>580</x>
+      <x>590</x>
       <y>46</y>
       <width>81</width>
       <height>21</height>
@@ -908,7 +741,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -918,7 +751,7 @@ fly:</string>
    <widget class="QLineEdit" name="edit_scannumber">
     <property name="geometry">
      <rect>
-      <x>450</x>
+      <x>460</x>
       <y>46</y>
       <width>41</width>
       <height>20</height>
@@ -932,22 +765,22 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
    </widget>
    <widget class="QLabel" name="label_12">
     <property name="geometry">
      <rect>
-      <x>340</x>
+      <x>330</x>
       <y>46</y>
-      <width>111</width>
+      <width>131</width>
       <height>21</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -957,15 +790,15 @@ fly:</string>
    <widget class="QLabel" name="lbl_scanname">
     <property name="geometry">
      <rect>
-      <x>659</x>
+      <x>679</x>
       <y>46</y>
-      <width>241</width>
+      <width>231</width>
       <height>21</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -977,7 +810,7 @@ fly:</string>
      <rect>
       <x>130</x>
       <y>12</y>
-      <width>621</width>
+      <width>631</width>
       <height>20</height>
      </rect>
     </property>
@@ -995,7 +828,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1016,7 +849,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1026,7 +859,7 @@ fly:</string>
    <widget class="QLineEdit" name="ed_8_tweak">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>439</y>
       <width>61</width>
       <height>20</height>
@@ -1040,7 +873,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1061,7 +894,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1071,7 +904,7 @@ fly:</string>
    <widget class="QPushButton" name="pb_lup_2">
     <property name="geometry">
      <rect>
-      <x>550</x>
+      <x>560</x>
       <y>224</y>
       <width>51</width>
       <height>28</height>
@@ -1079,7 +912,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -1092,7 +925,7 @@ fly:</string>
    <widget class="QLabel" name="lb_11">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>60</x>
       <y>545</y>
       <width>71</width>
       <height>21</height>
@@ -1100,7 +933,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1110,7 +943,7 @@ fly:</string>
    <widget class="QPushButton" name="pb_tweak2L">
     <property name="geometry">
      <rect>
-      <x>210</x>
+      <x>220</x>
       <y>225</y>
       <width>31</width>
       <height>28</height>
@@ -1118,7 +951,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1128,7 +961,7 @@ fly:</string>
    <widget class="QPushButton" name="pb_tweak5R">
     <property name="geometry">
      <rect>
-      <x>320</x>
+      <x>330</x>
       <y>329</y>
       <width>31</width>
       <height>28</height>
@@ -1136,7 +969,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1146,7 +979,7 @@ fly:</string>
    <widget class="QLineEdit" name="ed_7_tweak">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>404</y>
       <width>61</width>
       <height>20</height>
@@ -1160,7 +993,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1173,7 +1006,7 @@ fly:</string>
    <widget class="QLineEdit" name="ed_lup_8_L">
     <property name="geometry">
      <rect>
-      <x>360</x>
+      <x>370</x>
       <y>438</y>
       <width>51</width>
       <height>20</height>
@@ -1187,7 +1020,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
    </widget>
@@ -1202,7 +1035,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1212,7 +1045,7 @@ fly:</string>
    <widget class="QLineEdit" name="ed_lup_2_R">
     <property name="geometry">
      <rect>
-      <x>420</x>
+      <x>430</x>
       <y>228</y>
       <width>51</width>
       <height>20</height>
@@ -1226,7 +1059,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1236,7 +1069,7 @@ fly:</string>
    <widget class="QLabel" name="label_4">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>620</x>
       <y>140</y>
       <width>51</width>
       <height>41</height>
@@ -1244,7 +1077,7 @@ fly:</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1257,7 +1090,7 @@ Scan</string>
      <rect>
       <x>130</x>
       <y>300</y>
-      <width>71</width>
+      <width>81</width>
       <height>20</height>
      </rect>
     </property>
@@ -1269,7 +1102,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1279,7 +1112,7 @@ Scan</string>
    <widget class="QLabel" name="label_17">
     <property name="geometry">
      <rect>
-      <x>490</x>
+      <x>500</x>
       <y>140</y>
       <width>45</width>
       <height>41</height>
@@ -1299,7 +1132,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1312,7 +1145,7 @@ Scan</string>
      <rect>
       <x>130</x>
       <y>545</y>
-      <width>71</width>
+      <width>81</width>
       <height>20</height>
      </rect>
     </property>
@@ -1324,7 +1157,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1334,7 +1167,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_2_tweak">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>229</y>
       <width>61</width>
       <height>20</height>
@@ -1348,7 +1181,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1361,7 +1194,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_tweak9R">
     <property name="geometry">
      <rect>
-      <x>320</x>
+      <x>330</x>
       <y>469</y>
       <width>31</width>
       <height>28</height>
@@ -1369,7 +1202,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1379,7 +1212,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_tweak4R">
     <property name="geometry">
      <rect>
-      <x>320</x>
+      <x>330</x>
       <y>294</y>
       <width>31</width>
       <height>28</height>
@@ -1387,7 +1220,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1397,7 +1230,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_tweak10R">
     <property name="geometry">
      <rect>
-      <x>320</x>
+      <x>330</x>
       <y>504</y>
       <width>31</width>
       <height>28</height>
@@ -1405,7 +1238,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1415,7 +1248,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_lup_2_L">
     <property name="geometry">
      <rect>
-      <x>360</x>
+      <x>370</x>
       <y>228</y>
       <width>51</width>
       <height>20</height>
@@ -1429,7 +1262,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1441,7 +1274,7 @@ Scan</string>
      <rect>
       <x>130</x>
       <y>510</y>
-      <width>71</width>
+      <width>81</width>
       <height>20</height>
      </rect>
     </property>
@@ -1453,7 +1286,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1465,7 +1298,7 @@ Scan</string>
      <rect>
       <x>130</x>
       <y>195</y>
-      <width>71</width>
+      <width>81</width>
       <height>20</height>
      </rect>
     </property>
@@ -1477,7 +1310,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1487,7 +1320,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_5_tweak">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>334</y>
       <width>61</width>
       <height>20</height>
@@ -1501,7 +1334,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1514,7 +1347,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_tweak2R">
     <property name="geometry">
      <rect>
-      <x>320</x>
+      <x>330</x>
       <y>224</y>
       <width>31</width>
       <height>28</height>
@@ -1522,7 +1355,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1534,7 +1367,7 @@ Scan</string>
      <rect>
       <x>130</x>
       <y>475</y>
-      <width>71</width>
+      <width>81</width>
       <height>20</height>
      </rect>
     </property>
@@ -1546,7 +1379,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1556,7 +1389,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_SAXSscan_3">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>620</x>
       <y>259</y>
       <width>51</width>
       <height>28</height>
@@ -1564,7 +1397,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -1577,7 +1410,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_lup_1_R">
     <property name="geometry">
      <rect>
-      <x>420</x>
+      <x>430</x>
       <y>193</y>
       <width>51</width>
       <height>20</height>
@@ -1591,7 +1424,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1601,7 +1434,7 @@ Scan</string>
    <widget class="QLabel" name="lb_7">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>60</x>
       <y>405</y>
       <width>71</width>
       <height>21</height>
@@ -1609,7 +1442,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1619,9 +1452,9 @@ Scan</string>
    <widget class="QLineEdit" name="ed_7">
     <property name="geometry">
      <rect>
-      <x>130</x>
+      <x>120</x>
       <y>405</y>
-      <width>71</width>
+      <width>91</width>
       <height>20</height>
      </rect>
     </property>
@@ -1633,7 +1466,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1643,7 +1476,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_9_tweak">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>474</y>
       <width>61</width>
       <height>20</height>
@@ -1657,7 +1490,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1670,7 +1503,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_lup_2_N">
     <property name="geometry">
      <rect>
-      <x>480</x>
+      <x>490</x>
       <y>228</y>
       <width>61</width>
       <height>20</height>
@@ -1684,7 +1517,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1694,7 +1527,7 @@ Scan</string>
    <widget class="QLabel" name="lb_5">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>60</x>
       <y>335</y>
       <width>71</width>
       <height>21</height>
@@ -1702,7 +1535,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1712,7 +1545,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_tweak8L">
     <property name="geometry">
      <rect>
-      <x>210</x>
+      <x>220</x>
       <y>435</y>
       <width>31</width>
       <height>28</height>
@@ -1720,7 +1553,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1730,7 +1563,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_lup_8">
     <property name="geometry">
      <rect>
-      <x>550</x>
+      <x>560</x>
       <y>434</y>
       <width>51</width>
       <height>28</height>
@@ -1738,7 +1571,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -1751,7 +1584,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_SAXSscan_1">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>620</x>
       <y>189</y>
       <width>51</width>
       <height>28</height>
@@ -1759,7 +1592,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -1772,7 +1605,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_lup_3_L">
     <property name="geometry">
      <rect>
-      <x>360</x>
+      <x>370</x>
       <y>263</y>
       <width>51</width>
       <height>20</height>
@@ -1786,7 +1619,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1798,7 +1631,7 @@ Scan</string>
      <rect>
       <x>130</x>
       <y>335</y>
-      <width>71</width>
+      <width>81</width>
       <height>20</height>
      </rect>
     </property>
@@ -1810,7 +1643,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1820,7 +1653,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_tweak9L">
     <property name="geometry">
      <rect>
-      <x>210</x>
+      <x>220</x>
       <y>470</y>
       <width>31</width>
       <height>28</height>
@@ -1828,7 +1661,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1846,7 +1679,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1857,7 +1690,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_SAXSscan_9">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>620</x>
       <y>469</y>
       <width>51</width>
       <height>28</height>
@@ -1865,7 +1698,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -1878,7 +1711,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_4_tweak">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>299</y>
       <width>61</width>
       <height>20</height>
@@ -1892,7 +1725,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1913,7 +1746,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1923,7 +1756,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_11_tweak">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>544</y>
       <width>61</width>
       <height>20</height>
@@ -1937,7 +1770,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -1950,7 +1783,7 @@ Scan</string>
    <widget class="QLabel" name="lb_9">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>60</x>
       <y>475</y>
       <width>71</width>
       <height>21</height>
@@ -1958,7 +1791,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -1968,7 +1801,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_lup_9_R">
     <property name="geometry">
      <rect>
-      <x>420</x>
+      <x>430</x>
       <y>473</y>
       <width>51</width>
       <height>20</height>
@@ -1982,14 +1815,14 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
    </widget>
    <widget class="QLineEdit" name="ed_6_tweak">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>369</y>
       <width>61</width>
       <height>20</height>
@@ -2003,7 +1836,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -2016,7 +1849,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_lup_9_L">
     <property name="geometry">
      <rect>
-      <x>360</x>
+      <x>370</x>
       <y>473</y>
       <width>51</width>
       <height>20</height>
@@ -2030,14 +1863,14 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
    </widget>
    <widget class="QLabel" name="label_15">
     <property name="geometry">
      <rect>
-      <x>350</x>
+      <x>360</x>
       <y>140</y>
       <width>61</width>
       <height>41</height>
@@ -2051,7 +1884,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2076,7 +1909,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2087,7 +1920,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_SAXSscan_8">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>620</x>
       <y>434</y>
       <width>51</width>
       <height>28</height>
@@ -2095,7 +1928,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -2108,7 +1941,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_lup_1_L">
     <property name="geometry">
      <rect>
-      <x>360</x>
+      <x>370</x>
       <y>193</y>
       <width>51</width>
       <height>20</height>
@@ -2122,7 +1955,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2134,7 +1967,7 @@ Scan</string>
      <rect>
       <x>130</x>
       <y>265</y>
-      <width>71</width>
+      <width>81</width>
       <height>20</height>
      </rect>
     </property>
@@ -2146,7 +1979,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -2156,7 +1989,7 @@ Scan</string>
    <widget class="QPushButton" name="pb_SAXSscan_2">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>620</x>
       <y>224</y>
       <width>51</width>
       <height>28</height>
@@ -2164,7 +1997,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -2177,7 +2010,7 @@ Scan</string>
    <widget class="QLineEdit" name="ed_lup_3_R">
     <property name="geometry">
      <rect>
-      <x>420</x>
+      <x>430</x>
       <y>263</y>
       <width>51</width>
       <height>20</height>
@@ -2191,7 +2024,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2201,7 +2034,7 @@ Scan</string>
    <widget class="QLabel" name="lb_3">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>60</x>
       <y>265</y>
       <width>71</width>
       <height>21</height>
@@ -2209,7 +2042,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2219,7 +2052,7 @@ Scan</string>
    <widget class="QLabel" name="lb_6">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>60</x>
       <y>370</y>
       <width>71</width>
       <height>21</height>
@@ -2227,7 +2060,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2237,7 +2070,7 @@ Scan</string>
    <widget class="QLabel" name="label_3">
     <property name="geometry">
      <rect>
-      <x>551</x>
+      <x>561</x>
       <y>140</y>
       <width>61</width>
       <height>41</height>
@@ -2245,7 +2078,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2264,7 +2097,7 @@ Scan</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2275,7 +2108,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak3R">
     <property name="geometry">
      <rect>
-      <x>320</x>
+      <x>330</x>
       <y>259</y>
       <width>31</width>
       <height>28</height>
@@ -2283,7 +2116,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2293,7 +2126,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak1L">
     <property name="geometry">
      <rect>
-      <x>210</x>
+      <x>220</x>
       <y>190</y>
       <width>31</width>
       <height>28</height>
@@ -2301,7 +2134,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2311,7 +2144,7 @@ Position</string>
    <widget class="QPushButton" name="pb_SAXSscan_7">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>620</x>
       <y>399</y>
       <width>51</width>
       <height>28</height>
@@ -2319,7 +2152,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -2346,7 +2179,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2356,7 +2189,7 @@ Position</string>
    <widget class="QLineEdit" name="ed_lup_7_L">
     <property name="geometry">
      <rect>
-      <x>360</x>
+      <x>370</x>
       <y>403</y>
       <width>51</width>
       <height>20</height>
@@ -2370,14 +2203,14 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
    </widget>
    <widget class="QLabel" name="lb_2">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>60</x>
       <y>230</y>
       <width>71</width>
       <height>21</height>
@@ -2385,7 +2218,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2395,7 +2228,7 @@ Position</string>
    <widget class="QLineEdit" name="ed_lup_8_N">
     <property name="geometry">
      <rect>
-      <x>480</x>
+      <x>490</x>
       <y>438</y>
       <width>61</width>
       <height>20</height>
@@ -2409,14 +2242,14 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
    </widget>
    <widget class="QPushButton" name="pb_lup_1">
     <property name="geometry">
      <rect>
-      <x>550</x>
+      <x>560</x>
       <y>189</y>
       <width>51</width>
       <height>28</height>
@@ -2424,7 +2257,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -2437,7 +2270,7 @@ Position</string>
    <widget class="QLineEdit" name="ed_3_tweak">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>264</y>
       <width>61</width>
       <height>20</height>
@@ -2451,7 +2284,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -2464,7 +2297,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak7R">
     <property name="geometry">
      <rect>
-      <x>320</x>
+      <x>330</x>
       <y>399</y>
       <width>31</width>
       <height>28</height>
@@ -2472,7 +2305,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2482,7 +2315,7 @@ Position</string>
    <widget class="QLineEdit" name="ed_lup_7_N">
     <property name="geometry">
      <rect>
-      <x>480</x>
+      <x>490</x>
       <y>403</y>
       <width>61</width>
       <height>20</height>
@@ -2496,14 +2329,14 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
    </widget>
    <widget class="QPushButton" name="pb_tweak6R">
     <property name="geometry">
      <rect>
-      <x>320</x>
+      <x>330</x>
       <y>364</y>
       <width>31</width>
       <height>28</height>
@@ -2511,7 +2344,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2529,7 +2362,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2539,7 +2372,7 @@ Position</string>
    <widget class="QPushButton" name="pb_lup_3">
     <property name="geometry">
      <rect>
-      <x>550</x>
+      <x>560</x>
       <y>259</y>
       <width>51</width>
       <height>28</height>
@@ -2547,7 +2380,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -2560,7 +2393,7 @@ Position</string>
    <widget class="QLabel" name="lb_8">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>60</x>
       <y>440</y>
       <width>71</width>
       <height>21</height>
@@ -2568,7 +2401,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2578,7 +2411,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak7L">
     <property name="geometry">
      <rect>
-      <x>210</x>
+      <x>220</x>
       <y>400</y>
       <width>31</width>
       <height>28</height>
@@ -2586,7 +2419,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2596,7 +2429,7 @@ Position</string>
    <widget class="QLabel" name="lb_4">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>60</x>
       <y>300</y>
       <width>71</width>
       <height>21</height>
@@ -2604,7 +2437,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2614,7 +2447,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak3L">
     <property name="geometry">
      <rect>
-      <x>210</x>
+      <x>220</x>
       <y>260</y>
       <width>31</width>
       <height>28</height>
@@ -2622,7 +2455,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2640,7 +2473,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2650,7 +2483,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak8R">
     <property name="geometry">
      <rect>
-      <x>320</x>
+      <x>330</x>
       <y>434</y>
       <width>31</width>
       <height>28</height>
@@ -2658,7 +2491,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2668,7 +2501,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak1R">
     <property name="geometry">
      <rect>
-      <x>320</x>
+      <x>330</x>
       <y>189</y>
       <width>31</width>
       <height>28</height>
@@ -2676,7 +2509,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2694,7 +2527,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2704,7 +2537,7 @@ Position</string>
    <widget class="QLineEdit" name="ed_lup_9_N">
     <property name="geometry">
      <rect>
-      <x>480</x>
+      <x>490</x>
       <y>473</y>
       <width>61</width>
       <height>20</height>
@@ -2718,14 +2551,14 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
    </widget>
    <widget class="QPushButton" name="pb_tweak10L">
     <property name="geometry">
      <rect>
-      <x>210</x>
+      <x>220</x>
       <y>505</y>
       <width>31</width>
       <height>28</height>
@@ -2733,7 +2566,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2745,7 +2578,7 @@ Position</string>
      <rect>
       <x>130</x>
       <y>230</y>
-      <width>71</width>
+      <width>81</width>
       <height>20</height>
      </rect>
     </property>
@@ -2757,7 +2590,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -2781,7 +2614,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2791,7 +2624,7 @@ Position</string>
    <widget class="QLabel" name="label_16">
     <property name="geometry">
      <rect>
-      <x>420</x>
+      <x>430</x>
       <y>140</y>
       <width>61</width>
       <height>41</height>
@@ -2805,7 +2638,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2824,7 +2657,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2834,7 +2667,7 @@ Position</string>
    <widget class="QLineEdit" name="ed_lup_1_N">
     <property name="geometry">
      <rect>
-      <x>480</x>
+      <x>490</x>
       <y>193</y>
       <width>61</width>
       <height>20</height>
@@ -2854,7 +2687,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2872,7 +2705,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2890,7 +2723,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2900,7 +2733,7 @@ Position</string>
    <widget class="QLabel" name="lb_1">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>60</x>
       <y>195</y>
       <width>71</width>
       <height>21</height>
@@ -2908,7 +2741,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2918,7 +2751,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak5L">
     <property name="geometry">
      <rect>
-      <x>210</x>
+      <x>220</x>
       <y>330</y>
       <width>31</width>
       <height>28</height>
@@ -2926,7 +2759,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -2938,7 +2771,7 @@ Position</string>
      <rect>
       <x>130</x>
       <y>440</y>
-      <width>71</width>
+      <width>81</width>
       <height>20</height>
      </rect>
     </property>
@@ -2950,7 +2783,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -2960,7 +2793,7 @@ Position</string>
    <widget class="QPushButton" name="pb_lup_7">
     <property name="geometry">
      <rect>
-      <x>550</x>
+      <x>560</x>
       <y>399</y>
       <width>51</width>
       <height>28</height>
@@ -2968,7 +2801,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -2981,7 +2814,7 @@ Position</string>
    <widget class="QLabel" name="label_11">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>140</y>
       <width>91</width>
       <height>41</height>
@@ -2989,7 +2822,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3000,7 +2833,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak11R">
     <property name="geometry">
      <rect>
-      <x>320</x>
+      <x>330</x>
       <y>539</y>
       <width>31</width>
       <height>28</height>
@@ -3008,7 +2841,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3018,7 +2851,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak4L">
     <property name="geometry">
      <rect>
-      <x>210</x>
+      <x>220</x>
       <y>295</y>
       <width>31</width>
       <height>28</height>
@@ -3026,7 +2859,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3044,7 +2877,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3054,7 +2887,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak6L">
     <property name="geometry">
      <rect>
-      <x>210</x>
+      <x>220</x>
       <y>365</y>
       <width>31</width>
       <height>28</height>
@@ -3062,7 +2895,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3072,7 +2905,7 @@ Position</string>
    <widget class="QLineEdit" name="ed_lup_7_R">
     <property name="geometry">
      <rect>
-      <x>420</x>
+      <x>430</x>
       <y>403</y>
       <width>51</width>
       <height>20</height>
@@ -3086,14 +2919,14 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
    </widget>
    <widget class="QLineEdit" name="ed_lup_3_N">
     <property name="geometry">
      <rect>
-      <x>480</x>
+      <x>490</x>
       <y>263</y>
       <width>61</width>
       <height>20</height>
@@ -3107,7 +2940,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3117,7 +2950,7 @@ Position</string>
    <widget class="QPushButton" name="pb_tweak11L">
     <property name="geometry">
      <rect>
-      <x>210</x>
+      <x>220</x>
       <y>540</y>
       <width>31</width>
       <height>28</height>
@@ -3125,7 +2958,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3135,7 +2968,7 @@ Position</string>
    <widget class="QLineEdit" name="ed_1_tweak">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>194</y>
       <width>61</width>
       <height>20</height>
@@ -3149,7 +2982,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -3164,7 +2997,7 @@ Position</string>
      <rect>
       <x>130</x>
       <y>370</y>
-      <width>71</width>
+      <width>81</width>
       <height>20</height>
      </rect>
     </property>
@@ -3176,7 +3009,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -3186,7 +3019,7 @@ Position</string>
    <widget class="QLineEdit" name="ed_lup_8_R">
     <property name="geometry">
      <rect>
-      <x>420</x>
+      <x>430</x>
       <y>438</y>
       <width>51</width>
       <height>20</height>
@@ -3200,14 +3033,14 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
    </widget>
    <widget class="QLineEdit" name="ed_10_tweak">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>509</y>
       <width>61</width>
       <height>20</height>
@@ -3221,7 +3054,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="toolTip">
@@ -3234,7 +3067,7 @@ Position</string>
    <widget class="QPushButton" name="pb_lup_9">
     <property name="geometry">
      <rect>
-      <x>550</x>
+      <x>560</x>
       <y>469</y>
       <width>51</width>
       <height>28</height>
@@ -3242,7 +3075,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -3255,7 +3088,7 @@ Position</string>
    <widget class="QLabel" name="lb_10">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>60</x>
       <y>510</y>
       <width>71</width>
       <height>21</height>
@@ -3263,7 +3096,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3287,7 +3120,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>12</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3297,7 +3130,7 @@ Position</string>
    <widget class="QLCDNumber" name="lcd_X">
     <property name="geometry">
      <rect>
-      <x>668</x>
+      <x>688</x>
       <y>110</y>
       <width>71</width>
       <height>31</height>
@@ -3311,7 +3144,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>12</pointsize>
+      <pointsize>11</pointsize>
       <weight>75</weight>
       <bold>true</bold>
      </font>
@@ -3332,9 +3165,9 @@ Position</string>
    <widget class="QPushButton" name="btn_reset_qds_x">
     <property name="geometry">
      <rect>
-      <x>670</x>
+      <x>690</x>
       <y>80</y>
-      <width>51</width>
+      <width>61</width>
       <height>28</height>
      </rect>
     </property>
@@ -3346,7 +3179,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3356,9 +3189,9 @@ Position</string>
    <widget class="QPushButton" name="btn_record_z1">
     <property name="geometry">
      <rect>
-      <x>670</x>
-      <y>330</y>
-      <width>51</width>
+      <x>690</x>
+      <y>350</y>
+      <width>61</width>
       <height>28</height>
      </rect>
     </property>
@@ -3370,7 +3203,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3380,8 +3213,8 @@ Position</string>
    <widget class="QLabel" name="lbl_qds_z1">
     <property name="geometry">
      <rect>
-      <x>670</x>
-      <y>300</y>
+      <x>690</x>
+      <y>320</y>
       <width>41</width>
       <height>21</height>
      </rect>
@@ -3394,7 +3227,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3404,9 +3237,9 @@ Position</string>
    <widget class="QPushButton" name="btn_record_x1">
     <property name="geometry">
      <rect>
-      <x>670</x>
+      <x>690</x>
       <y>180</y>
-      <width>51</width>
+      <width>61</width>
       <height>28</height>
      </rect>
     </property>
@@ -3418,7 +3251,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3428,7 +3261,7 @@ Position</string>
    <widget class="QLabel" name="lbl_qds_x1">
     <property name="geometry">
      <rect>
-      <x>670</x>
+      <x>690</x>
       <y>150</y>
       <width>41</width>
       <height>21</height>
@@ -3442,7 +3275,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3452,8 +3285,8 @@ Position</string>
    <widget class="QLCDNumber" name="lcd_Z">
     <property name="geometry">
      <rect>
-      <x>668</x>
-      <y>265</y>
+      <x>688</x>
+      <y>285</y>
       <width>71</width>
       <height>31</height>
      </rect>
@@ -3466,7 +3299,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>15</pointsize>
+      <pointsize>11</pointsize>
       <weight>75</weight>
       <bold>true</bold>
      </font>
@@ -3487,9 +3320,9 @@ Position</string>
    <widget class="QPushButton" name="btn_reset_qds_z">
     <property name="geometry">
      <rect>
-      <x>670</x>
-      <y>230</y>
-      <width>51</width>
+      <x>690</x>
+      <y>250</y>
+      <width>61</width>
       <height>28</height>
      </rect>
     </property>
@@ -3501,7 +3334,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3512,7 +3345,7 @@ Position</string>
     <property name="geometry">
      <rect>
       <x>710</x>
-      <y>310</y>
+      <y>330</y>
       <width>31</width>
       <height>19</height>
      </rect>
@@ -3525,7 +3358,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>12</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3535,8 +3368,8 @@ Position</string>
    <widget class="QLabel" name="label_5">
     <property name="geometry">
      <rect>
-      <x>710</x>
-      <y>540</y>
+      <x>730</x>
+      <y>550</y>
       <width>31</width>
       <height>19</height>
      </rect>
@@ -3549,7 +3382,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>12</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3559,9 +3392,9 @@ Position</string>
    <widget class="QPushButton" name="btn_reset_qds_z2">
     <property name="geometry">
      <rect>
-      <x>670</x>
-      <y>460</y>
-      <width>51</width>
+      <x>690</x>
+      <y>470</y>
+      <width>61</width>
       <height>28</height>
      </rect>
     </property>
@@ -3573,7 +3406,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3583,8 +3416,8 @@ Position</string>
    <widget class="QLCDNumber" name="lcd_Z_2">
     <property name="geometry">
      <rect>
-      <x>668</x>
-      <y>495</y>
+      <x>688</x>
+      <y>505</y>
       <width>71</width>
       <height>31</height>
      </rect>
@@ -3597,7 +3430,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>15</pointsize>
+      <pointsize>11</pointsize>
       <weight>75</weight>
       <bold>true</bold>
      </font>
@@ -3618,9 +3451,9 @@ Position</string>
    <widget class="QPushButton" name="btn_record_z1_2">
     <property name="geometry">
      <rect>
-      <x>670</x>
-      <y>560</y>
-      <width>51</width>
+      <x>690</x>
+      <y>570</y>
+      <width>61</width>
       <height>28</height>
      </rect>
     </property>
@@ -3632,7 +3465,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3642,8 +3475,8 @@ Position</string>
    <widget class="QLabel" name="lbl_qds_z1_2">
     <property name="geometry">
      <rect>
-      <x>670</x>
-      <y>530</y>
+      <x>690</x>
+      <y>540</y>
       <width>41</width>
       <height>21</height>
      </rect>
@@ -3656,7 +3489,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3666,15 +3499,15 @@ Position</string>
    <widget class="QCheckBox" name="chk_keep_prev_scan">
     <property name="geometry">
      <rect>
-      <x>370</x>
-      <y>80</y>
-      <width>161</width>
+      <x>190</x>
+      <y>90</y>
+      <width>191</width>
       <height>16</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3687,15 +3520,15 @@ Position</string>
    <widget class="QCheckBox" name="chk_reverse_scan_dir">
     <property name="geometry">
      <rect>
-      <x>200</x>
-      <y>80</y>
-      <width>151</width>
+      <x>190</x>
+      <y>70</y>
+      <width>191</width>
       <height>16</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3708,7 +3541,7 @@ Position</string>
    <widget class="QLabel" name="label_19">
     <property name="geometry">
      <rect>
-      <x>350</x>
+      <x>360</x>
       <y>113</y>
       <width>151</width>
       <height>21</height>
@@ -3716,7 +3549,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
       <weight>75</weight>
       <bold>true</bold>
      </font>
@@ -3736,7 +3569,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
       <weight>75</weight>
       <bold>true</bold>
      </font>
@@ -3748,7 +3581,7 @@ Position</string>
    <widget class="QPushButton" name="pushButton_workingfolder_browse">
     <property name="geometry">
      <rect>
-      <x>760</x>
+      <x>780</x>
       <y>10</y>
       <width>61</width>
       <height>28</height>
@@ -3756,7 +3589,7 @@ Position</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3766,7 +3599,7 @@ Position</string>
    <widget class="QPushButton" name="pushButton_stopScan">
     <property name="geometry">
      <rect>
-      <x>360</x>
+      <x>370</x>
       <y>510</y>
       <width>161</width>
       <height>51</height>
@@ -3815,7 +3648,7 @@ color: rgb(255, 255, 255);</string>
    <widget class="QPushButton" name="pushButton_exit">
     <property name="geometry">
      <rect>
-      <x>1050</x>
+      <x>1080</x>
       <y>20</y>
       <width>61</width>
       <height>61</height>
@@ -3837,7 +3670,7 @@ color: rgb(255, 255, 255);</string>
    <widget class="QLabel" name="label_scanCheck">
     <property name="geometry">
      <rect>
-      <x>540</x>
+      <x>550</x>
       <y>80</y>
       <width>121</width>
       <height>51</height>
@@ -3845,7 +3678,7 @@ color: rgb(255, 255, 255);</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>12</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="frameShape">
@@ -3862,7 +3695,7 @@ folder is free</string>
    <widget class="QPushButton" name="pushButton_scanNm1">
     <property name="geometry">
      <rect>
-      <x>500</x>
+      <x>510</x>
       <y>42</y>
       <width>31</width>
       <height>28</height>
@@ -3870,7 +3703,7 @@ folder is free</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3880,7 +3713,7 @@ folder is free</string>
    <widget class="QPushButton" name="pushButton_scanNp1">
     <property name="geometry">
      <rect>
-      <x>540</x>
+      <x>550</x>
       <y>42</y>
       <width>31</width>
       <height>28</height>
@@ -3888,7 +3721,7 @@ folder is free</string>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3898,14 +3731,20 @@ folder is free</string>
    <widget class="QPushButton" name="pushButton_plotScanPositions">
     <property name="geometry">
      <rect>
-      <x>580</x>
-      <y>600</y>
-      <width>151</width>
-      <height>28</height>
+      <x>650</x>
+      <y>620</y>
+      <width>111</width>
+      <height>51</height>
      </rect>
     </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
+    </property>
     <property name="text">
-     <string>Plot 2d scan positions</string>
+     <string>Plot 2d scan
+positions</string>
     </property>
    </widget>
    <widget class="QPushButton" name="pushButton_saveCurrent">
@@ -3916,6 +3755,11 @@ folder is free</string>
       <width>171</width>
       <height>28</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
     </property>
     <property name="text">
      <string>Save current positions</string>
@@ -3930,6 +3774,11 @@ folder is free</string>
       <height>28</height>
      </rect>
     </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
+    </property>
     <property name="text">
      <string>Go to saved positions</string>
     </property>
@@ -3943,6 +3792,11 @@ folder is free</string>
       <height>28</height>
      </rect>
     </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
+    </property>
     <property name="text">
      <string>Check Saved</string>
     </property>
@@ -3953,15 +3807,15 @@ folder is free</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>580</x>
-      <y>630</y>
-      <width>151</width>
+      <x>650</x>
+      <y>680</y>
+      <width>111</width>
       <height>51</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -3969,35 +3823,19 @@ folder is free</string>
 optics gui</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="pushButton_openSampleAngleGui">
-    <property name="enabled">
-     <bool>false</bool>
-    </property>
-    <property name="geometry">
-     <rect>
-      <x>580</x>
-      <y>680</y>
-      <width>151</width>
-      <height>28</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>10</pointsize>
-     </font>
-    </property>
-    <property name="text">
-     <string>Open sample angle gui</string>
-    </property>
-   </widget>
    <widget class="QPushButton" name="pushButton_resetError">
     <property name="geometry">
      <rect>
       <x>130</x>
       <y>620</y>
-      <width>71</width>
+      <width>91</width>
       <height>28</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
     </property>
     <property name="text">
      <string>Reset error</string>
@@ -4006,11 +3844,16 @@ optics gui</string>
    <widget class="QFrame" name="frame_4">
     <property name="geometry">
      <rect>
-      <x>900</x>
+      <x>920</x>
       <y>10</y>
-      <width>141</width>
+      <width>151</width>
       <height>81</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
     </property>
     <property name="styleSheet">
      <string notr="true">background-color: #fffde7;  /* very pale yellow */</string>
@@ -4035,7 +3878,7 @@ optics gui</string>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="styleSheet">
@@ -4057,6 +3900,11 @@ optics gui</string>
        <height>28</height>
       </rect>
      </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
      <property name="styleSheet">
       <string notr="true">background-color: rgb(180, 255, 255);</string>
      </property>
@@ -4071,14 +3919,14 @@ optics gui</string>
      <property name="geometry">
       <rect>
        <x>60</x>
-       <y>10</y>
-       <width>71</width>
-       <height>61</height>
+       <y>30</y>
+       <width>81</width>
+       <height>41</height>
       </rect>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="styleSheet">
@@ -4089,19 +3937,40 @@ optics gui</string>
 SAXS</string>
      </property>
     </widget>
+    <widget class="QLabel" name="label_27">
+     <property name="geometry">
+      <rect>
+       <x>56</x>
+       <y>5</y>
+       <width>91</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Check SAXS</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
    </widget>
    <widget class="QPushButton" name="pushButton_checkFlyBlur">
     <property name="geometry">
      <rect>
       <x>770</x>
       <y>70</y>
-      <width>111</width>
+      <width>141</width>
       <height>28</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
     <property name="text">
@@ -4111,11 +3980,16 @@ SAXS</string>
    <widget class="QFrame" name="frame_5">
     <property name="geometry">
      <rect>
-      <x>665</x>
-      <y>360</y>
-      <width>71</width>
-      <height>91</height>
+      <x>550</x>
+      <y>600</y>
+      <width>91</width>
+      <height>131</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
     </property>
     <property name="styleSheet">
      <string notr="true">background-color: #fffde7;  /* very pale yellow */</string>
@@ -4131,13 +4005,13 @@ SAXS</string>
       <rect>
        <x>10</x>
        <y>40</y>
-       <width>51</width>
+       <width>71</width>
        <height>41</height>
       </rect>
      </property>
      <property name="font">
       <font>
-       <pointsize>10</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="styleSheet">
@@ -4156,13 +4030,13 @@ series</string>
       <rect>
        <x>10</x>
        <y>10</y>
-       <width>51</width>
+       <width>71</width>
        <height>21</height>
       </rect>
      </property>
      <property name="font">
       <font>
-       <pointsize>8</pointsize>
+       <pointsize>11</pointsize>
       </font>
      </property>
      <property name="styleSheet">
@@ -4172,26 +4046,50 @@ series</string>
       <string>takeshot</string>
      </property>
     </widget>
+    <widget class="QPushButton" name="pb_helix_scan">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>90</y>
+       <width>71</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>helix fly</string>
+     </property>
+    </widget>
    </widget>
-   <widget class="QPushButton" name="pb_helix_scan">
+   <widget class="QProgressBar" name="pbar_scan">
     <property name="geometry">
      <rect>
-      <x>580</x>
+      <x>210</x>
       <y>710</y>
-      <width>71</width>
-      <height>28</height>
+      <width>301</width>
+      <height>20</height>
      </rect>
+    </property>
+    <property name="maximumSize">
+     <size>
+      <width>1050</width>
+      <height>16777215</height>
+     </size>
     </property>
     <property name="font">
      <font>
-      <pointsize>10</pointsize>
+      <pointsize>11</pointsize>
      </font>
     </property>
-    <property name="styleSheet">
-     <string notr="true">background-color: rgb(255, 180, 255);</string>
-    </property>
-    <property name="text">
-     <string>helix fly</string>
+    <property name="value">
+     <number>24</number>
     </property>
    </widget>
   </widget>
@@ -4200,8 +4098,8 @@ series</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1127</width>
-     <height>26</height>
+     <width>1167</width>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -4769,7 +4667,6 @@ series</string>
   <tabstop>pushButton_scanNp1</tabstop>
   <tabstop>pushButton_openOpticsGui</tabstop>
   <tabstop>pushButton_exit</tabstop>
-  <tabstop>pushButton_openSampleAngleGui</tabstop>
   <tabstop>ed_lup_1_t</tabstop>
   <tabstop>chk_reverse_scan_dir</tabstop>
   <tabstop>chk_keep_prev_scan</tabstop>
@@ -4855,16 +4752,11 @@ series</string>
   <tabstop>pushButton_goToSaved</tabstop>
   <tabstop>pushButton_checkSaved</tabstop>
   <tabstop>pb_hp_up</tabstop>
-  <tabstop>pb_hp_left</tabstop>
   <tabstop>ed_hp_tweak</tabstop>
-  <tabstop>pb_hp_right</tabstop>
   <tabstop>pb_hp_down</tabstop>
-  <tabstop>pb_trans_up</tabstop>
   <tabstop>checkBox_transFlip</tabstop>
   <tabstop>pb_trans_left</tabstop>
-  <tabstop>ed_trans_tweak</tabstop>
   <tabstop>pb_trans_right</tabstop>
-  <tabstop>pb_trans_down</tabstop>
   <tabstop>pb_lup_step3d</tabstop>
   <tabstop>pb_SAXSscan_fly3d</tabstop>
   <tabstop>pushButton_plotScanPositions</tabstop>

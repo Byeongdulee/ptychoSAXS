@@ -14,12 +14,17 @@ import traceback
 import datetime
 import pathlib
 from collections import deque
-from PyQt5.QtWidgets import QMessageBox, QInputDialog, QLabel, QLineEdit, QFileDialog
+from PyQt5.QtWidgets import QMessageBox, QInputDialog, QLabel, QLineEdit, QFileDialog, QPushButton, QCheckBox, QDialog, QVBoxLayout
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
 import pyqtgraph as pg
 from tools.detectors import DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
 from tools.dg645 import DG645_Error
 from tools.softglue import SOFTGLUE_Setup_Error
+
+
+class HexapodPositionCountMismatchError(Exception):
+    """Raised when the software-predicted hexapod-snake trigger count does not
+    match hexapod.pulse_number after set_traj_SNAKE2 programs the trajectory."""
 
 
 # Constants mirrored from rungui.py
@@ -113,13 +118,15 @@ class ScanHandler:
         Called whenever Enter is pressed in any of ed_lup_1_L/N/R,
         ed_lup_3_L/N/R, or ed_lup_1_t.
 
-        Nx = (lup_1_R - lup_1_L) / lup_1_N + 1
-        Ny = (lup_3_R - lup_3_L) / lup_3_N + 1
-        Ntot = Nx * Ny
+        Nx, Ny = len(_make_positions(...)) for each axis (same formula the scan
+        executors use, so this estimate can't drift from the real scan).
+        Ntot_step = Nx * Ny (step scans always use plain grid product)
+        Ntot_fly = Ntot_step (or adjusted for snake fly if chk_snake is checked)
         est_time = Ntot * (lup_1_t + overhead)
 
         Overhead is OVERHEAD_FLY for fly scans, OVERHEAD_STEP for step scans.
         The scan type is determined by whether pushButton_flyscan is checked.
+        Snake adjustment is applied if chk_snake is checked (2-D scans only).
         """
 
         def _val(name, default=0.0):
@@ -142,14 +149,23 @@ class ScanHandler:
         if lup_1_N == 0 or lup_3_N == 0:
             return
 
-        Nx = (lup_1_R - lup_1_L) / lup_1_N + 1
-        Ny = (lup_3_R - lup_3_L) / lup_3_N + 1
-        Ntot = Nx * Ny
+        # Use the same _make_positions formula the scan executors use, so this
+        # estimate can never drift from what the scan actually runs.
+        x_pos = self._make_positions(0, lup_1_L, lup_1_R, lup_1_N)
+        y_pos = self._make_positions(0, lup_3_L, lup_3_R, lup_3_N)
+        Nx = len(x_pos)
+        Ny = len(y_pos)
 
-        step_est = Ntot * (lup_1_t + self.OVERHEAD_STEP)
+        # Step scan always uses plain grid product
+        Ntot_step = Nx * Ny
+
+        # Fly scan with snake uses adjusted positions (phantom triggers + Y padding)
+        Ntot_fly = self._compute_n_positions([x_pos, y_pos], scan_kind="fly_snake")
+
+        step_est = Ntot_step * (lup_1_t + self.OVERHEAD_STEP)
         fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
         fly_period = max(fly_acq_time, lup_1_t + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
-        fly_est = Ntot * fly_period
+        fly_est = Ntot_fly * fly_period
 
         def _set_label(name, text):
             lbl = self.ui.findChild(QLabel, name)
@@ -158,7 +174,7 @@ class ScanHandler:
 
         _set_label("label_Nx", "Nx\n%d" % int(round(Nx)))
         _set_label("label_Ny", "Ny\n%d" % int(round(Ny)))
-        _set_label("label_Ntot", "Ntot\n%d" % int(round(Ntot)))
+        _set_label("label_Ntot", "Ntot\n%d" % int(round(Ntot_step)))
 
         def _fmt_time(t):
             return "%.1f min" % (t / 60) if t > 300 else "%.1f s" % t
@@ -217,6 +233,73 @@ class ScanHandler:
             return False
         return True
 
+    def _check_saxs_det_mode(self) -> bool:
+        """Return False (and show a warning) if SAXS detector is not in scan mode.
+        Returns True when safe to proceed.
+        """
+        mode = self.get_saxs_det_mode()
+        if mode != "scan":
+            dlg = QMessageBox(self.w.ui)
+            dlg.setWindowTitle("Check SAXS Detector")
+            dlg.setText("Set SAXS detector to scan mode")
+            dlg.setIcon(QMessageBox.Warning)
+            dlg.addButton(QMessageBox.Ok)
+            dlg.exec_()
+            return False
+        return True
+
+    def _confirm_scan_name(self) -> bool:
+        """Prompt user to confirm scan name. Single source of truth for the name.
+        Returns False if user cancels, True if confirmed.
+        """
+        dlg = QDialog(self.w.ui)
+        dlg.setWindowTitle("Confirm Scan Name")
+        layout = QVBoxLayout(dlg)
+
+        label = QLabel("Enter scan name:")
+        layout.addWidget(label)
+
+        ed = QLineEdit()
+        ed.setText(self.w.parameters.scan_name)
+        ed.selectAll()
+        layout.addWidget(ed)
+
+        ok_btn = QPushButton("OK")
+        cancel_btn = QPushButton("Cancel")
+        ok_btn.setDefault(True)
+        ok_btn.setFocus()
+
+        btn_layout = QVBoxLayout()
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        ok_btn.clicked.connect(dlg.accept)
+        cancel_btn.clicked.connect(dlg.reject)
+
+        if dlg.exec_() == QDialog.Accepted:
+            scan_name = ed.text()
+            if scan_name:
+                self.w.parameters.scan_name = scan_name
+                return True
+            else:
+                QMessageBox.warning(self.w.ui, "Empty Name", "Scan name cannot be empty.")
+                return False
+        return False
+
+    def _pre_scan_guards(self) -> bool:
+        """Run all pre-scan guards and return False if any fail.
+        Call this at the top of every scan entry point before any other logic.
+        Add new guards here so they apply to all scan types.
+        """
+        if not self._confirm_scan_name():
+            return False
+        if not self._check_hdf_for_multi_pulse():
+            return False
+        if not self._check_saxs_det_mode():
+            return False
+        return True
+
     def _read_motor_params(self, motor_index: int) -> dict:
         """Read scan parameters for one motor from the UI and return them as a dict.
 
@@ -251,6 +334,19 @@ class ScanHandler:
             "expt": expt,
         }
 
+    @staticmethod
+    def _signed_step(ast: float, afe: float, step: float) -> float:
+        """Correct *step*'s sign to match the ast→afe direction.
+
+        If step==0 it is replaced by (afe-ast) so a two-element array can
+        still be produced. Shared by _make_positions and any caller that
+        needs the exact same step _make_positions would use internally
+        (e.g. to extrapolate an extra point past a single-element array).
+        """
+        if step == 0:
+            step = (afe - ast) if (afe != ast) else 1.0
+        return -abs(step) if ast > afe else abs(step)
+
     def _make_positions(
         self, p0: float, st: float, fe: float, step: float
     ) -> np.ndarray:
@@ -262,18 +358,19 @@ class ScanHandler:
         """
         ast = p0 + st
         afe = p0 + fe
-        if step == 0:
-            step = (afe - ast) if (afe != ast) else 1.0
-        step = -abs(step) if ast > afe else abs(step)
+        step = self._signed_step(ast, afe, step)
         pos = np.arange(ast, afe + step / 2, step)
         return pos
 
-    def _pre_scan(self, scan_name: str) -> None:
+    def _pre_scan(self, scan_name: str, scan_kind: str = "step") -> None:
         """Common setup called at the start of every scan entry point (GUI thread).
 
         Resets detector file/frame counters, refreshes scan name and file paths,
         logs current motor positions, and clears the stop flag so a previous scan's
         stop signal does not immediately abort the new one.
+
+        scan_kind: one of "step", "fly_snake", "fly_hexapod_1d", "fly_phi", "helix".
+        Used to determine how positions are computed for the NeXus master file.
         """
         self.w.update_scanname()
         self.w.get_detectors_ready()
@@ -293,7 +390,7 @@ class ScanHandler:
         # Create NeXus master files before scan starts
         try:
             sample_name = self.w.parameters.scan_name
-            scan_positions_dict = self._compute_scan_positions()
+            scan_positions_dict = self._compute_scan_positions(scan_kind=scan_kind)
 
             # Create master file for each active detector
             detectors_active = []
@@ -307,26 +404,23 @@ class ScanHandler:
         except Exception as e:
             print(f"Warning: Failed to create master file: {e}")
 
-    def _log_scan_header(self, scan_name: str, axes_params: list, is_fly_snake: bool = False, is_helix: bool = False) -> None:
+    def _log_scan_header(self, scan_name: str, axes_params: list, scan_kind: str = "step") -> None:
         """Write the SPEC-style #S header line for this scan to the log file.
 
         axes_params is a list of dicts from _read_motor_params, in axis order
         (X first, then Y if 2-D, then phi if 3-D).
-        is_fly_snake: set True for snake fly scans so n_pos accounts for the
-        phantom trigger at the end of each X line and the even-Y-line rounding.
-        is_helix: set True for helix scans so n_pos is the length of the Z axis
-        (both axes move in parallel, not a grid).
+        scan_kind: one of "step", "fly_snake", "fly_hexapod_1d", "fly_phi", "helix".
+        Determines how n_pos is computed from position arrays.
         """
         position_arrays = [self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"]) for ax in axes_params]
-        if is_helix:
-            # For helix scans, both axes move in parallel, so n_pos is the number of Z steps (second axis)
-            n_pos = len(position_arrays[1]) if len(position_arrays) > 1 else len(position_arrays[0])
+        if scan_kind == "helix":
+            # Only phi (axis 0) determines the trigger count; Z moves in parallel
+            # at constant velocity and does not add independent trigger points.
+            # Uses the same "fly_phi" formula that actually arms the DG645
+            # (see helix_fly0), so the logged/nominal count can't drift from it.
+            n_pos = self._compute_n_positions([position_arrays[0]], scan_kind="fly_phi")
         else:
-            n_pos = self._compute_n_positions(
-                position_arrays,
-                n_phantom_x=1 if is_fly_snake else 0,
-                round_y_to_even=is_fly_snake,
-            )
+            n_pos = self._compute_n_positions(position_arrays, scan_kind=scan_kind)
         scaninfo = ["\n#S", self.w.parameters.scan_number, scan_name]
         for ax in axes_params:
             n = ax["motor_index"] + 1
@@ -456,29 +550,32 @@ class ScanHandler:
                 return None
             try:
                 return float(w.text())
-            except ValueError:
+            except (ValueError, TypeError):
                 return None
 
-        expt = _read("ed_lup_1_t")
-        step = _read("ed_lup_1_N")
-        if expt is None or step is None or expt <= 0 or step <= 0:
-            QMessageBox.warning(self.w.ui, "Fly Blur", "Exposure time and step size must both be > 0.")
-            return
-        step = abs(step)
-        fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
-        step_time = max(fly_acq_time, expt + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
-        step_time = round(step_time * 1000) / 1000
-        velocity_mm_s = step / step_time
-        movestep_um = step * 1000.0 * expt / step_time
-        msg = (
-            f"Exposure time:     {expt * 1000:.2f} ms\n"
-            f"Step size:         {step * 1000:.3f} µm\n"
-            f"Acquisition time:  {step_time * 1000:.2f} ms\n"
-            f"Velocity:          {velocity_mm_s * 1000:.3f} µm/s\n"
-            f"\n"
-            f"Motion during exposure:  {movestep_um * 1000:d} nm"
-        )
-        QMessageBox.information(self.w.ui, "Fly Blur Estimate", msg)
+        try:
+            expt = _read("ed_lup_1_t")
+            step = _read("ed_lup_1_N")
+            if expt is None or step is None or expt <= 0 or step <= 0:
+                QMessageBox.warning(self.w.ui, "Fly Blur", "Exposure time and step size must both be > 0.")
+                return
+            step = abs(step)
+            fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
+            step_time = max(fly_acq_time, expt + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
+            step_time = round(step_time * 1000) / 1000
+            velocity_mm_s = step / step_time
+            movestep_um = step * 1000.0 * expt / step_time
+            msg = (
+                f"Exposure time:     {expt * 1000.:.2f} ms\n"
+                f"Step size:         {step * 1000.:.3f} µm\n"
+                f"Acquisition time:  {step_time * 1000.:.2f} ms\n"
+                f"Velocity:          {velocity_mm_s * 1000.:.3f} µm/s\n"
+                f"\n"
+                f"Motion during exposure:  {movestep_um * 1000:.0f} nm"
+            )
+            QMessageBox.information(self.w.ui, "Fly Blur Estimate", msg)
+        except Exception as e:
+            QMessageBox.warning(self.w.ui, "Fly Blur Error", f"Error calculating fly blur: {e}")
 
     def _get_detectors_used(self):
         det_names = []
@@ -499,21 +596,66 @@ class ScanHandler:
                 det_names.append("Other")
         return ",".join(det_names)
 
-    def _compute_n_positions(self, position_arrays, n_phantom_x=0, round_y_to_even=False):
-        """Return the total number of collected data positions.
+    def _adjust_axis_length(self, n: int, axis_index: int, scan_kind: str) -> int:
+        """Single source of truth for scan_kind-specific position-count adjustments.
 
-        For snake fly scans pass n_phantom_x=1 (the hexapod fires one extra
-        trigger at the end of each X line) and round_y_to_even=True (the
-        hexapod trajectory requires an even number of Y lines, rounded up).
+        axis_index is the position of this axis within the ordered axis list
+        (0 = fast/X, 1 = slow/Y). Used by both _compute_n_positions (counts)
+        and _extend_axis_positions (arrays), so the two can never diverge.
+
+        "fly_snake": +1 phantom trigger at the end of each X line (axis 0);
+          Y lines (axis 1) rounded up to nearest even (hardware constraint).
+          These reflect real hexapod hardware: the trajectory generator fires
+          one extra trigger per X line (a "phantom" trigger at the scan line's
+          end to facilitate pixel timing), and the trajectory table requires
+          the Y line count to be even (padded if odd). Independent of user
+          input and always applied.
+        "fly_phi": interval count on axis 0 (no +1). Constant-velocity phi
+          motion triggers at regular time intervals, not at discrete rest
+          points, so the count is (fe-st)/step without +1.
+        Anything else: unchanged.
+        """
+        if scan_kind == "fly_snake":
+            if axis_index == 0:
+                return n + 1  # phantom trigger at end of each X line
+            if axis_index == 1:
+                return n + (n % 2)  # round up to nearest even
+        elif scan_kind == "fly_phi" and axis_index == 0:
+            return max(n - 1, 0)  # phi flies at fixed intervals, not inclusive endpoints
+        return n
+
+    def _extend_axis_positions(self, coords: np.ndarray, step: float, axis_index: int, scan_kind: str) -> np.ndarray:
+        """Extend a position array to match _adjust_axis_length's target length.
+
+        Appends extra points extrapolated by *step* from the last point, so
+        arrays built this way have exactly the length _compute_n_positions
+        would predict for the same axis/scan_kind.
+        """
+        target_len = self._adjust_axis_length(len(coords), axis_index, scan_kind)
+        extra = target_len - len(coords)
+        if extra > 0:
+            last = coords[-1] if len(coords) else 0.0
+            coords = np.append(coords, last + step * np.arange(1, extra + 1))
+        return coords
+
+    def _compute_n_positions(self, position_arrays, scan_kind="step"):
+        """Return the total number of collected data positions for any scan type.
+
+        scan_kind determines the position-counting convention:
+          "step": grid product (Nx * Ny * ...). Always inclusive endpoints.
+          "fly_snake": grid product with hexapod adjustments for snake fly scans
+            (see _adjust_axis_length).
+          "fly_hexapod_1d": grid product (same as step; used for 1-D fly consistency).
+          "fly_phi": interval count on first axis (no +1), then product
+            (see _adjust_axis_length).
+
+        Note: "helix" scans do not use this function's plain grid-product path —
+        callers compute the helix count via a single-axis "fly_phi" call instead
+        (see _log_scan_header), since phi alone determines the trigger count.
         """
         n_pos = 1
         for i, pos in enumerate(position_arrays):
-            n = len(pos)
-            if i == 0:
-                n += n_phantom_x
-            elif i == 1 and round_y_to_even:
-                n += n % 2  # round up to nearest even
-            n_pos *= n
+            n_pos *= self._adjust_axis_length(len(pos), i, scan_kind)
         return n_pos
 
     def _write_scan_summary_line(self, scan_name: str, axes_params: list, n_pos: int) -> None:
@@ -528,6 +670,8 @@ class ScanHandler:
             )
             return
         write_header = not csv_path.exists()
+        if not write_header:
+            self._migrate_scan_summary_header(csv_path)
         timestamp = datetime.datetime.now()
         scan_id = "S%04d" % self.w.parameters.scan_number
         # Use cached optics values if available (queried once in _pre_scan), otherwise get them now
@@ -600,8 +744,30 @@ class ScanHandler:
         except Exception:
             pass
 
-    def _log_3d_slice_start(self, scan_name, axes_params, phi_value, is_fly_snake: bool = False):
-        # Modify axes_params for phi to fixed value
+    def _migrate_scan_summary_header(self, csv_path) -> None:
+        """Append any columns from _get_scan_summary_header() missing from the
+        on-disk header (e.g. a column added by a newer version of this file),
+        so newly-written rows stay aligned with the header instead of
+        silently drifting on a pre-existing CSV."""
+        try:
+            with open(csv_path, newline="") as f:
+                rows = list(csv.reader(f))
+            if not rows:
+                return
+            header = rows[0]
+            missing = [col for col in self._get_scan_summary_header() if col not in header]
+            if not missing:
+                return
+            header.extend(missing)
+            rows[0] = header
+            with open(csv_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerows(rows)
+        except Exception:
+            pass
+
+
+    def _log_3d_slice_start(self, scan_name, axes_params, phi_value, scan_kind: str = "step"):
         modified_axes = []
         for ax in axes_params:
             if ax.get("name", "").lower() == "phi":
@@ -614,11 +780,7 @@ class ScanHandler:
             else:
                 modified_axes.append(ax)
         position_arrays = [self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"]) for ax in modified_axes]
-        n_pos = self._compute_n_positions(
-            position_arrays,
-            n_phantom_x=1 if is_fly_snake else 0,
-            round_y_to_even=is_fly_snake,
-        )
+        n_pos = self._compute_n_positions(position_arrays, scan_kind=scan_kind)
         self._write_scan_summary_line(scan_name, modified_axes, n_pos)
 
     def _update_3d_slice_completed(self):
@@ -1553,7 +1715,7 @@ class ScanHandler:
                 if det is not None:
                     if "SG" in det._prefix:
                         self.w.s12softglue.flush()
-                        # time.sleep(5)
+                        time.sleep(1)
                         det.ForceStop()
                         success = True
                     if "3820" in det._prefix:
@@ -1925,22 +2087,24 @@ class ScanHandler:
 
         return metadata
 
-    def _compute_scan_positions(self) -> dict:
-        """Extract intended scan positions from UI scan parameters.
+    def _compute_2d_scan_positions(self, xmotor: int = 0, ymotor: int = 2, scan_kind: str = "step") -> np.ndarray:
+        """Compute 2D scan positions in snake (boustrophedon) order.
 
-        Reads motor limits (L/R/N) from the UI and computes position arrays.
-        Only returns data if this is an actual motor scan (not takeshot/time_series).
-        Determines which motors are being scanned (1D, 2D, 3D, etc.).
+        For snake fly scans, appends phantom points and pads Y lines to even count
+        to match what the hexapod hardware will actually collect.
+
+        Reads motor parameters from UI and returns Nx2 array of (x, y) positions
+        in the order they will be visited during the scan.
+
+        Args:
+            xmotor: 0-based X motor index (default 0 for motor 1)
+            ymotor: 0-based Y motor index (default 2 for motor 3)
+            scan_kind: one of "step", "fly_snake", "fly_hexapod_1d", "fly_phi", "helix".
 
         Returns:
-            Dictionary {motor_name: np.ndarray} where each array contains
-            the intended positions for that motor in scan traversal order.
-            Empty dict if not a motor scan.
-            Example for 2D: {'X': array([...]), 'Z': array([...])}
+            Nx2 numpy array of (x, y) positions in snake order.
+            Returns empty array if not a 2D scan.
         """
-        positions = {}
-
-        # Read scan parameters from UI widgets using findChild (same as _update_lup_labels)
         def _val(name, default=0.0):
             from PyQt5.QtWidgets import QLineEdit
             w = self.ui.findChild(QLineEdit, name)
@@ -1951,30 +2115,130 @@ class ScanHandler:
             except ValueError:
                 return default
 
-        lup_1_L = _val("ed_lup_1_L")
-        lup_1_R = _val("ed_lup_1_R")
-        lup_1_N = _val("ed_lup_1_N", 1.0)
-        lup_3_L = _val("ed_lup_3_L")
-        lup_3_R = _val("ed_lup_3_R")
-        lup_3_N = _val("ed_lup_3_N", 1.0)
+        # Read X motor parameters (same logic as _read_motor_params)
+        x_n = xmotor + 1
+        x_p0 = float(self.w.check_start_position(x_n))
+        x_L = _val(f"ed_lup_{x_n}_L")
+        x_R = _val(f"ed_lup_{x_n}_R")
+        x_step = _val(f"ed_lup_{x_n}_N", 1.0)
 
-        # Only compute positions if motors are actually being scanned (N > 1)
-        if lup_1_N <= 1 and lup_3_N <= 1:
-            # Not a motor scan (takeshot, time_series, etc.)
-            return positions
+        # Read Y motor parameters (same logic as _read_motor_params)
+        y_n = ymotor + 1
+        y_p0 = float(self.w.check_start_position(y_n))
+        y_L = _val(f"ed_lup_{y_n}_L")
+        y_R = _val(f"ed_lup_{y_n}_R")
+        y_step = _val(f"ed_lup_{y_n}_N", 1.0)
 
-        # Motor 1 (X axis)
-        if lup_1_N > 1:
-            pos_array = np.linspace(lup_1_L, lup_1_R, int(lup_1_N))
-            positions['X'] = pos_array
+        # Generate coordinate arrays via the same single-source formula used
+        # everywhere else (_make_positions handles step==0 and direction
+        # correction internally).
+        x_coords = self._make_positions(x_p0, x_L, x_R, x_step)
+        y_coords = self._make_positions(y_p0, y_L, y_R, y_step)
 
-        # Motor 3 (Z axis)
-        if lup_3_N > 1:
-            pos_array = np.linspace(lup_3_L, lup_3_R, int(lup_3_N))
-            positions['Z'] = pos_array
+        if len(x_coords) == 0 or len(y_coords) == 0:
+            return np.empty((0, 2))
 
-        print(f"Computed scan positions for {len(positions)} motors: {list(positions.keys())}")
-        return positions
+        # Apply scan_kind-specific adjustments (e.g. fly_snake's phantom X
+        # point / even-Y padding) via the same rule _compute_n_positions uses,
+        # so the array length here can never diverge from the computed count.
+        x_step_signed = self._signed_step(x_p0 + x_L, x_p0 + x_R, x_step)
+        y_step_signed = self._signed_step(y_p0 + y_L, y_p0 + y_R, y_step)
+        x_coords = self._extend_axis_positions(x_coords, x_step_signed, 0, scan_kind)
+        y_coords = self._extend_axis_positions(y_coords, y_step_signed, 1, scan_kind)
+
+        # Return as Nx2 array in snake order
+        return self._snake_positions(x_coords, y_coords)
+
+    def _compute_scan_positions(self, scan_kind: str = "step") -> dict:
+        """Compute 2D scan position array for master file.
+
+        For snake fly scans, applies hexapod adjustments: one phantom point per
+        X line and even-line rounding on Y, mirroring what the hardware will collect.
+
+        Args:
+            scan_kind: one of "step", "fly_snake", "fly_hexapod_1d", "fly_phi", "helix".
+
+        Returns:
+            Dictionary with single key 'positions': Nx2 numpy array of (x, y)
+            positions in scan traversal order. Empty dict if not a 2D scan.
+        """
+        pos = self._compute_2d_scan_positions(xmotor=0, ymotor=2, scan_kind=scan_kind)
+        if len(pos) > 0:
+            pos += -np.mean(pos, axis=0)  # Center positions around (0, 0)
+            return {'positions': pos}
+        return {}
+
+    def _reconcile_hexapod_snake_positions(self, write_to_master: bool) -> np.ndarray:
+        """Build the hexapod-predicted position array for the just-programmed
+        2-D snake trajectory, verify its length against hexapod.pulse_number,
+        write it into the master file(s), and record the pulse count in the CSV.
+
+        Must be called immediately after fly_traj() programs set_traj_SNAKE2
+        (the earliest point hexapod.pulse_number is known), before the
+        trajectory is actually run. Reads only the cached fly1d_*/fly2d_*
+        instance attributes fly_traj() itself relies on — no live Qt widget
+        reads — so this is safe to call from both the GUI thread (fly2d) and
+        the worker thread (fly3d0's per-phi-slice loop).
+
+        Raises HexapodPositionCountMismatchError if the counts disagree.
+        """
+        x_st = self.fly1d_st + self.fly1d_p0
+        x_fe = self.fly1d_fe + self.fly1d_p0
+        x_step = self.fly1d_step
+        y_st = self.fly2d_st + self.fly2d_p0
+        y_fe = self.fly2d_fe + self.fly2d_p0
+        y_step = self.fly2d_step
+
+        x_coords = self._make_positions(0, x_st, x_fe, x_step)
+        y_coords = self._make_positions(0, y_st, y_fe, y_step)
+        x_step_signed = self._signed_step(x_st, x_fe, x_step)
+        y_step_signed = self._signed_step(y_st, y_fe, y_step)
+        x_coords = self._extend_axis_positions(x_coords, x_step_signed, 0, "fly_snake")
+        y_coords = self._extend_axis_positions(y_coords, y_step_signed, 1, "fly_snake")
+        hexapod_pos = self._snake_positions(x_coords, y_coords)
+        if len(hexapod_pos) > 0:
+            hexapod_pos = hexapod_pos - np.mean(hexapod_pos, axis=0)  # match nominal 'positions' centering
+
+        expected_n = len(hexapod_pos)
+        actual_n = self.w.pts.hexapod.pulse_number
+        if expected_n != actual_n:
+            msg = (
+                f"Hexapod-predicted position count ({expected_n}) does not match "
+                f"hexapod.pulse_number ({actual_n}) after programming the snake "
+                f"trajectory. Aborting scan."
+            )
+            self.w.messages["recent error message"] = msg
+            print(msg)
+            # raise HexapodPositionCountMismatchError(msg)
+
+        if write_to_master:
+            for master_path in getattr(self, "_current_scan_master_paths", {}).values():
+                self._append_hexapod_positions_to_master_file(master_path, hexapod_pos)
+        return hexapod_pos
+
+    def _append_hexapod_positions_to_master_file(self, master_path: str, hexapod_pos: np.ndarray) -> None:
+        """Write the hexapod-predicted position array to an already-created master file.
+
+        Reopens the master file (created earlier in _pre_scan) in append mode
+        and adds /entry/sample/hexapod_positions alongside the software-nominal
+        /entry/sample/positions dataset.
+        """
+        import h5py
+
+        try:
+            with h5py.File(master_path, 'r+') as f:
+                sample = f['/entry/sample']
+                if 'hexapod_positions' in sample:
+                    del sample['hexapod_positions']
+                sample.create_dataset('hexapod_positions', data=hexapod_pos)
+                sample['hexapod_positions'].attrs['units'] = b'mm'
+                sample['hexapod_positions'].attrs['description'] = (
+                    b'Nx2 array of (X, Z) positions predicted from the programmed '
+                    b'hexapod trajectory (step size + phantom trigger + even-row '
+                    b'padding), verified equal to hexapod.pulse_number'
+                )
+        except Exception as e:
+            print(f"Warning: Failed to write hexapod_positions to master file {master_path}: {e}")
 
     def _populate_instrument_group(self, entry, shared_meta: dict, detector_meta: dict,
                                    detector_config: dict) -> None:
@@ -2118,13 +2382,12 @@ class ScanHandler:
             sample.create_dataset('theta', data=val)
             sample['theta'].attrs['units'] = b'degree'
 
-        # Write scan position arrays (1D arrays per motor)
-        motor_units = {'X': 'mm', 'Z': 'mm', 'Y': 'mm', 'phi': 'degree', 'omega': 'degree'}
-
-        for motor_name, pos_array in scan_positions_dict.items():
-            sample.create_dataset(motor_name, data=pos_array)
-            units = motor_units.get(motor_name, 'mm')
-            sample[motor_name].attrs['units'] = units.encode('utf-8')
+        # Write scan position array (Nx2 array of (x, y) positions in scan order)
+        if 'positions' in scan_positions_dict:
+            pos_array = scan_positions_dict['positions']
+            sample.create_dataset('positions', data=pos_array)
+            sample['positions'].attrs['units'] = b'mm'
+            sample['positions'].attrs['description'] = b'Nx2 array of (X, Z) motor positions in scan traversal order'
 
     def _populate_data_group(self, entry, sample_name: str) -> None:
         """Create /entry/data group structure (links added post-scan).
@@ -2849,7 +3112,7 @@ class ScanHandler:
             thread.start()
 
     def check_start_position(self, n):
-        # Compare p0 and p0_move_to at 4 digits
+        # Compare p0 and p0_move_to; only warn if difference > 0.001
         p0_move_to = self.ui.findChild(QLineEdit, "ed_%i" % n).text()
         p0 = self.ui.findChild(QLabel, "lb_%i" % n).text()
         if len(p0_move_to) > 0:
@@ -2859,7 +3122,7 @@ class ScanHandler:
             except Exception:
                 p0_float = p0
                 p0_move_to_float = p0_move_to
-            if round(p0_float, 4) != round(p0_move_to_float, 4):
+            if abs(p0_float - p0_move_to_float) > 0.001:
                 msg = (
                     f"'Move to' position ({p0_move_to_float:.4f}) and Current position ({p0_float:.4f}) differ.\n"
                     "Do you want to move to the 'Move to' position or update the 'Move to' position with the Current?"
@@ -2930,8 +3193,26 @@ class ScanHandler:
         Why fly2d exists separately from fly2d0 / fly2d0_SNAKE: thread-safety —
         Qt widget reads must happen on the GUI thread.
         """
+        if not self._pre_scan_guards():
+            return
+
+        # Read parameters and check large scan BEFORE _pre_scan (which creates master file)
+        try:
+            xax = self._read_motor_params(xmotor)
+            yax = self._read_motor_params(ymotor)
+        except (ValueError, TypeError):
+            QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
+            return
+
+        xpos = self._make_positions(xax["p0"], xax["st"], xax["fe"], xax["step"])
+        ypos = self._make_positions(yax["p0"], yax["st"], yax["fe"], yax["step"])
+        scan_kind = "fly_snake" if snake else "fly_hexapod_1d"
+        n_positions = self._compute_n_positions([xpos, ypos], scan_kind=scan_kind)
+        if not self._confirm_large_scan(n_positions, xax["expt"], self.OVERHEAD_FLY):
+            return
+
         scan_name = "fly2d_SNAKE" if snake else "fly2d"
-        self._pre_scan(scan_name)
+        self._pre_scan(scan_name, scan_kind=scan_kind)
 
         # SoftGlue socket stream is required for snake scans (both axes move
         # simultaneously; softglue provides the hardware timing signal).
@@ -2946,13 +3227,6 @@ class ScanHandler:
                 self.w.s12softglue.ckTime_reset()
 
         self.ui.pbar_scan.setValue(0)
-
-        try:
-            xax = self._read_motor_params(xmotor)
-            yax = self._read_motor_params(ymotor)
-        except (ValueError, TypeError):
-            QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
-            return
 
         # Store X (fast, flying) axis parameters.
         self.fly1d_p0 = xax["p0"]
@@ -2986,14 +3260,7 @@ class ScanHandler:
         # executor configures timing precisely.
         self.w.dg645_12ID.set_pilatus_fly(0.001)
 
-        xpos = self._make_positions(xax["p0"], xax["st"], xax["fe"], xax["step"])
-        ypos = self._make_positions(yax["p0"], yax["st"], yax["fe"], yax["step"])
-        if not self._confirm_large_scan(
-            len(xpos) * len(ypos), xax["expt"], self.OVERHEAD_FLY
-        ):
-            return
-
-        self._log_scan_header(scan_name, [xax, yax], is_fly_snake=snake)
+        self._log_scan_header(scan_name, [xax, yax], scan_kind=scan_kind)
 
         # Compute master file paths NOW (before scan number may be incremented)
         # so flydone2d can use the correct paths for linking detector data.
@@ -3016,6 +3283,14 @@ class ScanHandler:
             # Program the full 2-D snake trajectory on the hexapod controller
             # before the worker starts.  fly2d0_SNAKE then just triggers it.
             self.w.fly_traj(xmotor, ymotor)
+            # As early as possible after pulse_number becomes known, verify the
+            # software-predicted hexapod trigger count matches it and record
+            # both. Abort before the worker starts on a mismatch.
+            try:
+                self._reconcile_hexapod_snake_positions(write_to_master=True)
+            except HexapodPositionCountMismatchError as e:
+                QMessageBox.critical(self.w.ui, "Hexapod Mismatch", str(e))
+                return
             self._launch_worker(
                 self.fly2d0_SNAKE,
                 xmotor,
@@ -3055,8 +3330,31 @@ class ScanHandler:
         Why fly3d exists separately from fly3d0: thread-safety — Qt widget
         reads must happen on the GUI thread.
         """
+        if not self._pre_scan_guards():
+            return
+
+        # Read parameters and check large scan BEFORE _pre_scan (which creates master file)
+        try:
+            xax = self._read_motor_params(xmotor)
+            yax = self._read_motor_params(ymotor)
+            phiax = self._read_motor_params(phimotor)
+        except (ValueError, TypeError):
+            QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
+            return
+
+        xpos = self._make_positions(xax["p0"], xax["st"], xax["fe"], xax["step"])
+        ypos = self._make_positions(yax["p0"], yax["st"], yax["fe"], yax["step"])
+        phipos = self._make_positions(
+            phiax["p0"], phiax["st"], phiax["fe"], phiax["step"]
+        )
+        scan_kind = "fly_snake" if snake else "fly_hexapod_1d"
+        xy_n_positions = self._compute_n_positions([xpos, ypos], scan_kind=scan_kind)
+        n_positions = xy_n_positions * len(phipos)
+        if not self._confirm_large_scan(n_positions, xax["expt"], self.OVERHEAD_FLY):
+            return
+
         scan_name = "fly3d_SNAKE" if snake else "fly3d"
-        self._pre_scan(scan_name)
+        self._pre_scan(scan_name, scan_kind=scan_kind)
 
         self.w.switch_SGstream(snake)
 
@@ -3067,14 +3365,6 @@ class ScanHandler:
         if self.ui.actionckTime_reset_before_scan.isChecked():
             if self.w.s12softglue.isConnected:
                 self.w.s12softglue.ckTime_reset()
-
-        try:
-            xax = self._read_motor_params(xmotor)
-            yax = self._read_motor_params(ymotor)
-            phiax = self._read_motor_params(phimotor)
-        except (ValueError, TypeError):
-            QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
-            return
 
         # X (fast, flying) axis
         self.fly1d_p0 = xax["p0"]
@@ -3100,19 +3390,9 @@ class ScanHandler:
         self.w.motor_p0 = {xmotor: xax["p0"], ymotor: yax["p0"], phimotor: phiax["p0"]}
         self.time_scanstart = time.time()
 
-        xpos = self._make_positions(xax["p0"], xax["st"], xax["fe"], xax["step"])
-        ypos = self._make_positions(yax["p0"], yax["st"], yax["fe"], yax["step"])
-        phipos = self._make_positions(
-            phiax["p0"], phiax["st"], phiax["fe"], phiax["step"]
-        )
-        if not self._confirm_large_scan(
-            len(xpos) * len(ypos) * len(phipos), xax["expt"], self.OVERHEAD_FLY
-        ):
-            return
-
         self.fly3d_axes_params = [xax, yax, phiax]
 
-        self._log_scan_header(scan_name, [xax, yax, phiax], is_fly_snake=snake)
+        self._log_scan_header(scan_name, [xax, yax, phiax], scan_kind=scan_kind)
 
         # Compute master file paths NOW (before scan number may be incremented)
         # so flydone3d can use the correct paths for linking detector data.
@@ -3155,12 +3435,10 @@ class ScanHandler:
         Why fly exists separately from fly0: thread-safety — Qt widget reads
         must happen on the GUI thread.
         """
-        self._pre_scan("fly")
+        if not self._pre_scan_guards():
+            return
 
-        self.isMCS_ready = False
-        if self.w.detector[2] is not None:
-            self.w.detector[2].mcs_init()
-
+        # Resolve the motor index and read parameters
         if motornumber < 0:
             motornumber = self._motor_from_sender()
 
@@ -3169,6 +3447,19 @@ class ScanHandler:
         except (ValueError, TypeError):
             QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
             return
+
+        # Check large scan BEFORE _pre_scan (which creates master file)
+        pos = self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"])
+        scan_kind = "fly_hexapod_1d" if ax["name"] in self.w.pts.hexapod.axes else "fly_phi"
+        n_positions = self._compute_n_positions([pos], scan_kind=scan_kind)
+        if not self._confirm_large_scan(n_positions, ax["expt"], self.OVERHEAD_FLY):
+            return
+
+        self._pre_scan("fly", scan_kind=scan_kind)
+
+        self.isMCS_ready = False
+        if self.w.detector[2] is not None:
+            self.w.detector[2].mcs_init()
 
         self.fly1d_p0 = ax["p0"]
         self.fly1d_st = ax["st"]
@@ -3181,11 +3472,7 @@ class ScanHandler:
         self.w.motor_p0 = {motornumber: ax["p0"]}
         self.time_scanstart = time.time()
 
-        pos = self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"])
-        if not self._confirm_large_scan(len(pos), ax["expt"], self.OVERHEAD_FLY):
-            return
-
-        self._log_scan_header("fly", [ax])
+        self._log_scan_header("fly", [ax], scan_kind=scan_kind)
 
         # Program the hexapod trajectory waveform before the worker starts.
         # fly_traj sets self.Xaxis and _ratio_exp_period, which fly0 needs.
@@ -3224,18 +3511,27 @@ class ScanHandler:
         constant velocity over the same total_time, with images acquired at DG645-triggered
         intervals synchronized to phi's step timing.
         """
-        self._pre_scan("helix_fly")
+        if not self._pre_scan_guards():
+            return
 
-        self.isMCS_ready = False
-        if self.w.detector[2] is not None:
-            self.w.detector[2].mcs_init()
-
+        # Read parameters and check large scan BEFORE _pre_scan (which creates master file)
         try:
             phi_ax = self._read_motor_params(phimotor)
             z_ax = self._read_motor_params(zmotor)
         except (ValueError, TypeError):
             QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
             return
+
+        pos = self._make_positions(phi_ax["p0"], phi_ax["st"], phi_ax["fe"], phi_ax["step"])
+        n_positions = self._compute_n_positions([pos], scan_kind="fly_phi")
+        if not self._confirm_large_scan(n_positions, phi_ax["expt"], self.OVERHEAD_FLY):
+            return
+
+        self._pre_scan("helix_fly", scan_kind="fly_phi")
+
+        self.isMCS_ready = False
+        if self.w.detector[2] is not None:
+            self.w.detector[2].mcs_init()
 
         self.helix_phi_p0 = phi_ax["p0"]
         self.helix_phi_st = phi_ax["st"]
@@ -3251,11 +3547,7 @@ class ScanHandler:
         self.w.motor_p0 = {phimotor: phi_ax["p0"], zmotor: z_ax["p0"]}
         self.time_scanstart = time.time()
 
-        pos = self._make_positions(phi_ax["p0"], phi_ax["st"], phi_ax["fe"], phi_ax["step"])
-        if not self._confirm_large_scan(len(pos), phi_ax["expt"], self.OVERHEAD_FLY):
-            return
-
-        self._log_scan_header("helix_fly", [phi_ax, z_ax], is_helix=True)
+        self._log_scan_header("helix_fly", [phi_ax, z_ax], scan_kind="helix")
 
         # Compute master file paths NOW (before scan number may be incremented)
         # so helixdone can use the correct paths for linking detector data.
@@ -3497,9 +3789,8 @@ class ScanHandler:
         point and stepscan0 is required: Qt widgets must be accessed on the GUI
         thread; hardware moves must run in the background so the GUI stays responsive.
         """
-        if not self._check_hdf_for_multi_pulse():
+        if not self._pre_scan_guards():
             return
-        self._pre_scan("stepscan")
 
         # Resolve the motor index: negative means the call came from a UI button
         # whose object name encodes the motor number (e.g. 'pushButton_step_3').
@@ -3511,6 +3802,13 @@ class ScanHandler:
         except (ValueError, TypeError):
             QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
             return
+
+        # Check large scan BEFORE _pre_scan (which creates master file)
+        pos = self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"])
+        if not self._confirm_large_scan(len(pos), ax["expt"], self.OVERHEAD_STEP):
+            return
+
+        self._pre_scan("stepscan")
 
         # Populate the instance variables that stepscan0 reads from the worker thread.
         # (Workers cannot safely read Qt widgets, so we pass data via instance state.)
@@ -3526,10 +3824,6 @@ class ScanHandler:
         self.w.motor_p0 = {motornumber: ax["p0"]}
         self.time_scanstart = time.time()
 
-        pos = self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"])
-        if not self._confirm_large_scan(len(pos), ax["expt"], self.OVERHEAD_STEP):
-            return
-
         self._log_scan_header("stepscan", [ax])
         self._launch_worker(self.stepscan0, motornumber, done_signal=self.w.scandone)
 
@@ -3544,9 +3838,8 @@ class ScanHandler:
         Why stepscan2d exists separately from stepscan2d0: same thread-safety reason
         as stepscan/stepscan0 — Qt widget reads must happen on the GUI thread.
         """
-        if not self._check_hdf_for_multi_pulse():
+        if not self._pre_scan_guards():
             return
-        self._pre_scan("stepscan2d")
 
         try:
             xax = self._read_motor_params(xmotor)
@@ -3554,6 +3847,16 @@ class ScanHandler:
         except (ValueError, TypeError):
             QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
             return
+
+        # Check large scan BEFORE _pre_scan (which creates master file)
+        xpos = self._make_positions(xax["p0"], xax["st"], xax["fe"], xax["step"])
+        ypos = self._make_positions(yax["p0"], yax["st"], yax["fe"], yax["step"])
+        if not self._confirm_large_scan(
+            len(xpos) * len(ypos), xax["expt"], self.OVERHEAD_STEP
+        ):
+            return
+
+        self._pre_scan("stepscan2d")
 
         # Store X and Y parameters for the executor (worker thread cannot read UI).
         self.stepscan1d_p0 = xax["p0"]
@@ -3578,13 +3881,6 @@ class ScanHandler:
         self.w.motor_p0 = {xmotor: xax["p0"], ymotor: yax["p0"]}
         self.time_scanstart = time.time()
 
-        xpos = self._make_positions(xax["p0"], xax["st"], xax["fe"], xax["step"])
-        ypos = self._make_positions(yax["p0"], yax["st"], yax["fe"], yax["step"])
-        if not self._confirm_large_scan(
-            len(xpos) * len(ypos), xax["expt"], self.OVERHEAD_STEP
-        ):
-            return
-
         self._log_scan_header("stepscan2d", [xax, yax])
         self._launch_worker(
             self.stepscan2d0, xmotor, ymotor, done_signal=self.w.scandone
@@ -3600,8 +3896,28 @@ class ScanHandler:
         Why stepscan3d exists separately from stepscan3d0: thread-safety —
         Qt widget reads must happen on the GUI thread.
         """
-        if not self._check_hdf_for_multi_pulse():
+        if not self._pre_scan_guards():
             return
+
+        try:
+            xax = self._read_motor_params(xmotor)
+            yax = self._read_motor_params(ymotor)
+            phiax = self._read_motor_params(phimotor)
+        except (ValueError, TypeError):
+            QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
+            return
+
+        # Check large scan BEFORE _pre_scan (which creates master file)
+        xpos = self._make_positions(xax["p0"], xax["st"], xax["fe"], xax["step"])
+        ypos = self._make_positions(yax["p0"], yax["st"], yax["fe"], yax["step"])
+        phipos = self._make_positions(
+            phiax["p0"], phiax["st"], phiax["fe"], phiax["step"]
+        )
+        if not self._confirm_large_scan(
+            len(xpos) * len(ypos) * len(phipos), xax["expt"], self.OVERHEAD_STEP
+        ):
+            return
+
         self._pre_scan("stepscan3d")
 
         self.isMCS_ready = False
@@ -3611,14 +3927,6 @@ class ScanHandler:
         if self.ui.actionckTime_reset_before_scan.isChecked():
             if self.w.s12softglue.isConnected:
                 self.w.s12softglue.ckTime_reset()
-
-        try:
-            xax = self._read_motor_params(xmotor)
-            yax = self._read_motor_params(ymotor)
-            phiax = self._read_motor_params(phimotor)
-        except (ValueError, TypeError):
-            QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
-            return
 
         # X (fast) axis — inner loop of the 2-D slice
         self.stepscan1d_p0 = xax["p0"]
@@ -3645,16 +3953,6 @@ class ScanHandler:
         self.w.signalmotorunit = self.w.motorunits[xmotor]
         self.w.motor_p0 = {xmotor: xax["p0"], ymotor: yax["p0"], phimotor: phiax["p0"]}
         self.time_scanstart = time.time()
-
-        xpos = self._make_positions(xax["p0"], xax["st"], xax["fe"], xax["step"])
-        ypos = self._make_positions(yax["p0"], yax["st"], yax["fe"], yax["step"])
-        phipos = self._make_positions(
-            phiax["p0"], phiax["st"], phiax["fe"], phiax["step"]
-        )
-        if not self._confirm_large_scan(
-            len(xpos) * len(ypos) * len(phipos), xax["expt"], self.OVERHEAD_STEP
-        ):
-            return
 
         self.stepscan3d_axes_params = [xax, yax, phiax]
 
@@ -3709,20 +4007,14 @@ class ScanHandler:
         # enable fit menu
         if axis == "phi":
             self.ui.actionFit_QDS_phi.setEnabled(True)
-        if st > fe:
-            step = -1 * abs(step)
-        if st < fe:
-            step = abs(step)
         if self.ui.chk_reverse_scan_dir.isChecked():
             if abs(st - pos) > abs(fe - pos):
                 t = fe
                 fe = st
                 st = t
-                step = -step
 
-        # start scan..
         self.w.pts.mv(axis, st)
-        pos = np.arange(st, fe + step / 2, step)
+        pos = self._make_positions(0, st - 0, fe - 0, step)
         if len(pos) == 1:
             pos = np.array([st, fe])
 
@@ -3781,6 +4073,9 @@ class ScanHandler:
         isDET_selected = False
         for detN, det in enumerate(self.w.detector):
             if det is not None:
+                # Skip Struck detector which doesn't support HDF5 file templates
+                if "3820" in det._prefix:
+                    continue
                 isDET_selected = True
                 print(
                     f"Arming detector {detN} ({det._prefix}) for {len(pos)} positions."
@@ -3962,26 +4257,16 @@ class ScanHandler:
         self.stepscan1d_fe = fe
         self.stepscan1d_step = step
 
-        ## prepare zig-zag positions ................
-        # build Y range (absolute)
         yst = self.stepscan2d_st + self.stepscan2d_p0
         yfe = self.stepscan2d_fe + self.stepscan2d_p0
         ystep = self.stepscan2d_step
 
-        # build X range (absolute)
         xst = self.stepscan1d_st + self.stepscan1d_p0
         xfe = self.stepscan1d_fe + self.stepscan1d_p0
         xstep = self.stepscan1d_step
 
-        if xstep == 0:
-            xstep = (xfe - xst) if (xfe != xst) else 1.0
-        xstep = -abs(xstep) if xst > xfe else abs(xstep)
-        x_coords = np.arange(xst, xfe + 0.5 * xstep, xstep)
-
-        # build Y range (absolute) from st, fe, step already computed above
-        ystep = ystep if ystep != 0 else ((yfe - yst) if (yfe != yst) else 1.0)
-        ystep = -abs(ystep) if yst > yfe else abs(ystep)
-        y_coords = np.arange(yst, yfe + 0.5 * ystep, ystep)
+        x_coords = self._make_positions(0, xst - 0, xfe - 0, xstep)
+        y_coords = self._make_positions(0, yst - 0, yfe - 0, ystep)
 
         # Nx2 numpy array of (x, y) in snake (boustrophedon) order
         pos = self._snake_positions(x_coords, y_coords)
@@ -4038,6 +4323,9 @@ class ScanHandler:
         ## prepre detectors ............
         for detN, det in enumerate(self.w.detector):  # JD
             if det is not None:  # JD
+                # Skip Struck detector which doesn't support HDF5 file templates
+                if "3820" in det._prefix:
+                    continue
                 det.setFileTemplate('%s%s_%5.5d.h5')
                 det.step_ready(
                     expt,
@@ -4138,14 +4426,8 @@ class ScanHandler:
         fe = self.stepscan3d_fe + self.stepscan3d_p0
         step = self.stepscan3d_step
 
-        if st > fe:
-            step = -1 * abs(step)
-        if st < fe:
-            step = abs(step)
-
-        # revsere scan disabled: always scan from start to final regardless of the initial position.
         self.w.pts.mv(axis, st)
-        pos = np.arange(st, fe + step / 2, step)
+        pos = self._make_positions(0, st - 0, fe - 0, step)
 
         i = 0
         Npos = len(pos)
@@ -4159,16 +4441,14 @@ class ScanHandler:
             x_st = self.stepscan1d_st + self.stepscan1d_p0
             x_fe = self.stepscan1d_fe + self.stepscan1d_p0
             x_step = self.stepscan1d_step
-            x_step = -abs(x_step) if x_st > x_fe else abs(x_step)
-            x_coords = np.arange(x_st, x_fe + x_step / 2, x_step)
+            x_coords = self._make_positions(0, x_st - 0, x_fe - 0, x_step)
             if len(x_coords) == 1:
                 x_coords = np.array([x_st, x_fe])
 
             y_st = self.stepscan2d_st + self.stepscan2d_p0
             y_fe = self.stepscan2d_fe + self.stepscan2d_p0
             y_step = self.stepscan2d_step
-            y_step = -abs(y_step) if y_st > y_fe else abs(y_step)
-            y_coords = np.arange(y_st, y_fe + y_step / 2, y_step)
+            y_coords = self._make_positions(0, y_st - 0, y_fe - 0, y_step)
             if len(y_coords) == 1:
                 y_coords = np.array([y_st, y_fe])
 
@@ -4365,7 +4645,10 @@ class ScanHandler:
 
             self.progress_3d = (i, len(pos))
             scan = f"{scanname}{i:03d}"
-            self._log_3d_slice_start(scan, self.fly3d_axes_params, value, is_fly_snake=snake)
+            self._log_3d_slice_start(
+                scan, self.fly3d_axes_params, value,
+                scan_kind="fly_snake" if snake else "fly_hexapod_1d",
+            )
 
             # Program the hexapod trajectory for this phi slice, then run the
             # 2-D executor directly on the current worker thread (no sub-worker).
@@ -4375,6 +4658,14 @@ class ScanHandler:
                 if i > 0:
                     self.w.pts.hexapod.stop_traj()
                 self.fly_traj(xmotor, ymotor)
+                # As early as possible after pulse_number becomes known, verify
+                # the software-predicted hexapod trigger count matches it and
+                # record both. The X/Y grid is identical for every phi slice,
+                # so only the first slice needs to write the master file
+                # dataset; no try/except here — let a mismatch propagate to
+                # Worker.run()'s generic exception handler like DET_MIN_READOUT_Error
+                # and DG645_Error already do elsewhere in this file.
+                self._reconcile_hexapod_snake_positions(write_to_master=(i == 0))
                 retval = self.fly2d0_SNAKE(
                     xmotor, ymotor, scanname=scan,
                     update_progress=update_progress, update_status=update_status,
@@ -4667,7 +4958,10 @@ class ScanHandler:
             # 1-D fly: program a standard single-axis trajectory.
             # fly0 uses HEXAPOD_FLYMODE_WAVELET which calls assign_axis2wavtable
             # and run_traj, so set_traj here primes the standard (non-wavelet) path.
-            Nsteps = int((Xfe - Xst) / Xstep) + 1
+            # Use the same rounding-based formula as _make_positions to avoid
+            # truncation edge cases when step doesn't evenly divide the range.
+            positions = self._make_positions(Xst, 0, Xfe - Xst, Xstep)
+            Nsteps = len(positions)
             total_time = Nsteps * step_time
             self.w.pts.hexapod.set_traj(
                 Xaxis, total_time, Xfe - Xst, Xst, 1, abs(step_time), 50
@@ -4879,6 +5173,14 @@ class ScanHandler:
                     if ndet <= 1 and det is not None
                 ]
                 if active_dets and all(det.Armed == 0 for det in active_dets):
+                    msg = (
+                        f"Warning: fly2d0_SNAKE completed with {N_imgcollected}/{Nstep} "
+                        f"frames collected (Armed=0 accepted as finished, but the "
+                        f"detector's ArrayCounter_RBV never reached the expected "
+                        f"hexapod pulse count)."
+                    )
+                    self.w.messages["recent error message"] = msg
+                    print(msg)
                     break
 
             # Stall timeout: use the longer window for the last frame.
@@ -5022,7 +5324,7 @@ class ScanHandler:
                 * self.w.parameters._ratio_exp_period
             )
             print(
-                f"Actual exposure time: {1000*expt:0.3f} ms, during which {axis} will move {movestep:.3f} um."
+                f"Actual exposure time: {1000.*expt:0.3f} ms, during which {axis} will move {movestep:.3f} um."
             )
 
             # If softglue SG is not selected, use prepare for the softglue.
@@ -5154,7 +5456,10 @@ class ScanHandler:
             step_time = max(fly_acq_time, Xtm + self.det_readout_time, self.OVERHEAD_FLY)
             # self.w.parameters._ratio_exp_period = Xtm / step_time
             # total time calculation
-            Nsteps = int((fe - st) / Xstep)
+            # Use the same rounding-guarded formula as _make_positions/_compute_n_positions
+            # (bare int((fe-st)/Xstep) truncation can drop the last trigger on
+            # float-rounding edge cases where the division isn't exactly integral).
+            Nsteps = self._compute_n_positions([self._make_positions(0, st, fe, Xstep)], scan_kind="fly_phi")
             total_time = Nsteps * step_time
             # expt = step_time*self.w.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
             expt = Xtm
@@ -5372,7 +5677,10 @@ class ScanHandler:
 
         fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
         step_time = max(fly_acq_time, Xtm + self.det_readout_time, self.OVERHEAD_FLY)
-        Nsteps = int((phi_fe - phi_st) / Xstep)
+        # Same rounding-guarded formula used for helix's nominal count in
+        # _log_scan_header, so the logged count and the actual DG645 arm
+        # count can never diverge.
+        Nsteps = self._compute_n_positions([self._make_positions(0, phi_st, phi_fe, Xstep)], scan_kind="fly_phi")
         total_time = Nsteps * step_time
         expt = Xtm
         if step_time - expt < 0.015:

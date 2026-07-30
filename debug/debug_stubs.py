@@ -23,6 +23,7 @@ DEBUG_MODE check.
 
 import time as _time
 import random as _random
+import numpy as np
 
 
 # ---------------------------------------------------------------------------
@@ -644,6 +645,8 @@ class _HexapodInfo:
 
     def __init__(self, pos_dict: dict) -> None:
         self._pos = pos_dict
+        self.pulse_number = 0
+        self.pulse_step = 0.0
 
     def is_servo_on(self, axis) -> bool:
         return True
@@ -663,10 +666,25 @@ class _HexapodInfo:
     def set_traj(self, axis, total_time, distance, start_pos, direction, step_time, samples) -> None:
         """Stub for setting a 1-D trajectory."""
         print(f"[DEBUG] _HexapodInfo.set_traj({axis}, total_time={total_time}, distance={distance}, start_pos={start_pos})")
+        self.pulse_step = step_time
+        self.pulse_number = round(total_time / step_time) if step_time else 0
 
     def set_traj_SNAKE2(self, step_time, Xst, Xdist, Xstep, Yst, Yfe, Ystep) -> None:
-        """Stub for setting a 2-D SNAKE trajectory."""
+        """Stub for setting a 2-D SNAKE trajectory.
+
+        Mirrors the real hardware's phantom-trigger/even-row quirks (see
+        gui/handlers/scan_handler.py's _adjust_axis_length) so pulse_number is
+        a faithful stand-in for offline testing of fly-scan code paths.
+        """
         print(f"[DEBUG] _HexapodInfo.set_traj_SNAKE2(step_time={step_time}, X=[{Xst}, {Xst+Xdist}], Xstep={Xstep}, Y=[{Yst}, {Yfe}], Ystep={Ystep})")
+        self.pulse_step = step_time
+        Xfe = Xst + Xdist
+        x_step = -abs(Xstep) if Xst > Xfe else abs(Xstep)
+        y_step = -abs(Ystep) if Yst > Yfe else abs(Ystep)
+        n_x = len(np.arange(Xst, Xfe + x_step / 2, x_step)) + 1  # phantom trigger
+        n_y = len(np.arange(Yst, Yfe + y_step / 2, y_step))
+        n_y += n_y % 2  # pad to even
+        self.pulse_number = n_x * n_y
 
     def analyze_pulse_steps(self):
         """Stub for analyzing pulse steps."""

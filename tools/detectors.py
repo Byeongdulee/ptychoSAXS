@@ -472,7 +472,19 @@ class SGstream(AD_SG):
 			if (time.time()-t0) > TIMEOUT:
 				print("SGstream timed out.")
 				break
+		# FileCaptureOff() only writes Capture=0; it doesn't confirm the IOC
+		# actually finished closing the HDF5 file before returning. Without
+		# waiting, scandone() proceeds immediately (spawns master-file linking,
+		# reports "scan complete") while the file can still be open on the IOC
+		# side, leaving it locked/unreadable until the next scan's
+		# StartStreaming() happens to land after the IOC finally closes it.
+		# FinishStreaming() polls Capture_RBV until it actually reaches 0
+		# (re-requesting Capture=0 if the IOC hasn't responded yet) before
+		# returning -- call FileCaptureOff() first so the request goes out
+		# immediately instead of FinishStreaming() first burning its own
+		# timeout waiting for a close nobody asked for yet.
 		self.FileCaptureOff()
+		self.FinishStreaming(timeout=TIMEOUT)
 		self.Acquire = 0
 
 	def SetNumImages(self, n):
