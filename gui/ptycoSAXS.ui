@@ -101,7 +101,7 @@ Current</string>
      <rect>
       <x>230</x>
       <y>570</y>
-      <width>231</width>
+      <width>221</width>
       <height>131</height>
      </rect>
     </property>
@@ -122,7 +122,7 @@ Current</string>
     <widget class="QLabel" name="label_hp">
      <property name="geometry">
       <rect>
-       <x>90</x>
+       <x>80</x>
        <y>10</y>
        <width>21</width>
        <height>21</height>
@@ -143,7 +143,7 @@ Current</string>
     <widget class="QLineEdit" name="ed_hp_tweak">
      <property name="geometry">
       <rect>
-       <x>110</x>
+       <x>100</x>
        <y>50</y>
        <width>31</width>
        <height>31</height>
@@ -173,7 +173,7 @@ Current</string>
     <widget class="QLabel" name="label_hp_tweakUnit">
      <property name="geometry">
       <rect>
-       <x>140</x>
+       <x>130</x>
        <y>50</y>
        <width>31</width>
        <height>31</height>
@@ -194,7 +194,7 @@ Current</string>
     <widget class="QPushButton" name="pb_hp_up">
      <property name="geometry">
       <rect>
-       <x>110</x>
+       <x>100</x>
        <y>10</y>
        <width>51</width>
        <height>31</height>
@@ -212,7 +212,7 @@ Current</string>
     <widget class="QPushButton" name="pb_hp_down">
      <property name="geometry">
       <rect>
-       <x>110</x>
+       <x>100</x>
        <y>90</y>
        <width>51</width>
        <height>31</height>
@@ -230,7 +230,7 @@ Current</string>
     <widget class="QPushButton" name="pb_trans_left">
      <property name="geometry">
       <rect>
-       <x>170</x>
+       <x>160</x>
        <y>50</y>
        <width>51</width>
        <height>31</height>
@@ -248,7 +248,7 @@ Current</string>
     <widget class="QPushButton" name="pb_trans_right">
      <property name="geometry">
       <rect>
-       <x>50</x>
+       <x>40</x>
        <y>50</y>
        <width>51</width>
        <height>31</height>
@@ -266,7 +266,7 @@ Current</string>
     <widget class="QCheckBox" name="checkBox_transFlip">
      <property name="geometry">
       <rect>
-       <x>170</x>
+       <x>160</x>
        <y>10</y>
        <width>51</width>
        <height>31</height>
@@ -285,7 +285,7 @@ trans</string>
     <widget class="QLabel" name="label_trans">
      <property name="geometry">
       <rect>
-       <x>50</x>
+       <x>40</x>
        <y>80</y>
        <width>51</width>
        <height>21</height>
@@ -3731,9 +3731,9 @@ folder is free</string>
    <widget class="QPushButton" name="pushButton_plotScanPositions">
     <property name="geometry">
      <rect>
-      <x>650</x>
-      <y>620</y>
-      <width>111</width>
+      <x>670</x>
+      <y>610</y>
+      <width>91</width>
       <height>51</height>
      </rect>
     </property>
@@ -3807,10 +3807,10 @@ positions</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>650</x>
-      <y>680</y>
-      <width>111</width>
-      <height>51</height>
+      <x>670</x>
+      <y>670</y>
+      <width>91</width>
+      <height>71</height>
      </rect>
     </property>
     <property name="font">
@@ -3819,7 +3819,8 @@ positions</string>
      </font>
     </property>
     <property name="text">
-     <string>Open upstream
+     <string>Open
+upstream
 optics gui</string>
     </property>
    </widget>
@@ -3980,7 +3981,7 @@ SAXS</string>
    <widget class="QFrame" name="frame_5">
     <property name="geometry">
      <rect>
-      <x>550</x>
+      <x>570</x>
       <y>600</y>
       <width>91</width>
       <height>131</height>
@@ -4073,7 +4074,7 @@ series</string>
      <rect>
       <x>210</x>
       <y>710</y>
-      <width>301</width>
+      <width>241</width>
       <height>20</height>
      </rect>
     </property>
@@ -4092,6 +4093,75 @@ series</string>
      <number>24</number>
     </property>
    </widget>
+   <widget class="QFrame" name="frame_6">
+    <property name="geometry">
+     <rect>
+      <x>460</x>
+      <y>600</y>
+      <width>101</width>
+      <height>131</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: #fffde7;  /* very pale yellow */</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::Box</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QPushButton" name="pb_writeMacro">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>81</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>Write
+Macro</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_sendScanParamToMacro">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>60</y>
+       <width>81</width>
+       <height>61</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>Send Scan
+Params
+To Macro</string>
+     </property>
+    </widget>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -4099,7 +4169,7 @@ series</string>
      <x>0</x>
      <y>0</y>
      <width>1167</width>
-     <height>21</height>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">
@@ -4182,7 +4252,7 @@ series</string>
     <addaction name="actionShutter_Close_Afterscan"/>
     <addaction name="separator"/>
     <addaction name="actionRatio_of_exptime_period_for_Flyscan"/>
-    <addaction name="actionSet_waittime_between_scans"/>
+    <addaction name="actionSet_step_acq_time"/>
     <addaction name="actionSet_shot_number_per_a_step"/>
     <addaction name="separator"/>
     <addaction name="menu2D_XY_scan"/>
@@ -4469,9 +4539,9 @@ series</string>
     <string>Check to test fly parameters</string>
    </property>
   </action>
-  <action name="actionSet_waittime_between_scans">
+  <action name="actionSet_step_acq_time">
    <property name="text">
-    <string>Set waittime between scans</string>
+    <string>Set step acquisition time</string>
    </property>
   </action>
   <action name="actionSet_Interferometer_Param">
@@ -4524,7 +4594,7 @@ series</string>
   </action>
   <action name="actionRatio_of_exptime_period_for_Flyscan">
    <property name="text">
-    <string>Fly scan acquisition time</string>
+    <string>Set fly acquisition time</string>
    </property>
   </action>
   <action name="actionRecord_traj_during_scan">

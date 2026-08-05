@@ -13,6 +13,7 @@ import re
 import traceback
 import datetime
 import pathlib
+import inspect
 from collections import deque
 from PyQt5.QtWidgets import QMessageBox, QInputDialog, QLabel, QLineEdit, QFileDialog, QPushButton, QCheckBox, QDialog, QVBoxLayout
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
@@ -21,10 +22,6 @@ from tools.detectors import DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
 from tools.dg645 import DG645_Error
 from tools.softglue import SOFTGLUE_Setup_Error
 
-
-class HexapodPositionCountMismatchError(Exception):
-    """Raised when the software-predicted hexapod-snake trigger count does not
-    match hexapod.pulse_number after set_traj_SNAKE2 programs the trajectory."""
 
 
 # Constants mirrored from rungui.py
@@ -81,11 +78,35 @@ class ScanHandler:
     # Step scan overhead accounts for motor settle + readout.
     OVERHEAD_FLY = 0.033  # seconds — Pilatus 2M hard minimum (30 Hz)
     OVERHEAD_STEP = 0.5  # seconds
+    # Extra settle time between phi slices in a 3-D fly scan, on top of whatever
+    # get_detectors_ready()/_push_filepaths_to_detectors() already take. Detectors
+    # occasionally need longer than that to be ready for the next slice's trigger.
+    OVERHEAD_FLY3D_PHI = 4.0  # seconds
     # Show a confirmation dialog before starting scans larger than this.
-    LARGE_SCAN_THRESHOLD = 200  # positions
+    LARGE_SCAN_THRESHOLD = 250  # positions
     # 1-indexed motor numbers whose positions are saved/restored by the
     # Save Current / Go To Saved buttons.  Adjust this list as needed.
     SAVED_POSITION_MOTORS = [1, 2, 3, 7, 8, 9]
+    # Maximum allowed fly velocity per axis (same units as get_speed/set_speed
+    # use for that axis: mm/s for hexapod axes, deg/s for phi). Enforced by
+    # _check_velocity_limits before a helix fly scan starts moving anything —
+    # exceeding the hardware's own limit otherwise makes the motion controller
+    # (the hexapod) reject the move command outright mid-scan.
+    # Edit these values directly to change the limit.
+    MAX_VELOCITY = {
+        "X": 0.2,     # mm/s
+        "Z": 0.2,     # mm/s
+        "phi": 37.0,  # deg/s
+    }
+    # Minimum allowed fly velocity per axis (same units/keys as MAX_VELOCITY).
+    # Enforced alongside MAX_VELOCITY by _check_velocity_limits.
+    # Edit these values directly to change the limit.
+    MIN_VELOCITY = {
+        "X": 0.00024,    # mm/s
+        "Z": 0.00024,    # mm/s
+
+        "phi": 0.01,  # deg/s
+    }
 
     def __init__(self, window) -> None:
         self.w = window
@@ -196,6 +217,10 @@ class ScanHandler:
         Ntot = int(round(Ntot))
         if Ntot <= self.LARGE_SCAN_THRESHOLD:
             return True
+        if getattr(self.w, "macro_running", False):
+            # A macro is driving scans unattended -- proceed without
+            # blocking on a Proceed/Cancel dialog nobody is there to click.
+            return True
         est = Ntot * (tm + overhead)
         msg = (
             f"This scan has {Ntot} positions.\n"
@@ -249,9 +274,18 @@ class ScanHandler:
         return True
 
     def _confirm_scan_name(self) -> bool:
-        """Prompt user to confirm scan name. Single source of truth for the name.
+        """Prompt user to confirm/edit the scan name before a scan starts.
+
+        Pushes the confirmed text through the same widget+update_scanname() path
+        used everywhere else scan_name is set programmatically (see update_scanname),
+        so the edit isn't lost when _pre_scan() calls update_scanname() again.
         Returns False if user cancels, True if confirmed.
         """
+        if getattr(self.w, "macro_running", False):
+            # A macro is driving scans unattended — accept the current name as-is
+            # rather than blocking on a dialog nobody is there to click.
+            return True
+
         dlg = QDialog(self.w.ui)
         dlg.setWindowTitle("Confirm Scan Name")
         layout = QVBoxLayout(dlg)
@@ -280,17 +314,22 @@ class ScanHandler:
         if dlg.exec_() == QDialog.Accepted:
             scan_name = ed.text()
             if scan_name:
-                self.w.parameters.scan_name = scan_name
+                self.ui.edit_scanname.setText(scan_name)
+                self.w.update_scanname()
                 return True
             else:
                 QMessageBox.warning(self.w.ui, "Empty Name", "Scan name cannot be empty.")
                 return False
         return False
 
-    def _pre_scan_guards(self) -> bool:
+    def _pre_scan_guards(self, velocities: dict = None) -> bool:
         """Run all pre-scan guards and return False if any fail.
         Call this at the top of every scan entry point before any other logic.
         Add new guards here so they apply to all scan types.
+
+        velocities, if given, maps axis name -> planned fly velocity for that
+        axis (same units as MAX_VELOCITY) and is checked by
+        _check_velocity_limits. Only helix_fly passes this today.
         """
         if not self._confirm_scan_name():
             return False
@@ -298,6 +337,43 @@ class ScanHandler:
             return False
         if not self._check_saxs_det_mode():
             return False
+        if velocities is not None and not self._check_velocity_limits(velocities):
+            return False
+        return True
+
+    def _check_velocity_limits(self, velocities: dict) -> bool:
+        """Return False (and show a warning) if any axis in *velocities* is outside
+        [MIN_VELOCITY, MAX_VELOCITY] for that axis. Returns True when all axes are
+        within limits or have no configured limit.
+        """
+        for axis, vel in velocities.items():
+            speed = abs(vel)
+            max_limit = self.MAX_VELOCITY.get(axis)
+            min_limit = self.MIN_VELOCITY.get(axis)
+            if max_limit is not None and speed > max_limit:
+                dlg = QMessageBox(self.w.ui)
+                dlg.setWindowTitle("Velocity Limit Exceeded")
+                dlg.setText(
+                    f"{axis} velocity would be {speed:.4f}, exceeding the "
+                    f"configured maximum of {max_limit:.4f}.\n"
+                    "Reduce the scan range or increase the exposure time."
+                )
+                dlg.setIcon(QMessageBox.Warning)
+                dlg.addButton(QMessageBox.Ok)
+                dlg.exec_()
+                return False
+            if min_limit is not None and speed < min_limit:
+                dlg = QMessageBox(self.w.ui)
+                dlg.setWindowTitle("Velocity Limit Exceeded")
+                dlg.setText(
+                    f"{axis} velocity would be {speed:.4f}, below the "
+                    f"configured minimum of {min_limit:.4f}.\n"
+                    "Increase the scan range or reduce the exposure time."
+                )
+                dlg.setIcon(QMessageBox.Warning)
+                dlg.addButton(QMessageBox.Ok)
+                dlg.exec_()
+                return False
         return True
 
     def _read_motor_params(self, motor_index: int) -> dict:
@@ -362,7 +438,7 @@ class ScanHandler:
         pos = np.arange(ast, afe + step / 2, step)
         return pos
 
-    def _pre_scan(self, scan_name: str, scan_kind: str = "step") -> None:
+    def _pre_scan(self, scan_label: str, scan_kind: str = "step") -> None:
         """Common setup called at the start of every scan entry point (GUI thread).
 
         Resets detector file/frame counters, refreshes scan name and file paths,
@@ -377,7 +453,7 @@ class ScanHandler:
         self.w.prepare_scan_files()
         self.w.write_motor_scan_range()
         self.isStopScanIssued = False
-        print(f"\n\n{scan_name} starting")
+        print(f"\n\n{scan_label} starting")
 
         # Store the scan number at scan start time so background linking thread uses the
         # same number even if user changes scan_number before linking completes
@@ -391,6 +467,11 @@ class ScanHandler:
         try:
             sample_name = self.w.parameters.scan_name
             scan_positions_dict = self._compute_scan_positions(scan_kind=scan_kind)
+            # Cache the grid so 3-D fly/step scans can rewrite a per-slice master
+            # file from the worker thread without re-reading Qt widgets (the X/Y
+            # grid is identical for every phi slice; only the EPICS metadata,
+            # incl. theta, needs to be re-fetched per slice).
+            self._cached_scan_positions_dict = scan_positions_dict
 
             # Create master file for each active detector
             detectors_active = []
@@ -404,7 +485,7 @@ class ScanHandler:
         except Exception as e:
             print(f"Warning: Failed to create master file: {e}")
 
-    def _log_scan_header(self, scan_name: str, axes_params: list, scan_kind: str = "step") -> None:
+    def _log_scan_header(self, scan_label: str, axes_params: list, scan_kind: str = "step") -> None:
         """Write the SPEC-style #S header line for this scan to the log file.
 
         axes_params is a list of dicts from _read_motor_params, in axis order
@@ -421,7 +502,7 @@ class ScanHandler:
             n_pos = self._compute_n_positions([position_arrays[0]], scan_kind="fly_phi")
         else:
             n_pos = self._compute_n_positions(position_arrays, scan_kind=scan_kind)
-        scaninfo = ["\n#S", self.w.parameters.scan_number, scan_name]
+        scaninfo = ["\n#S", self.w.parameters.scan_number, scan_label]
         for ax in axes_params:
             n = ax["motor_index"] + 1
             scaninfo += [n, ax["p0"], ax["st"], ax["fe"], ax["expt"], ax["step"]]
@@ -433,7 +514,7 @@ class ScanHandler:
         for key in m:
             scaninfo.append(m[key])
         self.w.write_scaninfo_to_logfile(scaninfo)
-        self._write_scan_summary_line(scan_name, axes_params, n_pos)
+        self._write_scan_summary_line(scan_label, axes_params, n_pos)
 
     def _get_scan_summary_csv_path(self):
         if len(self.w.parameters.logfilename) == 0:
@@ -541,7 +622,14 @@ class ScanHandler:
         return values
 
     def check_fly_blur(self):
-        """Estimate the sample blur during a fly scan exposure and show it in a dialog."""
+        """Estimate the sample blur during a fly scan exposure and show it in a dialog.
+
+        Reports three independent estimates when their fields are populated:
+        the generic 1-D translation fly (ed_lup_1_*), the 1-D phi angular fly
+        (ed_lup_7_*, motor index 6), and the helix scan's Z blur (ed_lup_3_*,
+        motor index 2 — "vertical stage is Z", see DEFAULTS in rungui.py),
+        computed against the same phi timing that drives the helix trigger.
+        """
         from PyQt5.QtWidgets import QMessageBox
 
         def _read(name):
@@ -566,13 +654,57 @@ class ScanHandler:
             velocity_mm_s = step / step_time
             movestep_um = step * 1000.0 * expt / step_time
             msg = (
+                f"1D Fly (translation):\n"
                 f"Exposure time:     {expt * 1000.:.2f} ms\n"
                 f"Step size:         {step * 1000.:.3f} µm\n"
                 f"Acquisition time:  {step_time * 1000.:.2f} ms\n"
                 f"Velocity:          {velocity_mm_s * 1000.:.3f} µm/s\n"
-                f"\n"
                 f"Motion during exposure:  {movestep_um * 1000:.0f} nm"
             )
+
+            # 1D fly phi (angular) blur. Exposure falls back to ed_lup_1_t,
+            # matching _read_motor_params's per-axis-widget-or-shared behaviour.
+            phi_expt = _read("ed_lup_7_t")
+            if phi_expt is None or phi_expt <= 0:
+                phi_expt = expt
+            phi_step = _read("ed_lup_7_N")
+            if phi_step is not None and phi_step > 0:
+                phi_step = abs(phi_step)
+                phi_step_time = max(fly_acq_time, phi_expt + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
+                phi_step_time = round(phi_step_time * 1000) / 1000
+                phi_velocity_deg_s = phi_step / phi_step_time
+                phi_move_mdeg = phi_step * 1e3 * phi_expt / phi_step_time
+                phi_move_mrad = (1000 * np.pi / 180) * phi_step * phi_expt / phi_step_time
+                msg += (
+                    f"\n\n1D Fly phi (angular):\n"
+                    f"Exposure time:     {phi_expt * 1000.:.2f} ms\n"
+                    f"Step size:         {phi_step * 1000.:.3f} mdeg\n"
+                    f"Acquisition time:  {phi_step_time * 1000.:.2f} ms\n"
+                    f"Velocity:          {phi_velocity_deg_s:.4f} deg/s\n"
+                    f"Motion during exposure:  {phi_move_mdeg:.3f} mdeg\n"
+                    f"                      :  {phi_move_mrad:.3f} mrad"
+                )
+
+                # Helix Z blur: phi and Z fly simultaneously over the same
+                # total_time, triggered at phi's step timing (see
+                # _compute_helix_total_time / helix_fly). p0 cancels out of
+                # that calculation, so the raw L/R offsets stand in for it.
+                phi_L = _read("ed_lup_7_L")
+                phi_R = _read("ed_lup_7_R")
+                z_L = _read("ed_lup_3_L")
+                z_R = _read("ed_lup_3_R")
+                if None not in (phi_L, phi_R, z_L, z_R):
+                    total_time, _, _ = self._compute_helix_total_time(phi_L, phi_R, phi_step, phi_expt)
+                    if total_time > 0:
+                        z_velocity_mm_s = abs(z_R - z_L) / total_time
+                        z_move_um = z_velocity_mm_s * phi_expt * 1000.0
+                        msg += (
+                            f"\n\nHelix Z blur:\n"
+                            f"Total scan time:   {total_time:.2f} s\n"
+                            f"Z velocity:        {z_velocity_mm_s * 1000.:.3f} µm/s\n"
+                            f"Motion during exposure:  {z_move_um * 1000:.0f} nm"
+                        )
+
             QMessageBox.information(self.w.ui, "Fly Blur Estimate", msg)
         except Exception as e:
             QMessageBox.warning(self.w.ui, "Fly Blur Error", f"Error calculating fly blur: {e}")
@@ -658,7 +790,20 @@ class ScanHandler:
             n_pos *= self._adjust_axis_length(len(pos), i, scan_kind)
         return n_pos
 
-    def _write_scan_summary_line(self, scan_name: str, axes_params: list, n_pos: int) -> None:
+    def _compute_helix_total_time(self, phi_st: float, phi_fe: float, phi_step: float, phi_tm: float) -> tuple:
+        """Return (total_time, Nsteps, step_time) for a helix fly scan's phi axis.
+
+        Shared by helix_fly's pre-scan velocity guard (computed on the GUI thread
+        before anything moves) and helix_fly0's DG645 arming (on the worker
+        thread), so the two can never diverge.
+        """
+        fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
+        step_time = max(fly_acq_time, phi_tm + self.det_readout_time, self.OVERHEAD_FLY)
+        Nsteps = self._compute_n_positions([self._make_positions(0, phi_st, phi_fe, phi_step)], scan_kind="fly_phi")
+        total_time = Nsteps * step_time
+        return total_time, Nsteps, step_time
+
+    def _write_scan_summary_line(self, scan_label: str, axes_params: list, n_pos: int) -> None:
         csv_path = self._get_scan_summary_csv_path()
         if csv_path is None:
             return
@@ -685,7 +830,7 @@ class ScanHandler:
             "no",
             scan_id,
             self.w.parameters.scan_name,
-            scan_name,
+            scan_label,
             axes_params[0].get("expt", "") if axes_params else "",
             n_pos,
             self._get_mono_energy(),
@@ -767,7 +912,7 @@ class ScanHandler:
             pass
 
 
-    def _log_3d_slice_start(self, scan_name, axes_params, phi_value, scan_kind: str = "step"):
+    def _log_3d_slice_start(self, scan_label, axes_params, phi_value, scan_kind: str = "step"):
         modified_axes = []
         for ax in axes_params:
             if ax.get("name", "").lower() == "phi":
@@ -781,7 +926,7 @@ class ScanHandler:
                 modified_axes.append(ax)
         position_arrays = [self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"]) for ax in modified_axes]
         n_pos = self._compute_n_positions(position_arrays, scan_kind=scan_kind)
-        self._write_scan_summary_line(scan_name, modified_axes, n_pos)
+        self._write_scan_summary_line(scan_label, modified_axes, n_pos)
 
     def _update_3d_slice_completed(self):
         self._update_scan_summary_completed("yes")
@@ -804,13 +949,43 @@ class ScanHandler:
         w.signal.progress.connect(self.w.updateprogressbar)
         w.signal.statusmessage.connect(self.w.update_status_bar)
         w.signal.error.connect(self.w._on_worker_error)
+        w.signal.scanFolderAdvanced.connect(self.w.on_scan_folder_advanced)
         w.kwargs["update_progress"] = w.signal.progress.emit
         w.kwargs["update_status"] = w.signal.statusmessage.emit
+        # Only 3-D fly/step executors (which switch to a new scan folder per phi
+        # slice) declare this parameter; skip it for everything else so existing
+        # single-folder executors (fly0, stepscan0, fly2d0, ...) are unaffected.
+        if 'notify_folder_advanced' in inspect.signature(executor_fn).parameters:
+            w.kwargs["notify_folder_advanced"] = w.signal.scanFolderAdvanced.emit
         self.w.set_scan_status("Scanning")
         self.w.isscan = True
         if self.w.monitor_beamline_status:
             self.w.shutter.open()
         self.w.threadpool.start(w)
+
+    def _scan_mv(self, axis, target, wait=True, update_status=None):
+        """Move a motor during a scan without letting a stage-motion timeout abort it.
+
+        pts.mv() raises a bare TimeoutError if a move doesn't settle within its
+        internal 10 s window. Uncaught, that propagates out of the worker-thread
+        scan executor into Worker.run() (rungui.py), which treats any exception
+        as fatal and aborts the whole scan. A single slow/stalled move shouldn't
+        lose an entire scan's worth of data, so scan executors call this instead
+        of self.w.pts.mv() directly and just log + continue on timeout.
+
+        Deliberately does NOT set self.w.messages["recent error message"] —
+        that dict key is wired (see _ErrorDict in rungui.py) to flash the GUI's
+        red scan-status error box, which is more alarm than a tolerated,
+        continued-past timeout warrants. Prints to the terminal and (if
+        available) posts to the status bar instead.
+        """
+        try:
+            self.w.pts.mv(axis, target, wait=wait)
+        except TimeoutError:
+            msg = f"Stage motion timeout moving {axis} to {target} — continuing scan. {time.ctime()}"
+            print(msg)
+            # if update_status:
+            #     update_status(msg)
 
     def _motor_from_sender(self) -> int:
         """Extract a 0-based motor index from the name of the button that triggered
@@ -1228,16 +1403,16 @@ class ScanHandler:
             self.ui.actionCapture_multi_frames_fly.setChecked(False)
             self.w.hdf_plugin_savemode_fly = 0
 
-    def set_waittime_between_scans(self):
-        if hasattr(self.w.parameters, "_waittime_between_scans"):
-            wtime = self.w.parameters._waittime_between_scans
+    def set_step_acq_time(self):
+        if hasattr(self.w.parameters, "_step_acq_time"):
+            wtime = self.w.parameters._step_acq_time
         else:
             wtime = 1.0
         value, okPressed = QInputDialog.getDouble(
-            self.w.ui, "How long stay idle between scans?", "sleep time (s):", wtime
+            self.w.ui, "Set step acquisition time", "Acquisition time (s):", wtime
         )
         if okPressed:
-            self.w.parameters._waittime_between_scans = value
+            self.w.parameters._step_acq_time = value
             self.w.parameters.writeini()
 
     def set_shotnumber_per_step(self):
@@ -1621,7 +1796,7 @@ class ScanHandler:
     def set_fly_acquisition_time(self):
         val, ok = QInputDialog().getDouble(
             self.w.ui,
-            "Fly scan acquisition time",
+            "Set fly acquisition time",
             "Acquisition time (s)",
             self.w.parameters._fly_acq_time,
             decimals=3,
@@ -1679,11 +1854,48 @@ class ScanHandler:
         except Exception as e:
             print(f"[DEBUG] _debug_plot_scan error: {e}")
 
-    def scandone(self, update_scannumber=True, donedone=True, update_gui=True):
-        # return to the initial positions
+    def _wait_for_primary_detectors_written(self):
+        """Wait for SAXS/WAXS to finish writing their own file before touching SG.
+
+        SoftGlue is the hardware trigger source for snake fly scans (see
+        switch_SGstream), so force-stopping/flushing it while a primary
+        detector's last frame is still being written can cut off an
+        in-flight trigger and drop that frame. scandone() (step scans)
+        never races here because it waits on each detector's WriteFile_RBV
+        in index order, reaching SG last; fly-scan completion has no such
+        ordering, so it must wait explicitly.
+        """
+        if not self.w.use_hdf_plugin:
+            return
+        for det in self.w.detector[:2]:
+            if det is not None:
+                while det.fileGet("WriteFile_RBV"):
+                    time.sleep(0.01)
+
+    def _stop_sg_detector(self):
+        """Force-stop the SoftGlue streaming detector (12idSGSocket IOC) if active.
+
+        Only scandone() used to do this; fly-scan completion handlers (flydone,
+        flydone2d, flydone3d, helixdone) skipped it, leaving the IOC's Acquire
+        and HDF capture running after fly scans that use the SG stream (snake
+        fly2d/fly3d, or any scan with SG manually enabled via the SG action).
+        """
+        for det in self.w.detector:
+            if det is not None and "SG" in det._prefix:
+                self.w.s12softglue.flush()
+                time.sleep(1)
+                det.ForceStop()
+
+    def scandone(self, update_scannumber=True, donedone=True, update_gui=True,
+                 direct_gui_updates=True, notify_folder_advanced=None, link_scan_number=None,
+                 link_detector_data=True):
+        # Return to the initial positions. Per-slice (donedone=False) calls only
+        # restore x/y, since 3-D scans re-drive x/y at the start of every slice
+        # anyway and restoring phi mid-scan would just be an extra move back and
+        # forth. The true end of the scan (donedone=True) restores every motor
+        # in motor_p0, including phi for 3-D step scans.
         for i, key in enumerate(self.w.motor_p0):
-            # put only x motors and ymotors back to initial positions
-            if i < 2:
+            if i < 2 or donedone:
                 self.w.mv(key, self.w.motor_p0[key])
         if donedone:
             if self.w.shutter_close_after_scan:
@@ -1714,10 +1926,7 @@ class ScanHandler:
                 # print(det, " this is in scandone for detector ", i)
                 if det is not None:
                     if "SG" in det._prefix:
-                        self.w.s12softglue.flush()
-                        time.sleep(1)
-                        det.ForceStop()
-                        success = True
+                        self._stop_sg_detector()
                     if "3820" in det._prefix:
                         det.stop()
                         self.w.rpos = det.read_mcs(STRUCK_CHANNELS)
@@ -1782,40 +1991,65 @@ class ScanHandler:
                 scaninfo.append("#D")
                 scaninfo.append(time.ctime())
 
-        # Link detector data to master files asynchronously (non-blocking)
-        # Compute full paths NOW while GUI state is frozen, pass to background thread
-        sample_name = self.w.parameters.scan_name
-        # Use the scan number from when _pre_scan was called, not the current one
-        # (user may have changed it since scan started)
-        scan_number = getattr(self, '_scan_number_at_start', self.w.parameters.scan_number)
+        # Link detector data to master files asynchronously (non-blocking).
+        # Skipped when link_detector_data=False (3-D fly/step scans: every slice
+        # already linked its own master file in-loop via _link_slice_detector_data,
+        # so this single-folder catch-all would only ever hit an already-linked
+        # slice -- either the frozen scan-start folder for step scans, or the
+        # final slice for fly scans -- and re-attempt the same links.)
+        if link_detector_data:
+            # Compute full paths NOW while GUI state is frozen, pass to background thread
+            sample_name = self.w.parameters.scan_name
+            # Use the scan number from when _pre_scan was called, not the current one
+            # (user may have changed it since scan started) -- unless the caller
+            # explicitly names which slice's folder just finished.
+            if link_scan_number is not None:
+                scan_number = link_scan_number
+            else:
+                scan_number = getattr(self, '_scan_number_at_start', self.w.parameters.scan_number)
 
-        # Build master file paths for each active detector
-        master_paths = {}
-        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
-            try:
-                master_paths['SAXS'] = self._get_master_file_path_with_number('SAXS', sample_name, scan_number)
-            except Exception as e:
-                print(f"Warning: Could not compute SAXS master file path: {e}")
+            # Build master file paths for each active detector
+            master_paths = {}
+            if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+                try:
+                    master_paths['SAXS'] = self._get_master_file_path_with_number('SAXS', sample_name, scan_number)
+                except Exception as e:
+                    print(f"Warning: Could not compute SAXS master file path: {e}")
 
-        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
-            try:
-                master_paths['WAXS'] = self._get_master_file_path_with_number('WAXS', sample_name, scan_number)
-            except Exception as e:
-                print(f"Warning: Could not compute WAXS master file path: {e}")
+            if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+                try:
+                    master_paths['WAXS'] = self._get_master_file_path_with_number('WAXS', sample_name, scan_number)
+                except Exception as e:
+                    print(f"Warning: Could not compute WAXS master file path: {e}")
 
-        if master_paths:
-            import threading
-            thread = threading.Thread(
-                target=self._link_detector_data_delayed,
-                args=(master_paths, 6.0),
-                daemon=True
-            )
-            thread.start()
+            if master_paths:
+                import threading
+                thread = threading.Thread(
+                    target=self._link_detector_data_delayed,
+                    args=(master_paths, 6.0),
+                    daemon=True
+                )
+                thread.start()
 
         # when the measurement is all done, update the scan number.
-        if update_scannumber:
-            self.w.run_stop_issued()
-        self.w.update_scanname()
+        if direct_gui_updates:
+            # Default path (all single-folder scans: 1-D/2-D fly, 1-D/2-D step,
+            # helix). Always called from the GUI thread (either directly, or via
+            # a Qt-queued done_signal), so touching ui.edit_scannumber/lbl_scanname
+            # here is safe.
+            if update_scannumber:
+                self.w.run_stop_issued()
+            self.w.update_scanname()
+        else:
+            # Worker-thread-safe path (3-D fly/step in-loop per-slice calls).
+            # Advance scan_number without any direct Qt widget access, and defer
+            # the label refresh to a queued signal so it runs on the GUI thread.
+            if update_scannumber:
+                new_scan_number = self._advance_scan_number_safe()
+            else:
+                new_scan_number = self.w.parameters.scan_number
+            if notify_folder_advanced is not None:
+                notify_folder_advanced(new_scan_number)
 
         if donedone:
             self.w.update_status_scan_time()
@@ -2180,7 +2414,6 @@ class ScanHandler:
         reads — so this is safe to call from both the GUI thread (fly2d) and
         the worker thread (fly3d0's per-phi-slice loop).
 
-        Raises HexapodPositionCountMismatchError if the counts disagree.
         """
         x_st = self.fly1d_st + self.fly1d_p0
         x_fe = self.fly1d_fe + self.fly1d_p0
@@ -2198,18 +2431,6 @@ class ScanHandler:
         hexapod_pos = self._snake_positions(x_coords, y_coords)
         if len(hexapod_pos) > 0:
             hexapod_pos = hexapod_pos - np.mean(hexapod_pos, axis=0)  # match nominal 'positions' centering
-
-        expected_n = len(hexapod_pos)
-        actual_n = self.w.pts.hexapod.pulse_number
-        if expected_n != actual_n:
-            msg = (
-                f"Hexapod-predicted position count ({expected_n}) does not match "
-                f"hexapod.pulse_number ({actual_n}) after programming the snake "
-                f"trajectory. Aborting scan."
-            )
-            self.w.messages["recent error message"] = msg
-            print(msg)
-            # raise HexapodPositionCountMismatchError(msg)
 
         if write_to_master:
             for master_path in getattr(self, "_current_scan_master_paths", {}).values():
@@ -2561,7 +2782,12 @@ class ScanHandler:
                     # Relative path for HDF5 external link - use forward slashes
                     rel_path = os.path.relpath(det_h5_path, detector_folder).replace("\\", "/")
 
-                    # Create external link
+                    # Create external link. Idempotent: 3-D fly/step scans link each
+                    # slice's master file once in-loop and may relink it again from
+                    # the final scandone()/flydone3d() catch-all, so an existing link
+                    # of the same name must be replaced rather than raising.
+                    if link_name in entry_data:
+                        del entry_data[link_name]
                     entry_data[link_name] = h5py.ExternalLink(rel_path, '/entry/data/data')
                     print(f"Linked {link_name} -> {rel_path}")
 
@@ -2570,6 +2796,103 @@ class ScanHandler:
         except Exception as e:
             print(f"Error linking detector data for master file {master_path}: {e}")
             traceback.print_exc()
+
+    def _write_slice_master_file(self) -> dict:
+        """(Re)write the master file for the CURRENT scan folder (one per phi slice
+        of a 3-D fly/step scan). Reuses the X/Y grid cached once in _pre_scan
+        (avoids re-reading Qt widgets) but re-fetches EPICS metadata fresh, so the
+        written 'theta' reflects the angle this slice actually settled at.
+
+        Worker-thread safe: touches no Qt widgets.
+
+        Returns {detector_type: master_path} for the files written; also updates
+        self._current_scan_master_paths so any later single-shot linking (e.g.
+        flydone3d) targets this, the most recently written, slice.
+        """
+        scan_positions_dict = getattr(self, '_cached_scan_positions_dict', {})
+        sample_name = self.w.parameters.scan_name
+
+        detectors_active = []
+        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+            detectors_active.append('SAXS')
+        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+            detectors_active.append('WAXS')
+
+        master_paths = {}
+        for detector_type in detectors_active:
+            path = self._write_master_file_metadata(detector_type, scan_positions_dict, sample_name)
+            if path:
+                master_paths[detector_type] = path
+
+        self._current_scan_master_paths = master_paths
+        return master_paths
+
+    def _advance_scan_number_safe(self) -> int:
+        """Increment scan_number and persist it (PV put + ini write) without
+        touching any Qt widgets. Safe to call from a worker thread.
+
+        Unlike run_stop_issued()/update_scannumber(), this never reads or writes
+        a QLineEdit/QLabel; callers must refresh those on the GUI thread separately
+        (e.g. via the scanFolderAdvanced signal / on_scan_folder_advanced slot).
+
+        Returns the new scan_number.
+        """
+        self.w.parameters.scan_number = self.w.parameters.scan_number + 1
+        if self.w.SCAN_NUMBER_IOC is not None:
+            self.w.SCAN_NUMBER_IOC.put(int(self.w.parameters.scan_number))
+        self.w.parameters.writeini()
+        return self.w.parameters.scan_number
+
+    def _advance_scan_number_thread_safe(self) -> None:
+        """Advance scan_number at the end of fly2d0 / fly2d0_SNAKE.
+
+        These run on the worker thread both as standalone 2-D fly scans and,
+        synchronously, once per phi slice inside fly3d0's loop. run_stop_issued()
+        touches ui.edit_scannumber/lbl_scanname directly, which is only safe to
+        call from the GUI thread. For the standalone case that's how it's always
+        worked; but for the fly3d0 case, doing this once per slice from the worker
+        thread caused the scan-name label to stop updating reliably and, worse, let
+        a later update_scanname() call (which reads scan_number back out of the
+        QLineEdit) clobber the in-memory scan_number with a stale value -- so a
+        later slice's data would land in an already-used scan-number folder.
+        When fly3d0 is running (self._notify_folder_advanced_3d set), advance the
+        same worker-thread-safe way stepscan3d0 does instead.
+        """
+        notify = getattr(self, '_notify_folder_advanced_3d', None)
+        if notify is not None:
+            new_scan_number = self._advance_scan_number_safe()
+            notify(new_scan_number)
+        else:
+            self.w.run_stop_issued()
+
+    def _link_slice_detector_data(self, scan_number: int) -> None:
+        """Link one phi slice's detector data into ITS OWN master file, identified
+        by the given (just-used) scan_number -- as opposed to scandone()'s default
+        of always relinking self._scan_number_at_start, which is only correct for
+        single-folder scans. Spawns the same short delayed daemon thread scandone()
+        uses. Worker-thread safe.
+        """
+        sample_name = self.w.parameters.scan_name
+        master_paths = {}
+        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
+            try:
+                master_paths['SAXS'] = self._get_master_file_path_with_number('SAXS', sample_name, scan_number)
+            except Exception as e:
+                print(f"Warning: Could not compute SAXS master file path: {e}")
+        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
+            try:
+                master_paths['WAXS'] = self._get_master_file_path_with_number('WAXS', sample_name, scan_number)
+            except Exception as e:
+                print(f"Warning: Could not compute WAXS master file path: {e}")
+
+        if master_paths:
+            import threading
+            thread = threading.Thread(
+                target=self._link_detector_data_delayed,
+                args=(master_paths, 6.0),
+                daemon=True
+            )
+            thread.start()
 
     def set_basepaths(self, text=""):
         if type(text) == bool:
@@ -2904,7 +3227,8 @@ class ScanHandler:
         cnt = 0
         hpos = []
 
-    def flydone(self, return_motor=True, reset_scannumber=True, donedone=True):
+    def flydone(self, return_motor=True, reset_scannumber=True, donedone=True,
+                direct_gui_updates=True):
         if return_motor:
             # when 1D scan is done.
             # if self.w.shutter_close_after_scan:
@@ -2932,16 +3256,28 @@ class ScanHandler:
         self._update_scan_summary_completed(
             "partial" if self.isStopScanIssued else "yes"
         )
-        if self.isStopScanIssued:
-            self.w.set_scan_status("Stopped")
-            self.ui.statusbar.showMessage("Scan stopped by user \u2014 motors returned.")
-        else:
-            self.w.set_scan_status("No Scan")
-            self.ui.statusbar.showMessage("Fly scan complete.")
+        if direct_gui_updates:
+            # Safe here because flydone is either invoked as a Qt done_signal
+            # (auto-queued onto the GUI thread) or, when called inline from
+            # fly2d0's per-line loop on the worker thread, with
+            # direct_gui_updates=False so these widget touches are skipped.
+            if self.isStopScanIssued:
+                self.w.set_scan_status("Stopped")
+                self.ui.statusbar.showMessage("Scan stopped by user \u2014 motors returned.")
+            else:
+                self.w.set_scan_status("No Scan")
+                self.ui.statusbar.showMessage("Fly scan complete.")
         self.w.s12softglue.flush()
         print(f"softglue flushed at {time.ctime()}")
+        if return_motor:
+            # flydone doubles as the per-line completion signal inside fly2d0's
+            # Y loop (called there with return_motor=False) -- only force-stop
+            # the SG detector on a genuine top-level scan end, not per line.
+            self._wait_for_primary_detectors_written()
+            self._stop_sg_detector()
 
-        self.w.update_scanname()
+        if direct_gui_updates:
+            self.w.update_scanname()
 
         # Link detector data to master files asynchronously (non-blocking)
         # Use pre-computed master paths from fly() to ensure correct scan number
@@ -2987,11 +3323,8 @@ class ScanHandler:
             for i, key in enumerate(self.w.motor_p0):
                 if self.w.motornames[key] == "phi":
                     self.w.setphivel_default()
-                    if hasattr(self, "_prev_vel_phi"):
-                        self.w.pts.set_speed(
-                            self.w.motornames[key], self._prev_vel_phi, self._prev_acc_phi
-                        )
-                elif self.w.motornames[key] == "Z":
+                else:
+                    self.w.sethexapodvel_default()
                     if hasattr(self, "_prev_vel_z"):
                         self.w.pts.set_speed(
                             self.w.motornames[key], self._prev_vel_z, None
@@ -3018,6 +3351,8 @@ class ScanHandler:
             self.ui.statusbar.showMessage("Helix scan complete.")
         self.w.s12softglue.flush()
         print(f"softglue flushed at {time.ctime()}")
+        self._wait_for_primary_detectors_written()
+        self._stop_sg_detector()
 
         self.w.update_scanname()
 
@@ -3047,6 +3382,8 @@ class ScanHandler:
         else:
             self.w.set_scan_status("No Scan")
             self.ui.statusbar.showMessage("2-D fly scan complete.")
+        self._wait_for_primary_detectors_written()
+        self._stop_sg_detector()
         self.w.update_scanname()
         self.w.update_status_scan_time()
 
@@ -3095,21 +3432,14 @@ class ScanHandler:
         self.w.updateprogressbar(100)
         if self.w.shutter_close_after_scan:
             self.w.shutter.close()
+        self._wait_for_primary_detectors_written()
+        self._stop_sg_detector()
         self.w.update_scanname()
         self.w.update_status_scan_time()
 
-        # Link detector data to master files asynchronously (non-blocking)
-        # Use pre-computed master paths from fly3d() to ensure correct scan number
-        # (scan number may be incremented by the time flydone3d runs)
-        master_paths = getattr(self, '_current_scan_master_paths', {})
-        if master_paths:
-            import threading
-            thread = threading.Thread(
-                target=self._link_detector_data_delayed,
-                args=(master_paths, 6.0),
-                daemon=True
-            )
-            thread.start()
+        # No final data-linking here: every phi slice already linked its own
+        # master file in-loop (fly3d0 -> _link_slice_detector_data), including
+        # the last one, right after that slice's 2-D sweep finished.
 
     def check_start_position(self, n):
         # Compare p0 and p0_move_to; only warn if difference > 0.001
@@ -3123,6 +3453,16 @@ class ScanHandler:
                 p0_float = p0
                 p0_move_to_float = p0_move_to
             if abs(p0_float - p0_move_to_float) > 0.001:
+                if getattr(self.w, "macro_running", False):
+                    # A macro is driving scans unattended -- automatically
+                    # take the "Update the 'Move to' position" branch below
+                    # (keep the current position, sync the 'Move to' field
+                    # to match it) instead of blocking on this dialog.
+                    p0_move_to = p0
+                    self.ui.findChild(QLineEdit, "ed_%i" % n).setText(
+                        "%0.6f" % float(p0_move_to)
+                    )
+                    return p0
                 msg = (
                     f"'Move to' position ({p0_move_to_float:.4f}) and Current position ({p0_float:.4f}) differ.\n"
                     "Do you want to move to the 'Move to' position or update the 'Move to' position with the Current?"
@@ -3182,7 +3522,7 @@ class ScanHandler:
         # elif clicked == cancel_btn:
         #    return None
 
-    def fly2d(self, xmotor=0, ymotor=1, scanname="", snake=False):
+    def fly2d(self, xmotor=0, ymotor=1, snake=False):
         """Entry point for a 2-D fly scan (GUI thread).
 
         snake=False: steps Y with pts.mv, then flies X with fly0 for each row.
@@ -3211,8 +3551,8 @@ class ScanHandler:
         if not self._confirm_large_scan(n_positions, xax["expt"], self.OVERHEAD_FLY):
             return
 
-        scan_name = "fly2d_SNAKE" if snake else "fly2d"
-        self._pre_scan(scan_name, scan_kind=scan_kind)
+        scan_label = "fly2d_SNAKE" if snake else "fly2d"
+        self._pre_scan(scan_label, scan_kind=scan_kind)
 
         # SoftGlue socket stream is required for snake scans (both axes move
         # simultaneously; softglue provides the hardware timing signal).
@@ -3250,6 +3590,9 @@ class ScanHandler:
         self.fly3d_tm = None
         self.fly3d_step = None
         self.progress_3d = None
+        # Make sure a leftover 3-D-scan signal emitter can't be picked up by
+        # this standalone scan's end-of-scan bookkeeping (see fly3d0 / _advance_scan_number_thread_safe).
+        self._notify_folder_advanced_3d = None
 
         self.w.signalmotor = xax["name"]
         self.w.signalmotorunit = self.w.motorunits[xmotor]
@@ -3260,7 +3603,7 @@ class ScanHandler:
         # executor configures timing precisely.
         self.w.dg645_12ID.set_pilatus_fly(0.001)
 
-        self._log_scan_header(scan_name, [xax, yax], scan_kind=scan_kind)
+        self._log_scan_header(scan_label, [xax, yax], scan_kind=scan_kind)
 
         # Compute master file paths NOW (before scan number may be incremented)
         # so flydone2d can use the correct paths for linking detector data.
@@ -3283,20 +3626,11 @@ class ScanHandler:
             # Program the full 2-D snake trajectory on the hexapod controller
             # before the worker starts.  fly2d0_SNAKE then just triggers it.
             self.w.fly_traj(xmotor, ymotor)
-            # As early as possible after pulse_number becomes known, verify the
-            # software-predicted hexapod trigger count matches it and record
-            # both. Abort before the worker starts on a mismatch.
-            try:
-                self._reconcile_hexapod_snake_positions(write_to_master=True)
-            # except HexapodPositionCountMismatchError as e:
-            #     QMessageBox.critical(self.w.ui, "Hexapod Mismatch", str(e))
-                # return
             self._launch_worker(
                 self.fly2d0_SNAKE,
                 xmotor,
                 ymotor,
                 done_signal=self.w.flydone2d,
-                scanname=scanname,
             )
         else:
             # Non-snake: fly_traj programs a 1-D X trajectory; fly2d0 re-runs
@@ -3307,7 +3641,6 @@ class ScanHandler:
                 xmotor,
                 ymotor,
                 done_signal=self.w.flydone2d,
-                scanname=scanname,
             )
 
     def updateprogressbar(self, value):
@@ -3317,7 +3650,7 @@ class ScanHandler:
     def update_status_bar(self, message):
         self.ui.statusbar.showMessage(message)
 
-    def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname="", snake=False):
+    def fly3d(self, xmotor=0, ymotor=1, phimotor=6, slice_label_prefix="", snake=False):
         """Entry point for a 3-D fly scan (GUI thread).
 
         Steps phi in the outer loop; for each phi position fly3d0 calls
@@ -3353,8 +3686,8 @@ class ScanHandler:
         if not self._confirm_large_scan(n_positions, xax["expt"], self.OVERHEAD_FLY):
             return
 
-        scan_name = "fly3d_SNAKE" if snake else "fly3d"
-        self._pre_scan(scan_name, scan_kind=scan_kind)
+        scan_label = "fly3d_SNAKE" if snake else "fly3d"
+        self._pre_scan(scan_label, scan_kind=scan_kind)
 
         self.w.switch_SGstream(snake)
 
@@ -3392,7 +3725,7 @@ class ScanHandler:
 
         self.fly3d_axes_params = [xax, yax, phiax]
 
-        self._log_scan_header(scan_name, [xax, yax, phiax], scan_kind=scan_kind)
+        self._log_scan_header(scan_label, [xax, yax, phiax], scan_kind=scan_kind)
 
         # Compute master file paths NOW (before scan number may be incremented)
         # so flydone3d can use the correct paths for linking detector data.
@@ -3417,7 +3750,7 @@ class ScanHandler:
             ymotor,
             phimotor,
             done_signal=self.w.flydone3d,
-            scanname=scanname,
+            slice_label_prefix=slice_label_prefix,
             snake=snake,
         )
 
@@ -3503,6 +3836,28 @@ class ScanHandler:
         self.w.run_stop_issued()
         self.w.update_status_scan_time()
 
+    def helix_fly_choose_axis(self, phimotor=6):
+        """Prompt for which axis moves simultaneously with phi, then launch helix_fly."""
+        candidates = [
+            name for name in ("X", "Z")
+            if name in self.w.motornames
+            and self.w.motorconnected[self.w.motornames.index(name)]
+        ]
+        if not candidates:
+            QMessageBox.warning(self.w.ui, "Error", "Neither X nor Z motor is connected.")
+            return
+        selected, ok = QInputDialog.getItem(
+            self.w.ui,
+            "Helix Fly Scan",
+            "Choose which axis to move simultaneously with phi:",
+            candidates,
+            0,
+            False,
+        )
+        if not ok:
+            return
+        self.helix_fly(self.w.motornames.index(selected), phimotor)
+
     def helix_fly(self, zmotor=2, phimotor=6):
         """Entry point for a helix fly scan: phi flies with simultaneous Z constant-velocity motion (GUI thread).
 
@@ -3511,15 +3866,27 @@ class ScanHandler:
         constant velocity over the same total_time, with images acquired at DG645-triggered
         intervals synchronized to phi's step timing.
         """
-        if not self._pre_scan_guards():
-            return
-
-        # Read parameters and check large scan BEFORE _pre_scan (which creates master file)
+        # Read parameters before the guards so the velocity guard (below) can
+        # check the velocities they imply. Also done BEFORE _pre_scan (which
+        # creates the master file).
         try:
             phi_ax = self._read_motor_params(phimotor)
             z_ax = self._read_motor_params(zmotor)
         except (ValueError, TypeError):
             QMessageBox.warning(self.w.ui, "Error", "Check scan parameters.")
+            return
+
+        phi_st = phi_ax["p0"] + phi_ax["st"]
+        phi_fe = phi_ax["p0"] + phi_ax["fe"]
+        z_st = z_ax["p0"] + z_ax["st"]
+        z_fe = z_ax["p0"] + z_ax["fe"]
+        total_time, _, _ = self._compute_helix_total_time(phi_st, phi_fe, phi_ax["step"], phi_ax["expt"])
+        planned_velocities = {
+            phi_ax["name"]: abs(phi_fe - phi_st) / total_time,
+            z_ax["name"]: abs(z_fe - z_st) / total_time,
+        }
+        print(f"helix_fly planned velocities: {planned_velocities}")
+        if not self._pre_scan_guards(velocities=planned_velocities):
             return
 
         pos = self._make_positions(phi_ax["p0"], phi_ax["st"], phi_ax["fe"], phi_ax["step"])
@@ -3960,16 +4327,21 @@ class ScanHandler:
         # stepscan2d0 will re-configure it precisely per-step with set_pilatus().
         self.w.dg645_12ID.set_pilatus_fly(0.001)
 
-        # Per-slice scandone(True, False) calls inside stepscan3d0 handle per-slice
-        # detector cleanup and scan-number increment. The done_signal fires on the GUI
-        # thread after the worker exits and handles the final teardown (shutter, status
-        # label, scan time) without incrementing the scan number a second time.
+        # Per-slice scandone(..., direct_gui_updates=False) calls inside stepscan3d0
+        # handle per-slice detector cleanup, master-file linking, and scan-number
+        # increment -- entirely on the worker thread, with GUI label refresh
+        # deferred to a queued scanFolderAdvanced signal (see _launch_worker).
+        # The done_signal fires on the GUI thread after the worker exits and
+        # handles the final teardown (shutter, status label, scan time) without
+        # incrementing the scan number a second time.
         self._launch_worker(
             self.stepscan3d0,
             xmotor,
             ymotor,
             phimotor,
-            done_signal=lambda _ok: self.w.scandone(update_scannumber=False, donedone=True),
+            done_signal=lambda _ok: self.w.scandone(
+                update_scannumber=False, donedone=True, link_detector_data=False
+            ),
         )
 
     def run_stop_issued(self):
@@ -3983,6 +4355,21 @@ class ScanHandler:
             SCAN_NUMBER_IOC.put(int(self.w.parameters.scan_number))
         self.ui.edit_scannumber.setText(str(int(self.w.parameters.scan_number)))
         self.update_label_scanCheck()
+
+    def on_scan_folder_advanced(self, scan_number):
+        """GUI-thread slot for workerSignals.scanFolderAdvanced.
+
+        Refreshes the scan-number/scan-name widgets after a 3-D fly/step
+        executor advances to a new per-slice folder on the worker thread
+        (via _advance_scan_number_safe / scandone(direct_gui_updates=False)).
+        Qt auto-queues delivery here because this method is bound to self.w
+        (a QObject with GUI-thread affinity), so it is safe even though the
+        signal was emitted from the worker thread.
+        """
+        self.ui.edit_scannumber.setText(str(int(scan_number)))
+        self.update_label_scanCheck()
+        txt = "%s_%0.4i" % (self.w.parameters.scan_name, scan_number)
+        self.ui.lbl_scanname.setText(txt)
 
     def stepscan0(self, motornumber=-1, update_progress=None, update_status=None):
         axis = self.w.motornames[motornumber]
@@ -4013,7 +4400,7 @@ class ScanHandler:
                 fe = st
                 st = t
 
-        self.w.pts.mv(axis, st)
+        self._scan_mv(axis, st, update_status=update_status)
         pos = self._make_positions(0, st - 0, fe - 0, step)
         if len(pos) == 1:
             pos = np.array([st, fe])
@@ -4043,7 +4430,7 @@ class ScanHandler:
             for i, p in enumerate(pos):
                 if self.isStopScanIssued:
                     break
-                self.w.pts.mv(axis, p)
+                self._scan_mv(axis, p, update_status=update_status)
                 time.sleep(min(expt, 0.05))
                 mpos_data.append(self.w.pts.get_pos(axis))
                 if update_progress is not None:
@@ -4101,10 +4488,10 @@ class ScanHandler:
                 break
 
             # Move motor to this scan position and wait for motor to settle.
-            self.w.pts.mv(axis, value)
+            self._scan_mv(axis, value, update_status=update_status)
 
             # Configurable idle time between exposures (avoids vibration artefacts).
-            time.sleep(self.w.parameters._waittime_between_scans)
+            time.sleep(self.w.parameters._step_acq_time)
 
             # Re-confirm detector is armed before each trigger.
             # The detector can fall out of armed state after a timeout or IOC error.
@@ -4135,7 +4522,7 @@ class ScanHandler:
             self._emit_progress(t0, i, len(pos), update_progress, update_status)
 
         # Return motor to its home position (where it was before the scan started).
-        self.w.pts.mv(axis, pos0)
+        self._scan_mv(axis, pos0, update_status=update_status)
 
     def get_detectors_armed(self):
         TIMEOUT = 10
@@ -4300,8 +4687,8 @@ class ScanHandler:
             for i, (xp, yp) in enumerate(pos):
                 if self.isStopScanIssued:
                     break
-                self.w.pts.mv(xaxis, xp)
-                self.w.pts.mv(yaxis, yp)
+                self._scan_mv(xaxis, xp, update_status=update_status)
+                self._scan_mv(yaxis, yp, update_status=update_status)
                 time.sleep(min(expt, 0.05))
                 mpos_data.append([self.w.pts.get_pos(xaxis), self.w.pts.get_pos(yaxis)])
                 if update_progress is not None:
@@ -4367,7 +4754,7 @@ class ScanHandler:
                     pos_ok = self.w.pts.hexapod.handle_error()
 
             # Configurable idle time between exposures.
-            time.sleep(self.w.parameters._waittime_between_scans)
+            time.sleep(self.w.parameters._step_acq_time)
 
             # Confirm detector armed before each trigger (may fall out of arm
             # state after a previous timeout or transient IOC error).
@@ -4415,7 +4802,8 @@ class ScanHandler:
         return 1
 
     def stepscan3d0(
-        self, xmotor=0, ymotor=-1, phimotor=-1, update_progress=None, update_status=None
+        self, xmotor=0, ymotor=-1, phimotor=-1, update_progress=None, update_status=None,
+        notify_folder_advanced=None
     ):
         axis = self.w.motornames[phimotor]
         self.w.signalmotor3 = axis
@@ -4426,7 +4814,7 @@ class ScanHandler:
         fe = self.stepscan3d_fe + self.stepscan3d_p0
         step = self.stepscan3d_step
 
-        self.w.pts.mv(axis, st)
+        self._scan_mv(axis, st, update_status=update_status)
         pos = self._make_positions(0, st - 0, fe - 0, step)
 
         i = 0
@@ -4464,12 +4852,12 @@ class ScanHandler:
             for phip in pos:
                 if self.isStopScanIssued:
                     break
-                self.w.pts.mv(phiaxis, phip)
+                self._scan_mv(phiaxis, phip, update_status=update_status)
                 for xp, yp in xy_pos:
                     if self.isStopScanIssued:
                         break
-                    self.w.pts.mv(xaxis, xp)
-                    self.w.pts.mv(yaxis, yp)
+                    self._scan_mv(xaxis, xp, update_status=update_status)
+                    self._scan_mv(yaxis, yp, update_status=update_status)
                     time.sleep(min(expt, 0.05))
                     mpos_data.append(
                         [self.w.pts.get_pos(xaxis), self.w.pts.get_pos(yaxis)]
@@ -4480,7 +4868,7 @@ class ScanHandler:
                 time.sleep(0.5)
             self.w.mpos = mpos_data
             for key, p0val in self.w.motor_p0.items():
-                self.w.pts.mv(self.w.motornames[key], p0val)
+                self._scan_mv(self.w.motornames[key], p0val, update_status=update_status)
             return
 
         while i < Npos:
@@ -4498,8 +4886,11 @@ class ScanHandler:
             scaninfo.append(value)
             self.w.write_scaninfo_to_logfile(scaninfo)
 
-            self.w.pts.mv(axis, value)
+            self._scan_mv(axis, value, update_status=update_status)
             self._push_filepaths_to_detectors()
+            # Give this slice's folder its own master file, with theta reflecting
+            # the angle just settled at (worker-thread safe: no Qt widget reads).
+            self._write_slice_master_file()
             self.progress_3d = (i, Npos)
             scan = f"{axis}{i:03d}"
             self._log_3d_slice_start(scan, self.stepscan3d_axes_params, value)
@@ -4525,7 +4916,17 @@ class ScanHandler:
                 msg = f"Elapsed time = {time.time() - self.time_scanstart}s to finish {(i + 1) / len(pos) * 100}%."
                 update_status(msg)
 
-            self.w.scandone(True, False, update_gui=False)
+            # Link this slice's detector data into its own master file (not the
+            # frozen scan-start one), then advance to the next folder. Runs on
+            # the worker thread, so direct_gui_updates=False keeps this call from
+            # touching any Qt widgets directly -- label refresh is deferred to
+            # the queued scanFolderAdvanced signal via notify_folder_advanced.
+            self.w.scandone(
+                True, False, update_gui=False,
+                direct_gui_updates=False,
+                notify_folder_advanced=notify_folder_advanced,
+                link_scan_number=self.w.parameters.scan_number,
+            )
             if wait_long:
                 wait_for_det_recovery_s = 60  # extended wait after detector timeout to allow IOC recovery before retry
                 time.sleep(wait_for_det_recovery_s)
@@ -4544,10 +4945,11 @@ class ScanHandler:
         xmotor=0,
         ymotor=1,
         phimotor=6,
-        scanname="",
+        slice_label_prefix="",
         snake=False,
         update_progress=None,
         update_status=None,
+        notify_folder_advanced=None,
     ):
         # xmotor is for flying
         # ymotor is for stepping
@@ -4557,6 +4959,13 @@ class ScanHandler:
         self.w.signalmotorunit3 = self.w.motorunits[phimotor]
         pos = self.w.pts.get_pos(axis)
         self.w.isfly3 = False
+
+        # fly2d0/fly2d0_SNAKE run synchronously on this same worker thread for
+        # each phi slice below. Stash the queued-signal callback here so they can
+        # advance scan_number/refresh the GUI label the same thread-safe way
+        # stepscan3d0 does, instead of touching Qt widgets directly (see the
+        # end of fly2d0 / fly2d0_SNAKE).
+        self._notify_folder_advanced_3d = notify_folder_advanced
 
         st = self.fly3d_st + self.fly3d_p0
         fe = self.fly3d_fe + self.fly3d_p0
@@ -4568,7 +4977,7 @@ class ScanHandler:
             step = abs(step)
 
         # revsere scan disabled: always scan from start to final regardless of the initial position.
-        self.w.pts.mv(axis, st)
+        self._scan_mv(axis, st, update_status=update_status)
         pos = np.arange(st, fe + step / 2, step)
         retried_dueto_timeout = 0
 
@@ -4603,12 +5012,12 @@ class ScanHandler:
             for phip in pos:
                 if self.isStopScanIssued:
                     break
-                self.w.pts.mv(phiaxis, phip)
+                self._scan_mv(phiaxis, phip, update_status=update_status)
                 for xp, yp in xy_pos:
                     if self.isStopScanIssued:
                         break
-                    self.w.pts.mv(yaxis, yp)
-                    self.w.pts.mv(xaxis, xp)
+                    self._scan_mv(yaxis, yp, update_status=update_status)
+                    self._scan_mv(xaxis, xp, update_status=update_status)
                     time.sleep(min(tm, 0.05))
                     mpos_data.append(
                         [self.w.pts.get_pos(xaxis), self.w.pts.get_pos(yaxis)]
@@ -4622,10 +5031,10 @@ class ScanHandler:
 
         # ── REAL MODE ─────────────────────────────────────────────────────────
         # Build a per-slice scan label used in log entries.
-        if scanname:
-            scanname = axis
+        if slice_label_prefix:
+            slice_label_prefix = f"{slice_label_prefix}{axis}"
         else:
-            scanname = f"{scanname}{axis}"
+            slice_label_prefix = axis
 
         i = 0
         retried_dueto_timeout = 0
@@ -4641,14 +5050,25 @@ class ScanHandler:
             self.w.write_scaninfo_to_logfile(["#I phi = ", value])
 
             # Move phi to this angle.
-            self.w.pts.mv(axis, value)
+            self._scan_mv(axis, value, update_status=update_status)
 
             self.progress_3d = (i, len(pos))
-            scan = f"{scanname}{i:03d}"
+            scan = f"{slice_label_prefix}{i:03d}"
             self._log_3d_slice_start(
                 scan, self.fly3d_axes_params, value,
                 scan_kind="fly_snake" if snake else "fly_hexapod_1d",
             )
+
+            # Give this slice its own folder's master file, with theta reflecting
+            # the angle just settled at (worker-thread safe: no Qt widget reads).
+            # Also refreshes self._current_scan_master_paths to this slice, so the
+            # hexapod-positions append below (and flydone3d's final link) target it.
+            self._write_slice_master_file()
+            # fly2d0/fly2d0_SNAKE end with their own run_stop_issued(), which
+            # advances scan_number to the *next* slice's folder before we get
+            # control back below -- so capture this slice's number now, while
+            # it's still current, for the post-sweep data-linking call.
+            slice_scan_number = self.w.parameters.scan_number
 
             # Program the hexapod trajectory for this phi slice, then run the
             # 2-D executor directly on the current worker thread (no sub-worker).
@@ -4660,29 +5080,37 @@ class ScanHandler:
                 self.fly_traj(xmotor, ymotor)
                 # As early as possible after pulse_number becomes known, verify
                 # the software-predicted hexapod trigger count matches it and
-                # record both. The X/Y grid is identical for every phi slice,
-                # so only the first slice needs to write the master file
-                # dataset; no try/except here — let a mismatch propagate to
-                # Worker.run()'s generic exception handler like DET_MIN_READOUT_Error
-                # and DG645_Error already do elsewhere in this file.
-                self._reconcile_hexapod_snake_positions(write_to_master=(i == 0))
+                # record both. Every slice now has its own master file, so every
+                # slice writes its own hexapod_positions dataset; no try/except
+                # here — let a mismatch propagate to Worker.run()'s generic
+                # exception handler like DET_MIN_READOUT_Error and DG645_Error
+                # already do elsewhere in this file.
+                self._reconcile_hexapod_snake_positions(write_to_master=True)
                 retval = self.fly2d0_SNAKE(
-                    xmotor, ymotor, scanname=scan,
+                    xmotor, ymotor,
                     update_progress=update_progress, update_status=update_status,
                 )
             else:
                 self.fly_traj(xmotor)
                 retval = self.fly2d0(
-                    xmotor, ymotor, scanname=scan,
+                    xmotor, ymotor,
                     update_progress=update_progress, update_status=update_status,
                 )
             self.w.s12softglue.flush()
             print(f"softglue flushed at {time.ctime()}")
-            txt = "%s_%0.4i" % (self.w.parameters.scan_name, self.w.parameters.scan_number)
-            self.ui.lbl_scanname.setText(txt)
+
+            # Link this slice's detector data into its own master file. The
+            # scan-number advance for the next slice's folder already happened
+            # inside fly2d0/fly2d0_SNAKE's own end-of-scan bookkeeping above.
+            self._link_slice_detector_data(slice_scan_number)
+
             if i < len(pos) - 1:
                 self.w.get_detectors_ready()
                 self._push_filepaths_to_detectors()
+                # Extra settle time before the next phi slice starts arming its
+                # detectors -- some slices otherwise stall for a long time waiting
+                # on the detector IOC before the next trigger sequence begins.
+                time.sleep(self.OVERHEAD_FLY3D_PHI)
 
             # On detector failure, retry this phi angle up to 2 extra times.
             if retval == DETECTOR_NOT_STARTED_ERROR:
@@ -4717,6 +5145,10 @@ class ScanHandler:
 
             i += 1
 
+        # Don't let a standalone 2-D fly scan started later on this handler
+        # accidentally pick up this 3-D scan's (now-finished) signal emitter.
+        self._notify_folder_advanced_3d = None
+
     def wait_for_beam(self, update_status, value):
         ct0 = time.time()
         while self.w.isOK2run is not True:
@@ -4750,7 +5182,7 @@ class ScanHandler:
         self.w.write_scaninfo_to_logfile(scaninfo)
 
     def fly2d0(
-        self, xmotor=0, ymotor=1, scanname="", update_progress=None, update_status=None
+        self, xmotor=0, ymotor=1, update_progress=None, update_status=None
     ):
         """2-D fly scan: step the slow (Y) axis, fire fly0 along X for each Y line.
 
@@ -4801,7 +5233,7 @@ class ScanHandler:
             self.w.write_scaninfo_to_logfile(["#I Y = ", yval])
 
             # Step the slow axis to this Y position and wait for it to stop.
-            self.w.pts.mv(axis, yval)
+            self._scan_mv(axis, yval, update_status=update_status)
             while self.w.pts.ismoving(axis):
                 time.sleep(0.02)
 
@@ -4825,7 +5257,7 @@ class ScanHandler:
                     xmotor, update_progress=update_progress, update_status=update_status
                 )
                 if status is DETECTOR_NOT_STARTED_ERROR:
-                    isreshreshed = self.refresh_detectors()
+                    isreshreshed = self.refresh_detectors(update_status=update_status)
                 if isreshreshed == 0:
                     print("Detector refresh failed. Stopping scan.")
                     if update_status:
@@ -4835,12 +5267,16 @@ class ScanHandler:
             # Advance the scan number log entry for this completed X line.
             # return_motor=False keeps the motor at the end of the X trajectory
             # (the next line starts from wherever fly0 left off, or goto_start_pos
-            # handles repositioning internally).
-            self.w.flydone(return_motor=False, reset_scannumber=False)
+            # handles repositioning internally). direct_gui_updates=False because
+            # this runs on the worker thread, once per Y line -- touching Qt
+            # widgets directly here (rather than via a queued signal) is what
+            # was corrupting the backing store and crashing the GUI.
+            self.w.flydone(return_motor=False, reset_scannumber=False, direct_gui_updates=False)
 
-            # Inter-line idle time (configurable).
+            # Inter-line idle time (configurable). Reuses the step-scan acquisition
+            # time parameter for the per-line wait in this fly scan.
             t1 = time.time()
-            while time.time() - t1 < self.w.parameters._waittime_between_scans:
+            while time.time() - t1 < self.w.parameters._step_acq_time:
                 time.sleep(0.01)
 
             # Progress: fly3d_p0 is non-None when called from fly3d0.
@@ -4854,10 +5290,10 @@ class ScanHandler:
                 progress_3d=self.progress_3d if self.fly3d_p0 is not None else None,
             )
 
-        self.w.run_stop_issued()
+        self._advance_scan_number_thread_safe()
         return 1
 
-    def refresh_detectors(self):
+    def refresh_detectors(self, update_status=None):
         """Refresh the detectors to ensure they are ready for the next scan."""
         stata = 1
         for detN, det in enumerate(self.w.detector):
@@ -4877,10 +5313,10 @@ class ScanHandler:
                     )  # if failed, it will return 0. ohterwise it will return 1.
                     stata = stata * status
                 except Exception as e:
-                    print(f"Error refreshing detector {det._prefix}: {e}")
-                    self.ui.statusbar.showMessage(
-                        f"Error refreshing detector {det._prefix}: {e}"
-                    )
+                    msg = f"Error refreshing detector {det._prefix}: {e}"
+                    print(msg)
+                    if update_status:
+                        update_status(msg)
         return stata
 
     def fly_traj(self, xmotor=0, ymotor=-1):
@@ -4968,7 +5404,7 @@ class ScanHandler:
             )
 
     def fly2d0_SNAKE(
-        self, xmotor=0, ymotor=1, scanname="", update_progress=None, update_status=None
+        self, xmotor=0, ymotor=1, update_progress=None, update_status=None
     ):
         self.w.isfly2 = False
         ##### ############## need to work from this........
@@ -5033,8 +5469,8 @@ class ScanHandler:
             for xp, yp in xy_pos:
                 if self.isStopScanIssued:
                     break
-                self.w.pts.mv(yaxis, yp)
-                self.w.pts.mv(xaxis, xp)
+                self._scan_mv(yaxis, yp, update_status=update_status)
+                self._scan_mv(xaxis, xp, update_status=update_status)
                 time.sleep(min(tm, 0.05))
                 mpos_data.append([self.w.pts.get_pos(xaxis), self.w.pts.get_pos(yaxis)])
                 count += 1
@@ -5165,25 +5601,14 @@ class ScanHandler:
                 N_imgcollected = val
                 t_since_last_frame = time.time()
 
-            # When one frame short, Armed→0 is the reliable "all data written" signal.
-            # ArrayCounter_RBV lags while the HDF5 file is being finalised.
-            if N_imgcollected == Nstep - 1:
-                active_dets = [
-                    det for ndet, det in enumerate(self.w.detector)
-                    if ndet <= 1 and det is not None
-                ]
-                if active_dets and all(det.Armed == 0 for det in active_dets):
-                    msg = (
-                        f"Warning: fly2d0_SNAKE completed with {N_imgcollected}/{Nstep} "
-                        f"frames collected (Armed=0 accepted as finished, but the "
-                        f"detector's ArrayCounter_RBV never reached the expected "
-                        f"hexapod pulse count)."
-                    )
-                    self.w.messages["recent error message"] = msg
-                    print(msg)
-                    break
-
-            # Stall timeout: use the longer window for the last frame.
+            # Stall timeout: use the longer window for the last frame, since its
+            # ArrayCounter_RBV update can be delayed by HDF5 finalization. This used
+            # to also accept Armed==0 at Nstep-1 as "close enough" and break early,
+            # but Armed can drop to 0 just as easily because the last trigger was
+            # never registered at all (dropped trigger, not just a slow RBV) --
+            # that silently produced a NaN or missing final frame. Waiting out the
+            # full stall window and timing out on a genuine miss (which fly2d/fly3d
+            # already retry on DETECTOR_NOT_STARTED_ERROR) is safer than guessing.
             stall_limit = LAST_FRAME_TIMEOUT if N_imgcollected == Nstep - 1 else TIMEOUT
             if time.time() - t_since_last_frame > stall_limit:
                 self.w.messages["recent error message"] = (
@@ -5194,7 +5619,7 @@ class ScanHandler:
                 return DETECTOR_NOT_STARTED_ERROR
 
         self.w.pts.hexapod.wait()
-        self.w.run_stop_issued()
+        self._advance_scan_number_thread_safe()
         return 1
 
     def fly0(self, motornumber=-1, update_progress=None, update_status=None):
@@ -5248,7 +5673,7 @@ class ScanHandler:
             for i, p in enumerate(positions):
                 if self.isStopScanIssued:
                     break
-                self.w.pts.mv(axis, p)
+                self._scan_mv(axis, p, update_status=update_status)
                 time.sleep(min(tm, 0.05))
                 mpos_data.append(self.w.pts.get_pos(axis))
                 if update_progress is not None:
@@ -5290,7 +5715,8 @@ class ScanHandler:
                     f"Exposure time {expt:.4f} and period {period:.4f} requires the readout time {period - expt}, which is too short."
                 )
                 print(self.w.messages["recent error message"])
-                self.ui.statusbar.showMessage(self.w.messages["recent error message"])
+                if update_status:
+                    update_status(self.w.messages["recent error message"])
                 return None
 
             if expt <= 0:
@@ -5371,9 +5797,8 @@ class ScanHandler:
                             f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
                         )
                         print(self.w.messages["recent error message"])
-                        self.ui.statusbar.showMessage(
-                            self.w.messages["recent error message"]
-                        )
+                        if update_status:
+                            update_status(self.w.messages["recent error message"])
                         return DETECTOR_NOT_STARTED_ERROR
             print("Ready for traj")
             pos = self.w.pts.get_pos(axis)
@@ -5489,7 +5914,7 @@ class ScanHandler:
                 self.ui.actionFit_QDS_phi.setEnabled(True)
 
             self._prev_vel, self._prev_acc = self.w.pts.get_speed(axis)
-            self.w.pts.mv(axis, st, wait=True)
+            self._scan_mv(axis, st, wait=True, update_status=update_status)
             wait_for_motor_settle_s = 0.1  # brief settle time after moving phi to start position before setting fly speed
             time.sleep(wait_for_motor_settle_s)
             # print(f"Setting speed for fly scan. Total time: {abs(fe-st)/total_time:.3f} s, acceleration: {abs(fe-st)/total_time*10:.3f}.")
@@ -5522,9 +5947,8 @@ class ScanHandler:
                             f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
                         )
                         print(self.w.messages["recent error message"])
-                        self.ui.statusbar.showMessage(
-                            self.w.messages["recent error message"]
-                        )
+                        if update_status:
+                            update_status(self.w.messages["recent error message"])
                         # showerror("Detector timeout.")
                         return
 
@@ -5591,9 +6015,8 @@ class ScanHandler:
                         f"Detector {det._prefix} data collection timeout after {TIMEOUT} seconds."
                     )
                     print(self.w.messages["recent error message"])
-                    self.ui.statusbar.showMessage(
-                        self.w.messages["recent error message"]
-                    )
+                    if update_status:
+                        update_status(self.w.messages["recent error message"])
                     return DETECTOR_NOT_STARTED_ERROR
                 timeelapsed = time.time() - t0
                 if self.isStopScanIssued:
@@ -5658,8 +6081,8 @@ class ScanHandler:
                 if self.isStopScanIssued:
                     break
                 z_p = z_st + i * z_step_debug
-                self.w.pts.mv(phi_axis, p)
-                self.w.pts.mv(z_axis, z_p)
+                self._scan_mv(phi_axis, p, update_status=update_status)
+                self._scan_mv(z_axis, z_p, update_status=update_status)
                 time.sleep(min(phi_tm, 0.05))
                 phi_mpos_data.append(self.w.pts.get_pos(phi_axis))
                 z_mpos_data.append(self.w.pts.get_pos(z_axis))
@@ -5675,13 +6098,9 @@ class ScanHandler:
         Xstep = self.helix_phi_step
         Xtm = self.helix_phi_tm
 
-        fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
-        step_time = max(fly_acq_time, Xtm + self.det_readout_time, self.OVERHEAD_FLY)
-        # Same rounding-guarded formula used for helix's nominal count in
-        # _log_scan_header, so the logged count and the actual DG645 arm
-        # count can never diverge.
-        Nsteps = self._compute_n_positions([self._make_positions(0, phi_st, phi_fe, Xstep)], scan_kind="fly_phi")
-        total_time = Nsteps * step_time
+        # Same formula used by helix_fly's pre-scan velocity guard, so the
+        # logged/guarded values and the actual DG645 arm count can never diverge.
+        total_time, Nsteps, step_time = self._compute_helix_total_time(phi_st, phi_fe, Xstep, Xtm)
         expt = Xtm
         if step_time - expt < 0.015:
             raise DET_MIN_READOUT_Error(
@@ -5706,11 +6125,10 @@ class ScanHandler:
                 z_fe = z_st
                 z_st = t
 
-        self._prev_vel_phi, self._prev_acc_phi = self.w.pts.get_speed(phi_axis)
         self._prev_vel_z, _ = self.w.pts.get_speed(z_axis)
 
-        self.w.pts.mv(phi_axis, phi_st, wait=True)
-        self.w.pts.mv(z_axis, z_st, wait=True)
+        self._scan_mv(phi_axis, phi_st, wait=True, update_status=update_status)
+        self._scan_mv(z_axis, z_st, wait=True, update_status=update_status)
         wait_for_motor_settle_s = 0.1
         time.sleep(wait_for_motor_settle_s)
 
@@ -5741,9 +6159,8 @@ class ScanHandler:
                         f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
                     )
                     print(self.w.messages["recent error message"])
-                    self.ui.statusbar.showMessage(
-                        self.w.messages["recent error message"]
-                    )
+                    if update_status:
+                        update_status(self.w.messages["recent error message"])
                     return
 
         timeout_occurred, TIMEOUT = self.w.is_arming_detecotors_timedout()
@@ -5811,9 +6228,8 @@ class ScanHandler:
                     f"Detector {det._prefix} data collection timeout after {TIMEOUT} seconds."
                 )
                 print(self.w.messages["recent error message"])
-                self.ui.statusbar.showMessage(
-                    self.w.messages["recent error message"]
-                )
+                if update_status:
+                    update_status(self.w.messages["recent error message"])
                 return DETECTOR_NOT_STARTED_ERROR
             timeelapsed = time.time() - t0
             if self.isStopScanIssued:
@@ -6105,14 +6521,16 @@ class ScanHandler:
                 self.w.mvr(motornumber=motornumber, val=float(pos))
 
         elif cmd == "fly2d":
-            self.w.fly2d(xmotor=xmotor, ymotor=ymotor, scanname=scanname)
+            self.w.fly2d(xmotor=xmotor, ymotor=ymotor)
 
         elif cmd == "fly2d_snake":
-            self.w.fly2d(xmotor=xmotor, ymotor=ymotor, snake=True, scanname=scanname)
+            self.w.fly2d(xmotor=xmotor, ymotor=ymotor, snake=True)
 
         elif cmd == "fly3d":
+            # scanname here seeds fly3d0's per-phi-slice label prefix, not the
+            # sample scan name (set separately via a prior "set" command).
             self.w.fly3d(
-                xmotor=xmotor, ymotor=ymotor, phimotor=phimotor, scanname=scanname
+                xmotor=xmotor, ymotor=ymotor, phimotor=phimotor, slice_label_prefix=scanname
             )
 
         elif cmd == "fly3d_snake":
@@ -6121,7 +6539,7 @@ class ScanHandler:
                 ymotor=ymotor,
                 phimotor=phimotor,
                 snake=True,
-                scanname=scanname,
+                slice_label_prefix=scanname,
             )
 
         elif cmd == "stepscan3d":

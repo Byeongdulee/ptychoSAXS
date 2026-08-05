@@ -135,7 +135,7 @@ except ImportError:
         _ref_Z = 0.0
         _ref_Z2 = 0.0
         _qds_time_interval = 0.1
-        _waittime_between_scans = 1
+        _step_acq_time = 1
         _qds_R_vert = 10.0
         _qds_th0_vert = -30.0
         _qds_R_cyl = 50.0
@@ -310,6 +310,10 @@ class workerSignals(QObject):
     progress = pyqtSignal(int)
     statusmessage = pyqtSignal(str)
     error = pyqtSignal(str)
+    # Emitted by 3-D fly/step executors from the worker thread after advancing to
+    # a new per-slice scan folder; Qt auto-queues delivery onto the GUI thread
+    # since the connected slot lives on a QObject (RunGUI) with GUI-thread affinity.
+    scanFolderAdvanced = pyqtSignal(int)
 
 
 # Step 1: Create a worker class
@@ -477,7 +481,7 @@ class ptyco_main_control(QObject):
             self.parameters._ref_Z = 0
             self.parameters._ref_Z2 = 0
             self.parameters._qds_time_interval = 0.1
-            self.parameters._waittime_between_scans = 1
+            self.parameters._step_acq_time = 1
             self.parameters._qds_R_vert = 10.0  # 10mm
             self.parameters._qds_th0_vert = -30.0  # degree
             self.parameters._qds_R_cyl = 50.0  # mm
@@ -596,7 +600,11 @@ class ptyco_main_control(QObject):
             enable = pts is not None and self.motorconnected[i]
             self._set_motor_widgets_enabled(n, enable)
 
-        self.ui.pb_helix_scan.setEnabled(pts is not None and self.motorconnected[ym] and self.motorconnected[phim])
+        self.ui.pb_helix_scan.setEnabled(
+            pts is not None
+            and self.motorconnected[phim]
+            and (self.motorconnected[ym] or self.motorconnected[xm])
+        )
 
         self.read_motor_scan_range()
 
@@ -667,6 +675,9 @@ class ptyco_main_control(QObject):
         )
         self.ui.pb_timeSeries.clicked.connect(self.scan_handler.time_series)
         self.ui.pb_takeshot.clicked.connect(self.scan_handler.takeshot)
+        self.ui.pb_writeMacro.clicked.connect(self._open_macro_window)
+        self.ui.pb_sendScanParamToMacro.setEnabled(False)
+        self.ui.pb_sendScanParamToMacro.clicked.connect(self._send_scan_param_to_macro)
         self.ui.pushButton_plotScanPositions.clicked.connect(
             lambda: self.scan_handler.plot_scan_positions_2d(xm, ym)
         )
@@ -683,7 +694,7 @@ class ptyco_main_control(QObject):
         self.ui.pb_SAXSscan_fly3d.clicked.connect(
             lambda: self.fly3d(xm, ym, phim, snake=True)
         )
-        self.ui.pb_helix_scan.clicked.connect(lambda: self.scan_handler.helix_fly(ym, phim))
+        self.ui.pb_helix_scan.clicked.connect(lambda: self.scan_handler.helix_fly_choose_axis(phim))
         self.ui.actionSelect_time_intervals.triggered.connect(self.select_timeintervals)
         self.ui.actionTrigout.triggered.connect(lambda: self.set_softglue_in(1))
         self.ui.actionDetout.triggered.connect(lambda: self.set_softglue_in(2))
@@ -719,8 +730,8 @@ class ptyco_main_control(QObject):
         )
         self.ui.pushButton_scanNp1.clicked.connect(self._scan_number_plus_one)
         self.ui.pushButton_scanNm1.clicked.connect(self._scan_number_minus_one)
-        self.ui.actionSet_waittime_between_scans.triggered.connect(
-            self.set_waittime_between_scans
+        self.ui.actionSet_step_acq_time.triggered.connect(
+            self.set_step_acq_time
         )
         self.ui.actionMonitor_Beamline_Status.triggered.connect(
             self.set_monitor_beamline_status
@@ -974,6 +985,7 @@ class ptyco_main_control(QObject):
         w.signal.error.connect(self._on_worker_error)
         self.threadpool.start(w)
         self.updatepos(axis)
+        return w
 
     def mvr(self, motornumber=-1, sign=1, val=0):
         if motornumber == -1:
@@ -993,6 +1005,7 @@ class ptyco_main_control(QObject):
         w.signal.error.connect(self._on_worker_error)
         self.threadpool.start(w)
         self.updatepos(axis)
+        return w
 
     # ── Gonio & hexapod speed control ─────────────────────────────────────
 
@@ -1151,8 +1164,8 @@ class ptyco_main_control(QObject):
     def select_hdf_multiframecapture_fly(self, value=None):
         return self.scan_handler.select_hdf_multiframecapture_fly(value)
 
-    def set_waittime_between_scans(self):
-        return self.scan_handler.set_waittime_between_scans()
+    def set_step_acq_time(self):
+        return self.scan_handler.set_step_acq_time()
 
     def set_shotnumber_per_step(self):
         return self.scan_handler.set_shotnumber_per_step()
@@ -1237,7 +1250,7 @@ class ptyco_main_control(QObject):
         return self.scan_handler.fly0(motornumber, update_progress, update_status)
 
     def fly2d(self, xmotor=0, ymotor=1, scanname="", snake=False):
-        return self.scan_handler.fly2d(xmotor, ymotor, scanname, snake)
+        return self.scan_handler.fly2d(xmotor, ymotor, snake)
 
     def fly2d0(
         self, xmotor=0, ymotor=1, scanname="", update_progress=None, update_status=None
@@ -1302,8 +1315,16 @@ class ptyco_main_control(QObject):
         )
 
     # Scan lifecycle helpers
-    def scandone(self, update_scannumber=True, donedone=True, update_gui=True):
-        return self.scan_handler.scandone(update_scannumber, donedone, update_gui=update_gui)
+    def scandone(self, update_scannumber=True, donedone=True, update_gui=True,
+                 direct_gui_updates=True, notify_folder_advanced=None, link_scan_number=None,
+                 link_detector_data=True):
+        return self.scan_handler.scandone(
+            update_scannumber, donedone, update_gui=update_gui,
+            direct_gui_updates=direct_gui_updates,
+            notify_folder_advanced=notify_folder_advanced,
+            link_scan_number=link_scan_number,
+            link_detector_data=link_detector_data,
+        )
 
     def check_start_position(self, n):
         return self.scan_handler.check_start_position(n)
@@ -1337,6 +1358,9 @@ class ptyco_main_control(QObject):
 
     def update_scannumber(self):
         return self.scan_handler.update_scannumber()
+
+    def on_scan_folder_advanced(self, scan_number):
+        return self.scan_handler.on_scan_folder_advanced(scan_number)
 
     def write_scaninfo_to_logfile(self, strlist):
         return self.scan_handler.write_scaninfo_to_logfile(strlist)
@@ -1569,6 +1593,23 @@ class ptyco_main_control(QObject):
                 self.ui, "Optics GUI", "Could not launch optics GUI:\n%s" % e
             )
 
+    def _open_macro_window(self):
+        """Open (or raise) the non-modal scan macro window."""
+        if getattr(self, "macro_window", None) is None:
+            from macro_window import MacroWindow
+
+            self.macro_window = MacroWindow(self)
+        self.macro_window.show()
+        self.macro_window.raise_()
+        self.macro_window.activateWindow()
+
+    def _send_scan_param_to_macro(self):
+        """pb_sendScanParamToMacro: only reachable while the macro window is
+        open (see MacroWindow.showEvent/hideEvent, which enable/disable this
+        button)."""
+        if getattr(self, "macro_window", None) is not None and self.macro_window.isVisible():
+            self.macro_window.add_scan_param_snapshot()
+
     def _open_setup_window(self):
         """Open the setup configuration dialog."""
         import time as _time
@@ -1583,7 +1624,7 @@ class ptyco_main_control(QObject):
         )
         dlg.lineEdit_nBursts.setValidator(QIntValidator(1, 9999, dlg))
         dlg.lineEdit_nBursts.setText(str(int(self.parameters._pulses_per_step)))
-        dlg.lineEdit_scanWait.setText(str(self.parameters._waittime_between_scans))
+        dlg.lineEdit_scanWait.setText(str(self.parameters._step_acq_time))
         dlg.lineEdit_acqTime.setText(str(self.parameters._fly_acq_time))
 
         dlg.checkBox_SAXS.setChecked(self.ui.actionSAXS.isChecked())
@@ -1667,7 +1708,7 @@ class ptyco_main_control(QObject):
         except ValueError:
             pass
         try:
-            self.parameters._waittime_between_scans = float(
+            self.parameters._step_acq_time = float(
                 dlg.lineEdit_scanWait.text()
             )
         except ValueError:

@@ -174,6 +174,7 @@ class sgz_pty(Device):
     
     def memory_clear(self):
         self.D = 1
+        self.F = 1
         self.PROC = 1
         timeout = 5
         tm = time.time()

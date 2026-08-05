@@ -388,7 +388,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>After scan wait (s):</string>
+    <string>Step acquisition time (s):</string>
    </property>
   </widget>
   <widget class="QRadioButton" name="radioButton_0p1ms">
@@ -632,7 +632,7 @@ Layout</string>
     </rect>
    </property>
    <property name="text">
-    <string>After scan wait (s):</string>
+    <string>Fly acquisition time (s):</string>
    </property>
   </widget>
   <widget class="QLineEdit" name="lineEdit_acqTime">
