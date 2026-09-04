@@ -86,7 +86,7 @@ from typing import List
 from threading import Lock
 
 from PyQt5 import uic, QtCore, QtGui
-from PyQt5.QtWidgets import QApplication, QPushButton, QFileDialog, QWidget, QFormLayout
+from PyQt5.QtWidgets import QApplication, QPushButton, QFileDialog, QFormLayout
 from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
@@ -111,6 +111,9 @@ from PyQt5.QtCore import (
     QSettings,
 )
 from asyncqt import QEventLoop
+
+from font_utils import apply_font_size_to_tree, DEFAULT_FONT_SIZE
+from resize_utils import ProportionalResizer
 
 import pyqtgraph as pg
 
@@ -871,10 +874,33 @@ class ptyco_main_control(QObject):
         self.ui.pushButton_exit.clicked.connect(self.exit_gui)
 
         self.ui.show()
+
+        # QMainWindow only resolves its central widget's real size once the
+        # window is actually shown (layout activation is deferred) — force
+        # that to happen now, before snapshotting the as-designed layout, so
+        # the reference size/geometry used for proportional rescaling is
+        # accurate. Capturing this before restoreGeometry() means later
+        # rescales are always relative to the true .ui-authored arrangement.
+        QApplication.processEvents()
+        self._main_resizer = ProportionalResizer(self.ui.centralWidget())
+        self.ui.centralWidget().setMaximumSize(16777215, 16777215)
+        self.ui.setMinimumSize(
+            int(self._main_resizer.orig_size.width() * 0.4),
+            int(self._main_resizer.orig_size.height() * 0.4),
+        )
+
         _s = QSettings("ptychoSAXS", "ptychoSAXS")
         _geom = _s.value("mainWindow/geometry")
         if _geom is not None:
             self.ui.restoreGeometry(_geom)
+        # The restored (or otherwise resolved) window size may differ from
+        # the design-time size captured above — resync widget geometry to it
+        # immediately instead of waiting for the user to resize manually.
+        self._main_resizer.rescale()
+
+        _font_size = _s.value("ui/fontSize", None)
+        if _font_size is not None:
+            apply_font_size_to_tree(self.ui, int(_font_size))
 
     # ── Motor widget enable/disable ────────────────────────────────────────
 
@@ -1599,6 +1625,11 @@ class ptyco_main_control(QObject):
             from macro_window import MacroWindow
 
             self.macro_window = MacroWindow(self)
+            _font_size = QSettings("ptychoSAXS", "ptychoSAXS").value(
+                "ui/fontSize", None
+            )
+            if _font_size is not None:
+                apply_font_size_to_tree(self.macro_window, int(_font_size))
         self.macro_window.show()
         self.macro_window.raise_()
         self.macro_window.activateWindow()
@@ -1617,7 +1648,29 @@ class ptyco_main_control(QObject):
 
         dlg = uic.loadUi("setup_configuration.ui")
 
+        # Make the dialog proportionally resizable, same as the main window.
+        dlg._resizer = ProportionalResizer(dlg)
+        dlg.setMinimumSize(
+            int(dlg._resizer.orig_size.width() * 0.4),
+            int(dlg._resizer.orig_size.height() * 0.4),
+        )
+
         # ── Populate with current state ────────────────────────────────────
+        dlg.spinBox_fontSize.setValue(
+            QSettings("ptychoSAXS", "ptychoSAXS").value(
+                "ui/fontSize", DEFAULT_FONT_SIZE, type=int
+            )
+        )
+
+        def _on_font_size_changed(size):
+            apply_font_size_to_tree(self.ui, size)
+            apply_font_size_to_tree(dlg, size)
+            if getattr(self, "macro_window", None) is not None:
+                apply_font_size_to_tree(self.macro_window, size)
+            QSettings("ptychoSAXS", "ptychoSAXS").setValue("ui/fontSize", size)
+
+        dlg.spinBox_fontSize.valueChanged.connect(_on_font_size_changed)
+
         dlg.lineEdit_logFname.setText(self.parameters.logfilename)
         dlg.lineEdit_dataBasepaths.setText(
             getattr(self.parameters, "base_linux_datafolder", "")
