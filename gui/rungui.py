@@ -673,6 +673,7 @@ class ptyco_main_control(QObject):
         self.ui.pb_SAXSscan_fly2d.clicked.connect(
             lambda: self.fly2d(xm, ym, snake=True)
         )
+        self.ui.pb_extra_scans.clicked.connect(self._open_extra_scans_window)
         self.ui.pushButton_checkFlyBlur.clicked.connect(
             self.scan_handler.check_fly_blur
         )
@@ -1640,6 +1641,22 @@ class ptyco_main_control(QObject):
         button)."""
         if getattr(self, "macro_window", None) is not None and self.macro_window.isVisible():
             self.macro_window.add_scan_param_snapshot()
+
+    def _open_extra_scans_window(self):
+        """Open (or raise) the non-modal Extra Scans window."""
+        if getattr(self, "extra_scans_window", None) is None:
+            dlg = uic.loadUi("extra_scans.ui")
+            dlg._resizer = ProportionalResizer(dlg)
+            dlg.setMinimumSize(
+                int(dlg._resizer.orig_size.width() * 0.4),
+                int(dlg._resizer.orig_size.height() * 0.4),
+            )
+            dlg.pushButton_piezoStep2d.clicked.connect(self.scan_handler.piezo_step2d)
+            dlg.pushButton_exitExtraScans.clicked.connect(dlg.close)
+            self.extra_scans_window = dlg
+        self.extra_scans_window.show()
+        self.extra_scans_window.raise_()
+        self.extra_scans_window.activateWindow()
 
     def _open_setup_window(self):
         """Open the setup configuration dialog."""

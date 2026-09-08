@@ -3772,6 +3772,28 @@ To Macro</string>
      </property>
     </widget>
    </widget>
+   <widget class="QPushButton" name="pb_extra_scans">
+    <property name="geometry">
+     <rect>
+      <x>680</x>
+      <y>400</y>
+      <width>71</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
+    </property>
+    <property name="text">
+     <string>Extra
+Scans</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">

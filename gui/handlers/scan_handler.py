@@ -4253,6 +4253,23 @@ class ScanHandler:
             self.stepscan2d0, xmotor, ymotor, done_signal=self.w.scandone
         )
 
+    def piezo_step2d(self):
+        """2D step scan over the trans1/trans2 ('piezo') stages.
+
+        Kept as a single, argument-free entry point (mirrors stepscan2d(xmotor,
+        ymotor)) so it can be invoked directly -- e.g. by a macro/API -- with no
+        GUI interaction, exactly as the "Piezo 2D step" button does.
+        """
+        try:
+            xmotor = self.w.motornames.index("trans1")
+            ymotor = self.w.motornames.index("trans2")
+        except ValueError:
+            QMessageBox.warning(
+                self.w.ui, "Not Available", "trans1/trans2 are not connected."
+            )
+            return
+        self.stepscan2d(xmotor, ymotor)
+
     def stepscan3d(self, xmotor=0, ymotor=1, phimotor=6):
         """Entry point for a 3-D step scan (GUI thread).
 
@@ -4737,21 +4754,27 @@ class ScanHandler:
             if self.isStopScanIssued:
                 break
 
-            # Move both hexapod axes simultaneously.
-            # hexapod.mv(x_axis, xp, y_axis, yp) issues a single coordinated move
-            # command.  Using two separate pts.mv() calls is wrong here because it
-            # creates an unwanted intermediate position and is slower.
-            # The loop retries on hexapod fault (handle_error resets the controller).
-            pos_ok = False
-            while not pos_ok:
-                pos_ok = self.w.pts.hexapod.mv(xaxis, xp, yaxis, yp, wait=True)
-                if not pos_ok:
-                    self.w.messages["recent error message"] = (
-                        f"Hexapod move failed at ({xp:.4f}, {yp:.4f}), "
-                        f"attempting recovery. {time.ctime()}"
-                    )
-                    print(self.w.messages["recent error message"])
-                    pos_ok = self.w.pts.hexapod.handle_error()
+            if xaxis in self.w.pts.hexapod.axes and yaxis in self.w.pts.hexapod.axes:
+                # Move both hexapod axes simultaneously.
+                # hexapod.mv(x_axis, xp, y_axis, yp) issues a single coordinated move
+                # command.  Using two separate pts.mv() calls is wrong here because it
+                # creates an unwanted intermediate position and is slower.
+                # The loop retries on hexapod fault (handle_error resets the controller).
+                pos_ok = False
+                while not pos_ok:
+                    pos_ok = self.w.pts.hexapod.mv(xaxis, xp, yaxis, yp, wait=True)
+                    if not pos_ok:
+                        self.w.messages["recent error message"] = (
+                            f"Hexapod move failed at ({xp:.4f}, {yp:.4f}), "
+                            f"attempting recovery. {time.ctime()}"
+                        )
+                        print(self.w.messages["recent error message"])
+                        pos_ok = self.w.pts.hexapod.handle_error()
+            else:
+                # Non-hexapod axis pair (e.g. trans1/trans2 gonio stages): no
+                # coordinated-move API exists, so move sequentially instead.
+                self._scan_mv(xaxis, xp, update_status=update_status)
+                self._scan_mv(yaxis, yp, update_status=update_status)
 
             # Configurable idle time between exposures.
             time.sleep(self.w.parameters._step_acq_time)
