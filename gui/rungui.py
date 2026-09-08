@@ -899,11 +899,27 @@ class ptyco_main_control(QObject):
         # immediately instead of waiting for the user to resize manually.
         self._main_resizer.rescale()
 
-        _font_size = _s.value("ui/fontSize", None)
-        if _font_size is not None:
-            apply_font_size_to_tree(self.ui, int(_font_size))
+        self._apply_saved_font_size(self.ui)
 
     # ── Motor widget enable/disable ────────────────────────────────────────
+
+    @staticmethod
+    def _apply_saved_font_size(target):
+        """Defer-apply the persisted font size to `target`'s widget tree.
+
+        Deferred via singleShot so it runs after any pending show/layout/
+        paint events for a freshly created or just-resized window have
+        drained — applying immediately can get silently overwritten by that
+        backlog once the event loop actually processes it (this is what
+        broke the font on the main window at startup: __init__ runs
+        entirely before main() starts the event loop, so restoreGeometry()/
+        rescale() there leave a backlog that flushes right after, undoing
+        an immediately-applied font).
+        """
+        _size = QSettings("ptychoSAXS", "ptychoSAXS").value("ui/fontSize", None)
+        if _size is not None:
+            _size = int(_size)
+            QTimer.singleShot(0, lambda: apply_font_size_to_tree(target, _size))
 
     def _set_motor_widgets_enabled(self, n: int, enable: bool) -> None:
         """Enable or disable all UI widgets for motor slot n (1-indexed).
@@ -1626,11 +1642,7 @@ class ptyco_main_control(QObject):
             from macro_window import MacroWindow
 
             self.macro_window = MacroWindow(self)
-            _font_size = QSettings("ptychoSAXS", "ptychoSAXS").value(
-                "ui/fontSize", None
-            )
-            if _font_size is not None:
-                apply_font_size_to_tree(self.macro_window, int(_font_size))
+            self._apply_saved_font_size(self.macro_window)
         self.macro_window.show()
         self.macro_window.raise_()
         self.macro_window.activateWindow()
@@ -1653,6 +1665,23 @@ class ptyco_main_control(QObject):
             )
             dlg.pushButton_piezoStep2d.clicked.connect(self.scan_handler.piezo_step2d)
             dlg.pushButton_exitExtraScans.clicked.connect(dlg.close)
+
+            _extra_settings = QSettings("ptychoSAXS", "ptychoSAXS")
+            _extra_geom = _extra_settings.value("extraScansWindow/geometry")
+            if _extra_geom is not None:
+                dlg.restoreGeometry(_extra_geom)
+                dlg._resizer.rescale()
+
+            def _save_extra_scans_geom_and_close(event):
+                QSettings("ptychoSAXS", "ptychoSAXS").setValue(
+                    "extraScansWindow/geometry", dlg.saveGeometry()
+                )
+                event.accept()
+
+            dlg.closeEvent = _save_extra_scans_geom_and_close
+
+            self._apply_saved_font_size(dlg)
+
             self.extra_scans_window = dlg
         self.extra_scans_window.show()
         self.extra_scans_window.raise_()
@@ -1672,6 +1701,14 @@ class ptyco_main_control(QObject):
             int(dlg._resizer.orig_size.height() * 0.4),
         )
 
+        _setup_settings = QSettings("ptychoSAXS", "ptychoSAXS")
+        _setup_geom = _setup_settings.value("setupWindow/geometry")
+        if _setup_geom is not None:
+            dlg.restoreGeometry(_setup_geom)
+            dlg._resizer.rescale()
+
+        self._apply_saved_font_size(dlg)
+
         # ── Populate with current state ────────────────────────────────────
         dlg.spinBox_fontSize.setValue(
             QSettings("ptychoSAXS", "ptychoSAXS").value(
@@ -1684,6 +1721,8 @@ class ptyco_main_control(QObject):
             apply_font_size_to_tree(dlg, size)
             if getattr(self, "macro_window", None) is not None:
                 apply_font_size_to_tree(self.macro_window, size)
+            if getattr(self, "extra_scans_window", None) is not None:
+                apply_font_size_to_tree(self.extra_scans_window, size)
             QSettings("ptychoSAXS", "ptychoSAXS").setValue("ui/fontSize", size)
 
         dlg.spinBox_fontSize.valueChanged.connect(_on_font_size_changed)
@@ -1759,7 +1798,11 @@ class ptyco_main_control(QObject):
         dlg.pushButton_checkLayout.clicked.connect(self._check_detector_layout)
 
         # ── Apply settings only on OK ──────────────────────────────────────
-        if dlg.exec_() != QDialog.Accepted:
+        _setup_result = dlg.exec_()
+        QSettings("ptychoSAXS", "ptychoSAXS").setValue(
+            "setupWindow/geometry", dlg.saveGeometry()
+        )
+        if _setup_result != QDialog.Accepted:
             return
 
         # Log filename

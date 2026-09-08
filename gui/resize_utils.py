@@ -9,7 +9,7 @@ arrangement scaled uniformly larger/smaller.
 """
 
 from PyQt5.QtCore import QObject, QEvent
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import QWidget, QSizePolicy
 
 
 class ProportionalResizer(QObject):
@@ -17,11 +17,31 @@ class ProportionalResizer(QObject):
         super().__init__(parent)
         self.container = container
         self.orig_size = container.size()
-        self.orig_geoms = {
-            w: w.geometry()
-            for w in container.findChildren(QWidget)
-            if w.objectName()
-        }
+        self.orig_geoms = {}
+        for w in container.findChildren(QWidget):
+            if not w.objectName():
+                continue
+            self.orig_geoms[w] = w.geometry()
+            # A few widgets carry static min/max-size constraints from the
+            # original fixed-size design (meant to keep them from growing/
+            # shrinking in a *static* layout). Those fight our explicit
+            # setGeometry() calls below, so lift them. Likewise, force
+            # sizePolicy to Ignored so nothing silently reasserts a
+            # preferred sizeHint over the geometry we set.
+            w.setMinimumSize(0, 0)
+            w.setMaximumSize(16777215, 16777215)
+            sp = w.sizePolicy()
+            sp.setHorizontalPolicy(QSizePolicy.Ignored)
+            sp.setVerticalPolicy(QSizePolicy.Ignored)
+            w.setSizePolicy(sp)
+
+        # installEventFilter works regardless of whether `container` is a
+        # Python-subclassed widget (e.g. a dialog's root widget from
+        # uic.loadUi) or a plain, non-subclassed instance (e.g.
+        # QMainWindow.centralWidget(), which is just a bare QWidget) —
+        # instance-level resizeEvent overrides only work for the former, and
+        # silently do nothing for the latter, so an event filter is the only
+        # approach reliable for both.
         container.installEventFilter(self)
 
     def eventFilter(self, obj, event):

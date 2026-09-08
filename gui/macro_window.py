@@ -456,6 +456,10 @@ class MacroWindow(QWidget):
         self._scan_button_prev_enabled = {}
         self._build_ui()
 
+        _geom = QSettings("ptychoSAXS", "ptychoSAXS").value("macroWindow/geometry")
+        if _geom is not None:
+            self.restoreGeometry(_geom)
+
         self.engine = MacroExecutionEngine(self.main, parent=self)
         self.engine.stepStarted.connect(self._on_step_started)
         self.engine.stepFinished.connect(self._on_step_finished)
@@ -950,6 +954,9 @@ class MacroWindow(QWidget):
                 self, "Macro Running", "Stop the macro before closing this window."
             )
         else:
+            QSettings("ptychoSAXS", "ptychoSAXS").setValue(
+                "macroWindow/geometry", self.saveGeometry()
+            )
             event.accept()
 
     def showEvent(self, event):
