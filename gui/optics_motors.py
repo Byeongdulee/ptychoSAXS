@@ -22,6 +22,8 @@ from PyQt5.QtCore import (
 )
 from threading import Lock
 import argparse
+from font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
+from resize_utils import ProportionalResizer
 import configparser
 import json
 import sys
@@ -810,9 +812,46 @@ class motor_control(QMainWindow):
 
         self.ui.closeEvent = _save_geom_and_close
         self.ui.show()
+
+        # QMainWindow only resolves its central widget's real size once the
+        # window is actually shown (layout activation is deferred) — force
+        # that to happen now, before snapshotting the as-designed layout, so
+        # the reference size/geometry used for proportional rescaling is
+        # accurate. Capturing this before restoreGeometry() means later
+        # rescales are always relative to the true .ui-authored arrangement.
+        QApplication.processEvents()
+        self._main_resizer = ProportionalResizer(self.ui.centralWidget())
+        # motorGUI.ui bakes a 1600px-wide cap on both the window itself and
+        # its central widget (ptycoSAXS.ui only has it on the central
+        # widget) — lift both so the window can actually grow past it.
+        self.ui.setMaximumSize(16777215, 16777215)
+        self.ui.centralWidget().setMaximumSize(16777215, 16777215)
+        self.ui.setMinimumSize(
+            int(self._main_resizer.orig_size.width() * 0.4),
+            int(self._main_resizer.orig_size.height() * 0.4),
+        )
+
         _geom = QSettings("ptychoSAXS", "ptychoSAXS").value("opticsMotorsWindow/geometry")
         if _geom is not None:
             self.ui.restoreGeometry(_geom)
+        # The restored (or otherwise resolved) window size may differ from
+        # the design-time size captured above — resync widget geometry to it
+        # immediately instead of waiting for the user to resize manually.
+        self._main_resizer.rescale()
+
+        self.ui.spinBox_fontSize.setValue(
+            QSettings("ptychoSAXS", "ptychoSAXS").value(
+                "ui/fontSize", DEFAULT_FONT_SIZE, type=int
+            )
+        )
+
+        def _on_font_size_changed(size):
+            apply_font_size_to_tree(self.ui, size)
+            QSettings("ptychoSAXS", "ptychoSAXS").setValue("ui/fontSize", size)
+
+        self.ui.spinBox_fontSize.valueChanged.connect(_on_font_size_changed)
+
+        apply_saved_font_size(self.ui)
         # self.resized.connect(self.resizeFunction)
 
     def _set_xrayeye_buttons(self, eye_in: bool):

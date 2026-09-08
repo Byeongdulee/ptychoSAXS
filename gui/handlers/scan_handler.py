@@ -4654,7 +4654,13 @@ class ScanHandler:
         p0 = float(p0)
         st = float(self.ui.findChild(QLineEdit, "ed_lup_%i_L" % n).text())
         fe = float(self.ui.findChild(QLineEdit, "ed_lup_%i_R" % n).text())
-        expt = float(self.ui.findChild(QLineEdit, "ed_lup_%i_t" % n).text())
+        # Not every motor slot has its own exposure-time widget (e.g. trans1/
+        # trans2 at slots 7/8); fall back to the shared ed_lup_1_t like
+        # _read_motor_params does.
+        t_widget = self.ui.findChild(QLineEdit, "ed_lup_%i_t" % n) or self.ui.findChild(
+            QLineEdit, "ed_lup_1_t"
+        )
+        expt = float(t_widget.text())
         step = float(self.ui.findChild(QLineEdit, "ed_lup_%i_N" % n).text())
         self.stepscan1d_p0 = p0
         self.stepscan1d_st = st
