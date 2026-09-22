@@ -438,7 +438,7 @@ class ScanHandler:
         pos = np.arange(ast, afe + step / 2, step)
         return pos
 
-    def _pre_scan(self, scan_label: str, scan_kind: str = "step") -> None:
+    def _pre_scan(self, scan_label: str, scan_kind: str = "step", xmotor: int = 0, ymotor: int = 2) -> None:
         """Common setup called at the start of every scan entry point (GUI thread).
 
         Resets detector file/frame counters, refreshes scan name and file paths,
@@ -447,6 +447,11 @@ class ScanHandler:
 
         scan_kind: one of "step", "fly_snake", "fly_hexapod_1d", "fly_phi", "helix".
         Used to determine how positions are computed for the NeXus master file.
+
+        xmotor, ymotor: 0-based indices of the motors actually driving this scan's
+        XY grid (e.g. trans1/trans2 for a piezo scan). Defaults (0, 2) match the
+        hexapod X/Z pair used by the "normal" 2-D scans, for callers with no XY
+        grid of their own (1-D scans, takeshot, timeseries).
         """
         self.w.update_scanname()
         self.w.get_detectors_ready()
@@ -466,7 +471,7 @@ class ScanHandler:
         # Create NeXus master files before scan starts
         try:
             sample_name = self.w.parameters.scan_name
-            scan_positions_dict = self._compute_scan_positions(scan_kind=scan_kind)
+            scan_positions_dict = self._compute_scan_positions(scan_kind=scan_kind, xmotor=xmotor, ymotor=ymotor)
             # Cache the grid so 3-D fly/step scans can rewrite a per-slice master
             # file from the worker thread without re-reading Qt widgets (the X/Y
             # grid is identical for every phi slice; only the EPICS metadata,
@@ -480,8 +485,15 @@ class ScanHandler:
             if len(self.w.detector) > 1 and self.w.detector[1] is not None:
                 detectors_active.append('WAXS')
 
+            master_paths = {}
             for detector_type in detectors_active:
-                self._write_master_file_metadata(detector_type, scan_positions_dict, sample_name)
+                path = self._write_master_file_metadata(detector_type, scan_positions_dict, sample_name)
+                if path:
+                    master_paths[detector_type] = path
+            # Lets step-scan executors (e.g. stepscan2d0's piezo-position readback)
+            # find the just-created master file(s) without recomputing the path.
+            # 3-D fly/step scans overwrite this per-slice via _write_slice_master_file.
+            self._current_scan_master_paths = master_paths
         except Exception as e:
             print(f"Warning: Failed to create master file: {e}")
 
@@ -2383,7 +2395,7 @@ class ScanHandler:
         # Return as Nx2 array in snake order
         return self._snake_positions(x_coords, y_coords)
 
-    def _compute_scan_positions(self, scan_kind: str = "step") -> dict:
+    def _compute_scan_positions(self, scan_kind: str = "step", xmotor: int = 0, ymotor: int = 2) -> dict:
         """Compute 2D scan position array for master file.
 
         For snake fly scans, applies hexapod adjustments: one phantom point per
@@ -2391,12 +2403,16 @@ class ScanHandler:
 
         Args:
             scan_kind: one of "step", "fly_snake", "fly_hexapod_1d", "fly_phi", "helix".
+            xmotor: 0-based X motor index actually used by this scan (default 0 —
+                hexapod X — for entry points with no XY grid of their own).
+            ymotor: 0-based Y motor index actually used by this scan (default 2 —
+                hexapod Z).
 
         Returns:
             Dictionary with single key 'positions': Nx2 numpy array of (x, y)
             positions in scan traversal order. Empty dict if not a 2D scan.
         """
-        pos = self._compute_2d_scan_positions(xmotor=0, ymotor=2, scan_kind=scan_kind)
+        pos = self._compute_2d_scan_positions(xmotor=xmotor, ymotor=ymotor, scan_kind=scan_kind)
         if len(pos) > 0:
             pos += -np.mean(pos, axis=0)  # Center positions around (0, 0)
             return {'positions': pos}
@@ -2460,6 +2476,46 @@ class ScanHandler:
                 )
         except Exception as e:
             print(f"Warning: Failed to write hexapod_positions to master file {master_path}: {e}")
+
+    def _append_piezo_positions_to_master_file(self, master_path: str, piezo_pos: np.ndarray) -> None:
+        """Write the piezo-stage position array to an already-created master file.
+
+        Unlike hexapod_positions (predicted from the programmed trajectory),
+        piezo_pos holds positions actually read back from the SmarAct MCS2
+        controllers (trans1/trans2) after each point's move settled, since
+        step-scan moves are closed-loop but not guaranteed pulse-exact like the
+        hexapod's fly trajectory.
+
+        Reopens the master file (created earlier in _pre_scan) in append mode
+        and adds /entry/sample/piezo_positions alongside the software-nominal
+        /entry/sample/positions dataset.
+        """
+        import h5py
+
+        try:
+            with h5py.File(master_path, 'r+') as f:
+                sample = f['/entry/sample']
+                if 'piezo_positions' in sample:
+                    del sample['piezo_positions']
+                sample.create_dataset('piezo_positions', data=piezo_pos)
+                sample['piezo_positions'].attrs['units'] = b'mm'
+                sample['piezo_positions'].attrs['description'] = (
+                    b'Nx2 array of (trans1, trans2) positions read back from the '
+                    b'SmarAct MCS2 piezo stage controllers after each scan point'
+                )
+        except Exception as e:
+            print(f"Warning: Failed to write piezo_positions to master file {master_path}: {e}")
+
+    def _write_piezo_positions_to_master(self, piezo_pos_actual: list) -> None:
+        """Convert accumulated per-point (trans1, trans2) readbacks to an array
+        and write them to /entry/sample/piezo_positions in the scan's master
+        file(s). No-op if the scan was stopped before any point completed.
+        """
+        if not piezo_pos_actual:
+            return
+        piezo_pos = np.array(piezo_pos_actual)
+        for master_path in getattr(self, "_current_scan_master_paths", {}).values():
+            self._append_piezo_positions_to_master_file(master_path, piezo_pos)
 
     def _populate_instrument_group(self, entry, shared_meta: dict, detector_meta: dict,
                                    detector_config: dict) -> None:
@@ -3552,7 +3608,7 @@ class ScanHandler:
             return
 
         scan_label = "fly2d_SNAKE" if snake else "fly2d"
-        self._pre_scan(scan_label, scan_kind=scan_kind)
+        self._pre_scan(scan_label, scan_kind=scan_kind, xmotor=xmotor, ymotor=ymotor)
 
         # SoftGlue socket stream is required for snake scans (both axes move
         # simultaneously; softglue provides the hardware timing signal).
@@ -3687,7 +3743,7 @@ class ScanHandler:
             return
 
         scan_label = "fly3d_SNAKE" if snake else "fly3d"
-        self._pre_scan(scan_label, scan_kind=scan_kind)
+        self._pre_scan(scan_label, scan_kind=scan_kind, xmotor=xmotor, ymotor=ymotor)
 
         self.w.switch_SGstream(snake)
 
@@ -4223,7 +4279,7 @@ class ScanHandler:
         ):
             return
 
-        self._pre_scan("stepscan2d")
+        self._pre_scan("stepscan2d", xmotor=xmotor, ymotor=ymotor)
 
         # Store X and Y parameters for the executor (worker thread cannot read UI).
         self.stepscan1d_p0 = xax["p0"]
@@ -4302,7 +4358,7 @@ class ScanHandler:
         ):
             return
 
-        self._pre_scan("stepscan3d")
+        self._pre_scan("stepscan3d", xmotor=xmotor, ymotor=ymotor)
 
         self.isMCS_ready = False
         if self.w.detector[2] is not None:
@@ -4683,6 +4739,13 @@ class ScanHandler:
         Nline = len(pos)
         # keep for later use if needed
         self.stepscan2d_positions = pos
+
+        # trans1/trans2 (the SmarAct MCS2 'piezo' stages) are closed-loop but not
+        # pulse-exact like the hexapod's fly trajectory, so for a piezo scan we
+        # read back the actual settled position after each move (see below) and
+        # write it to the master file as /entry/sample/piezo_positions.
+        is_piezo_scan = xaxis in self.w.pts.gonio.motornames and yaxis in self.w.pts.gonio.motornames
+        piezo_pos_actual = [] if is_piezo_scan else None
         # self.w.dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
         # each time it will send a pulse
 
@@ -4713,10 +4776,15 @@ class ScanHandler:
                 self._scan_mv(xaxis, xp, update_status=update_status)
                 self._scan_mv(yaxis, yp, update_status=update_status)
                 time.sleep(min(expt, 0.05))
-                mpos_data.append([self.w.pts.get_pos(xaxis), self.w.pts.get_pos(yaxis)])
+                xy_readback = [self.w.pts.get_pos(xaxis), self.w.pts.get_pos(yaxis)]
+                mpos_data.append(xy_readback)
+                if is_piezo_scan:
+                    piezo_pos_actual.append(xy_readback)
                 if update_progress is not None:
                     update_progress(int(100 * (i + 1) / Nline))
             self.w.mpos = mpos_data
+            if is_piezo_scan:
+                self._write_piezo_positions_to_master(piezo_pos_actual)
             return
 
         if self.w.parameters._pulses_per_step == 1:
@@ -4782,6 +4850,13 @@ class ScanHandler:
                 self._scan_mv(xaxis, xp, update_status=update_status)
                 self._scan_mv(yaxis, yp, update_status=update_status)
 
+            if is_piezo_scan:
+                # Read back the actual settled position from the SmarAct
+                # controllers rather than trusting the commanded (xp, yp).
+                piezo_pos_actual.append(
+                    [self.w.pts.get_pos(xaxis), self.w.pts.get_pos(yaxis)]
+                )
+
             # Configurable idle time between exposures.
             time.sleep(self.w.parameters._step_acq_time)
 
@@ -4827,6 +4902,9 @@ class ScanHandler:
                 if self.stepscan3d_p0 is not None
                 else None,
             )
+
+        if is_piezo_scan:
+            self._write_piezo_positions_to_master(piezo_pos_actual)
 
         return 1
 

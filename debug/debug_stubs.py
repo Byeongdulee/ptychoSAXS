@@ -1030,3 +1030,74 @@ class DebugSlit:
         self._pos[name] = float(pos)
         print(f"[DEBUG] DebugSlit.set_pos({name!r}, {pos})")
         return self._pos[name]
+
+
+# ===========================================================================
+# CRL_3dprint stubs - used by gui/CRL_3dprint.py --debug_mode
+# ===========================================================================
+
+class DebugSmaractCRLController:
+    """
+    Debug stub for ptychosaxs.smaract_crl3dprint.CRLAxisController.
+    Holds an in-memory position dict keyed by logical motor name
+    ('X', 'Y', 'TILT', 'PITCH' by default). Never opens a network
+    connection. Mirrors the real class's public method signatures exactly
+    so gui/CRL_3dprint.py can use either interchangeably.
+    """
+
+    def __init__(self, motor_slots=None):
+        # motor_slots: [(name, channel, unit), ...] - same shape as
+        # smaract_crl3dprint.MOTOR_SLOTS. The caller passes the real
+        # MOTOR_SLOTS constant even in debug mode so names stay consistent
+        # with non-debug wiring.
+        self.motor_slots = motor_slots or [
+            ("X", 0, "mm"), ("Y", 1, "mm"), ("TILT", 2, "deg"), ("PITCH", 3, "deg"),
+        ]
+        self._pos = {name: 0.0 for name, _ch, _unit in self.motor_slots}
+        self._connected = False
+        print(f"[DEBUG] DebugSmaractCRLController initialised: {[n for n, _, _ in self.motor_slots]}")
+
+    def connect(self) -> None:
+        print("[DEBUG] DebugSmaractCRLController.connect() (no-op)")
+        self._connected = True
+
+    def disconnect(self) -> None:
+        print("[DEBUG] DebugSmaractCRLController.disconnect() (no-op)")
+        self._connected = False
+
+    def is_connected(self) -> bool:
+        return self._connected
+
+    def get_pos(self, axis) -> float:
+        return self._pos[axis]
+
+    def mv(self, axis, target: float, wait: bool = True) -> None:
+        self._pos[axis] = float(target)
+        print(f"[DEBUG] DebugSmaractCRLController.mv({axis!r}, {target})")
+
+    def mvr(self, axis, delta: float, wait: bool = True) -> None:
+        self._pos[axis] += float(delta)
+        print(f"[DEBUG] DebugSmaractCRLController.mvr({axis!r}, {delta}) -> {self._pos[axis]:.6f}")
+
+    def stop(self, axis) -> None:
+        print(f"[DEBUG] DebugSmaractCRLController.stop({axis!r})")
+
+    def set_pos(self, axis, position: float = 0.0) -> float:
+        self._pos[axis] = float(position)
+        return self._pos[axis]
+
+    def is_moving(self, axis) -> bool:
+        return False
+
+    def set_speed(self, axis, vel: float = 1, acc: float = 10) -> None:
+        print(f"[DEBUG] DebugSmaractCRLController.set_speed({axis!r}, vel={vel}, acc={acc})")
+
+    def get_speed(self, axis) -> tuple:
+        return (1.0, 10.0)
+
+    def calibrate(self, axis) -> None:
+        print(f"[DEBUG] DebugSmaractCRLController.calibrate({axis!r})")
+
+    def find_reference(self, axis) -> None:
+        self._pos[axis] = 0.0
+        print(f"[DEBUG] DebugSmaractCRLController.find_reference({axis!r}) -> 0.0")
