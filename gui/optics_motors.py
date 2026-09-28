@@ -689,9 +689,14 @@ class motor_control(QMainWindow):
                 btn_stop.clicked.connect(lambda: self.stop(-1))
 
         # menu
-        self.ui.actionSmarAct_3.triggered.connect(self.enable_ptyoptics)
-        self.ui.actionNewport.triggered.connect(self.enable_galil)
-        self.ui.actionNewport_Piezo.triggered.connect(self.enable_newport)
+        # Vestigial: these controllers ("ptyoptics"/"galil"/"newport") never
+        # appear in self.controller (only opticsbox/OSA/camera/beamstop/slit
+        # are ever instantiated above), so set_ui_enability never matches
+        # anything for them. Left connected-but-commented in case a real
+        # SmarAct/Newport/Galil stage is added later.
+        # self.ui.actionSmarAct_3.triggered.connect(self.enable_ptyoptics)
+        # self.ui.actionNewport.triggered.connect(self.enable_galil)
+        # self.ui.actionNewport_Piezo.triggered.connect(self.enable_newport)
         self.ui.actionIn.triggered.connect(self.put_xrayeye_in)
         self.ui.actionOut.triggered.connect(self.put_xrayeye_out)
         if self.debug_mode:
