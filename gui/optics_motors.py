@@ -68,11 +68,9 @@ try:
 
     # from newport_piezo import newport
     MotorControlAvailable = True
-except Exception:
+except:
     MotorControlAvailable = False
     print("Piezo is NOT available.")
-    import traceback
-    traceback.print_exc()
 
 
 class MotorPresetBlock:
