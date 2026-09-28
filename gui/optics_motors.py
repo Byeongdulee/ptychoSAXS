@@ -805,10 +805,9 @@ class motor_control(QMainWindow):
             btn_all_out.clicked.connect(self._all_out)
         self._update_all_buttons()
 
-        if os.name == "nt":
-            self.timer = QTimer()
-            self.timer.timeout.connect(self.updatepos)
-            self.timer.start(100)
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.updatepos)
+        self.timer.start(100)
         def _save_geom_and_close(event):
             QSettings("ptychoSAXS", "ptychoSAXS").setValue(
                 "opticsMotorsWindow/geometry", self.ui.saveGeometry()
