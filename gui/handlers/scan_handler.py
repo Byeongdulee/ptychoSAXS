@@ -467,6 +467,7 @@ class ScanHandler:
         # Query optics PVs once and cache for both CSV and master file (avoid duplicate queries)
         self._cached_us_optics = self._get_us_optics_positions()
         self._cached_zone_plate_optics = self._fetch_zone_plate_optics_metadata()
+        self._cached_gonio_trans = self._get_gonio_trans_positions()
 
         # Create NeXus master files before scan starts
         try:
@@ -535,10 +536,10 @@ class ScanHandler:
 
     def _get_scan_summary_header(self):
         return [
+            "scan",
+            "completed",
             "date",
             "time",
-            "completed",
-            "scan",
             "sample_name",
             "scan_type",
             "ExpTime",
@@ -558,6 +559,8 @@ class ScanHandler:
             "OSA_X",
             "OSA_Z",
             "OSA_Y",
+            "trans1",
+            "trans2",
         ]
 
     def _format_scan_axis_string(self, axes_params, key):
@@ -628,6 +631,18 @@ class ScanHandler:
         for _, pv in self._US_OPTICS_PVS:
             try:
                 val = epics.caget(pv)
+            except Exception:
+                val = None
+            values.append("" if val is None else str(val))
+        return values
+
+    _GONIO_TRANS_AXES = ["trans1", "trans2"]
+
+    def _get_gonio_trans_positions(self):
+        values = []
+        for axis in self._GONIO_TRANS_AXES:
+            try:
+                val = self.w.pts.get_pos(axis) if axis in self.w.pts.gonio.motornames else None
             except Exception:
                 val = None
             values.append("" if val is None else str(val))
@@ -836,6 +851,9 @@ class ScanHandler:
             optics_values = self._cached_us_optics
         else:
             optics_values = self._get_us_optics_positions() if getattr(self.w.parameters, "_save_us_optics", True) else [""] * len(self._US_OPTICS_PVS)
+        gonio_trans_values = getattr(self, '_cached_gonio_trans', None)
+        if gonio_trans_values is None:
+            gonio_trans_values = self._get_gonio_trans_positions()
         row = [
             timestamp.strftime("%Y-%m-%d"),
             timestamp.strftime("%H:%M:%S"),
@@ -853,6 +871,7 @@ class ScanHandler:
             self._format_scan_axis_string(axes_params, "scan_positive_edge"),
             self._format_scan_axis_string(axes_params, "scan_step_size"),
             *optics_values,
+            *gonio_trans_values,
         ]
         self._last_scan_summary_id = scan_id
         try:
@@ -2301,6 +2320,17 @@ class ScanHandler:
             if zp_success:
                 metadata.update(zp_success)
 
+        # Query SmarAct goniometer translation stages (not EPICS PVs; read via self.w.pts)
+        for nexus_path, axis in (
+            ('/entry/sample/trans1', 'trans1'),
+            ('/entry/sample/trans2', 'trans2'),
+        ):
+            try:
+                if axis in self.w.pts.gonio.motornames:
+                    metadata[nexus_path] = self.w.pts.get_pos(axis)
+            except Exception as e:
+                print(f"Warning: Failed to query gonio axis {axis}: {e}")
+
         return metadata
 
     def _fetch_detector_epics_metadata(self, detector_config: dict) -> dict:
@@ -2632,7 +2662,7 @@ class ScanHandler:
 
         Args:
             entry: HDF5 entry group
-            shared_meta: Shared metadata dict (contains sth, stv, theta)
+            shared_meta: Shared metadata dict (contains sth, stv, theta, trans1, trans2)
             scan_positions_dict: {motor_name: np.ndarray} from _compute_scan_positions
         """
         from .nexus_metadata_config import SHARED_METADATA_MAP
@@ -2658,6 +2688,17 @@ class ScanHandler:
             val = shared_meta['/entry/sample/theta']
             sample.create_dataset('theta', data=val)
             sample['theta'].attrs['units'] = b'degree'
+
+        # Write SmarAct goniometer translation stage positions
+        if '/entry/sample/trans1' in shared_meta:
+            val = shared_meta['/entry/sample/trans1']
+            sample.create_dataset('trans1', data=val)
+            sample['trans1'].attrs['units'] = b'mm'
+
+        if '/entry/sample/trans2' in shared_meta:
+            val = shared_meta['/entry/sample/trans2']
+            sample.create_dataset('trans2', data=val)
+            sample['trans2'].attrs['units'] = b'mm'
 
         # Write scan position array (Nx2 array of (x, y) positions in scan order)
         if 'positions' in scan_positions_dict:

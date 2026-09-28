@@ -34,6 +34,18 @@ SHARED_METADATA_MAP = {
         "pv": "12idc:m5.RBV",
         "units": "degree",
     },
+    # "/entry/sample/sth": {
+    #     "pv": "12idc:m8.RBV",
+    #     "units": "mm",
+    # },
+    # "/entry/sample/sth": {
+    #     "pv": "12idc:m8.RBV",
+    #     "units": "mm",
+    # },
+    # "/entry/sample/sth": {
+    #     "pv": "12idc:m8.RBV",
+    #     "units": "mm",
+    # },
     "/entry/scalars/IC": {
         "pv": "12idc:3820:scaler1.S2",
         "units": "counts",

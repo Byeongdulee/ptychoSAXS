@@ -34,6 +34,7 @@ from PyQt5.QtWidgets import (
 
 from font_utils import DEFAULT_FONT_SIZE, apply_font_size_to_tree
 from resize_utils import ProportionalResizer
+from handlers.scalar_scan import ScalarScanWindow
 
 _GUI_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_GUI_DIR)
@@ -577,12 +578,14 @@ class CRL3DPrintControl(QObject):
         self._wire_menu_actions(EDIT_ACTIONS)
 
         self.xy_preset = XYPresetBlock(self)
+        self._scalar_scan_window = None
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_positions)
         self.timer.start(200)
 
         self.ui.pushButton_exit.clicked.connect(self.ui.close)
+        self.ui.pushButton_scalarScan.clicked.connect(self._open_scalar_scan)
         self.ui.closeEvent = self._on_close_event
 
         # show() FIRST (matches optics_motors.py) so centralWidget's real,
@@ -843,8 +846,22 @@ class CRL3DPrintControl(QObject):
             self.ui.restoreGeometry(QByteArray.fromHex(hexstr.encode()))
 
     def _on_close_event(self, event):
+        if self._scalar_scan_window is not None:
+            self._scalar_scan_window.win.close()
         self._save_ini_value("ui", "window_geometry", bytes(self.ui.saveGeometry().toHex()).decode())
         event.accept()
+
+    # -- scalar scan window -------------------------------------------------
+
+    def _open_scalar_scan(self):
+        if self._scalar_scan_window is None:
+            self._scalar_scan_window = ScalarScanWindow(
+                self.ui, self.controller, self._pv_class, self.lock, SOFT_LIMITS
+            )
+        else:
+            self._scalar_scan_window.win.show()
+            self._scalar_scan_window.win.raise_()
+            self._scalar_scan_window.win.activateWindow()
 
     # -- periodic update --------------------------------------------------------
 
