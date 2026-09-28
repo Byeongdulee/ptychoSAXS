@@ -47,6 +47,10 @@ SCALAR_PVS = {
 }
 SCALER_TP_PV = "12idc:3820:scaler1.TP"  # scaler preset (exposure) time
 
+# Stages this window can step-scan, and each one's native unit.
+SCAN_AXES = ("X", "Y", "TILT", "PITCH")
+AXIS_UNITS = {"X": "mm", "Y": "mm", "TILT": "deg", "PITCH": "deg"}
+
 # Preamplifier sensitivity (unit, value) PV pairs per scalar - read once at
 # save time (not polled at 5 Hz like SCALAR_PVS) and stored alongside each
 # scalar's data.
@@ -218,7 +222,7 @@ class ScanResultWindow(QObject):
         layout = QVBoxLayout(self.win)
         plot = pg.PlotWidget()
         plot.plot(positions, values[display_scalar], pen=pg.mkPen("g"), symbol="o")
-        plot.setLabel("bottom", axis, units="mm")
+        plot.setLabel("bottom", axis, units=AXIS_UNITS[axis])
         plot.setLabel("left", display_scalar)
         layout.addWidget(plot)
 
@@ -245,7 +249,7 @@ class ScanResultWindow(QObject):
             sample = entry.create_group("sample")
             sample.attrs["NX_class"] = b"NXsample"
             sample.create_dataset("positions", data=np.array(self.positions, dtype=float))
-            sample["positions"].attrs["units"] = b"mm"
+            sample["positions"].attrs["units"] = AXIS_UNITS[self.axis].encode("utf-8")
             sample["positions"].attrs["axis"] = self.axis.encode("utf-8")
 
             scalars = entry.create_group("scalars")
@@ -329,7 +333,7 @@ class ScalarScanWindow(QObject):
         left = QVBoxLayout(left_widget)
 
         grid = QGridLayout()
-        headers = ["Motor", "from (mm)", "to (mm)", "step (mm)", "N pos", "Scan"]
+        headers = ["Motor", "from", "to", "step", "N pos", "Scan"]
         for col, text in enumerate(headers):
             grid.addWidget(_named(QLabel(text), f"scalarscan_hdr_{col}"), 0, col)
 
@@ -338,8 +342,10 @@ class ScalarScanWindow(QObject):
         self._edit_step = {}
         self._lbl_npos = {}
         self._btn_scan = {}
-        for row, axis in enumerate(("X", "Y"), start=1):
-            grid.addWidget(_named(QLabel(axis), f"scalarscan_lbl_axis_{axis}"), row, 0)
+        for row, axis in enumerate(SCAN_AXES, start=1):
+            grid.addWidget(
+                _named(QLabel(f"{axis} ({AXIS_UNITS[axis]})"), f"scalarscan_lbl_axis_{axis}"), row, 0
+            )
 
             edit_from = _named(QLineEdit(_ini_get(f"{axis.lower()}_from", "0.0")), f"scalarscan_edit_from_{axis}")
             grid.addWidget(edit_from, row, 1)
@@ -433,7 +439,7 @@ class ScalarScanWindow(QObject):
         splitter.setSizes([300, 600])
 
     def _wire_signals(self):
-        for axis in ("X", "Y"):
+        for axis in SCAN_AXES:
             for edit in (self._edit_from[axis], self._edit_to[axis], self._edit_step[axis]):
                 edit.textChanged.connect(lambda _t, a=axis: self._update_n_pos_label(a))
             self._btn_scan[axis].clicked.connect(lambda _checked=False, a=axis: self._start_scan(a))
@@ -583,8 +589,8 @@ class ScalarScanWindow(QObject):
         QMessageBox.critical(self.win, "Scan error", msg)
 
     def _set_scan_controls_enabled(self, enabled: bool):
-        self._btn_scan["X"].setEnabled(enabled)
-        self._btn_scan["Y"].setEnabled(enabled)
+        for axis in SCAN_AXES:
+            self._btn_scan[axis].setEnabled(enabled)
         self.btn_save.setEnabled(enabled)
 
     # -- save ---------------------------------------------------------------
