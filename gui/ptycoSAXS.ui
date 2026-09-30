@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1167</width>
-    <height>804</height>
+    <height>823</height>
    </rect>
   </property>
   <property name="font">
@@ -1350,9 +1350,9 @@ Scan</string>
    <widget class="QLineEdit" name="ed_7">
     <property name="geometry">
      <rect>
-      <x>120</x>
+      <x>130</x>
       <y>405</y>
-      <width>91</width>
+      <width>81</width>
       <height>20</height>
      </rect>
     </property>
@@ -3792,6 +3792,27 @@ To Macro</string>
     <property name="text">
      <string>Extra
 Scans</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pb_sample_alignment">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>740</y>
+      <width>211</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 180, 255);</string>
+    </property>
+    <property name="text">
+     <string>Sample alignment GUI</string>
     </property>
    </widget>
   </widget>

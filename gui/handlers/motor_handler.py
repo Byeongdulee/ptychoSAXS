@@ -78,7 +78,13 @@ class MotorHandler:
         np.save('_numbers.npy', numbers)
 
     def read_motor_scan_range(self):
+        import os
         import numpy as np
+        # _numbers.npy is untracked per-installation state: create it filled
+        # with the "field left blank" sentinel on first start.
+        if not os.path.exists('_numbers.npy'):
+            np.save('_numbers.npy', np.full((len(self.w.motornames), 6), -999999.0))
+
         # Load the array from the file
         numbers = np.load('_numbers.npy')
 

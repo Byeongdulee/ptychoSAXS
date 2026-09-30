@@ -113,6 +113,7 @@ from PyQt5.QtCore import (
 from asyncqt import QEventLoop
 
 from font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
+from ini_utils import INI_DIR
 from resize_utils import ProportionalResizer
 
 import pyqtgraph as pg
@@ -247,8 +248,78 @@ DEFAULTS = {
     "ymotor": 2,
     "phimotor": 6,
 }  # vertical stage is Z in the scan_gui, change 'ymotor' from 1 to 2, JD
-inifilename = "pty-co-saxs.ini"
+inifilename = os.path.join(INI_DIR, "pty-co-saxs.ini")
 STRUCK_CHANNELS = [2, 3, 4, 5]
+
+# Default contents of pty-co-saxs.ini as (description, attribute, value)
+# triples, written in py12inifunc's "<description>, <attribute> : <value>"
+# line format. The file holds per-installation state (reference positions,
+# working folder, scan number, ...) and is not tracked in git, so this table
+# is the only definition of a fresh one. Values match the fallbacks
+# ptyco_main_control.__init__ applies when readini() fails. Descriptions must
+# not contain a comma - that is the field separator py12inifunc splits on.
+INI_DEFAULT_ENTRIES = [
+    ("Reference Position X", "_ref_X", "0.0000"),
+    ("Reference Position Y", "_ref_Z", "0.0000"),
+    ("Reference Position Z", "_ref_Z2", "0.0000"),
+    ("Working Folder Name", "working_folder", ""),
+    ("Unit of QDS (nm. um. mm for 0. 1. 2)", "_qds_unit", "%.4f" % QDS_UNIT_DEFAULT),
+    ("Axis of QDS X", "_qds_x_sensor", "0.0000"),
+    ("Axis of QDS Y", "_qds_y_sensor", "1.0000"),
+    ("QDS Time Interval", "_qds_time_interval", "0.1000"),
+    ("Number of Pulses per Exposure", "countsperexposure", "0.0000"),
+    ("Wait Time Between Fly Scan (s)", "_waittime_between_scans", "0.0000"),
+    ("Radial Distance of the QDS V laser (mm)", "_qds_R_vert", "10.0000"),
+    ("Azimuthal Angular Position of the QDS V laser (deg)", "_qds_th0_vert", "-30.0000"),
+    ("Radial Distance of the QDS H laser (mm)", "_qds_R_cyl", "50.0000"),
+    ("SoftGlue Channels", "softglue_channels", " B  C  D "),
+    ("Log File Name", "logfilename", ""),
+    ("Scan Number", "scan_number", "0.0000"),
+    ("Flyscan step time-exptime", "_fly_idletime", "0.0000"),
+    (
+        "Ratio between Exposure and Period for Flyscan (exposure / (flyidletime + expsosure))",
+        "_ratio_exp_period",
+        "%.4f" % FRACTION_EXPOSURE_PERIOD,
+    ),
+    ("Scan Time", "scan_time", "-1.0000"),
+    ("Base Name of Data Files in Linux", "base_linux_datafolder", "/net/s12data/export/12id-c/"),
+    ("Scan Name", "scan_name", ""),
+    ("Number of Frames per Exposure", "_pulses_per_step", "1.0000"),
+    ("ABC", "_step_acq_time", "1.0000"),
+    ("ABC", "_fly_acq_time", "0.0330"),
+    ("Save Upstream Optics Positions", "_save_us_optics", "1.0000"),
+    ("SAXS Mode (0 for ptychography. 1 for SAXS)", "saxsmode", "1.0000"),
+]
+
+
+def ensure_default_ini(path=inifilename):
+    """Create pty-co-saxs.ini from INI_DEFAULT_ENTRIES if it does not exist,
+    and append any single entry missing from an existing file.
+
+    Entries already in the file keep their saved value; only absent ones are
+    added, so a GUI upgrade that needs a new field no longer requires the
+    .ini to be hand-edited first.
+    """
+    text = ""
+    if os.path.exists(path):
+        with open(path) as f:
+            text = f.read()
+
+    present = set()
+    for line in text.splitlines():
+        if "," in line and ":" in line:
+            present.add(line.split(",", 1)[1].split(":", 1)[0].strip())
+
+    missing = [e for e in INI_DEFAULT_ENTRIES if e[1] not in present]
+    if not missing:
+        return
+
+    if text and not text.endswith("\n"):
+        text += "\n"
+    for description, name, value in missing:
+        text += "%s, %s : %s\n" % (description, name, value)
+    with open(path, "w") as f:
+        f.write(text)
 
 # Detector attribute/layout PVs (PILATUS1). The attributes XML drives
 # NDAttributes; the layout XML drives the HDF1 file writer.
@@ -470,8 +541,9 @@ class ptyco_main_control(QObject):
 
         self.is_selfsaved = False
         self.is_ptychomode = True
+        ensure_default_ini(inifilename)
         self.parameters = py12inifunc.ini(inifilename)
-        # When you need new field to inifile, edit the ini file first.
+        # New fields are added to the ini file by ensure_default_ini above.
         try:
             self.parameters.readini()
         except:
@@ -674,6 +746,15 @@ class ptyco_main_control(QObject):
             lambda: self.fly2d(xm, ym, snake=True)
         )
         self.ui.pb_extra_scans.clicked.connect(self._open_extra_scans_window)
+        # pb_sample_alignment is added to ptycoSAXS.ui by hand. Warn rather
+        # than raise if it is missing, so the rest of the panel still starts.
+        _pb_align = self.ui.findChild(QPushButton, "pb_sample_alignment")
+        if _pb_align is None:
+            print("[WARNING] pb_sample_alignment not found in ptycoSAXS.ui - "
+                  "the sample alignment window cannot be opened. Add a "
+                  "QPushButton with that objectName to the .ui file.")
+        else:
+            _pb_align.clicked.connect(self._open_sample_alignment_window)
         self.ui.pushButton_checkFlyBlur.clicked.connect(
             self.scan_handler.check_fly_blur
         )
@@ -770,6 +851,12 @@ class ptyco_main_control(QObject):
             self.ui.menuQDS.setDisabled(True)
         self.threadpool = QThreadPool.globalInstance()
         self.Worker = Worker  # expose to handlers that don't import rungui
+        # Same reason as Worker above: importing rungui from a child window
+        # re-executes this module and builds a second GUI (see the note in
+        # handlers/status_handler.py). Child windows take the move runnables
+        # from here instead.
+        self.MoveRunnable = move  # absolute move
+        self.MoveRelRunnable = mover  # relative move
 
         # QDS buttons
         self.ui.btn_reset_qds_x.clicked.connect(self.reset_qdsX)
@@ -1097,6 +1184,11 @@ class ptyco_main_control(QObject):
         np.save("_numbers.npy", numbers)
 
     def read_motor_scan_range(self):
+        # _numbers.npy is untracked per-installation state: create it filled
+        # with the "field left blank" sentinel on first start.
+        if not os.path.exists("_numbers.npy"):
+            np.save("_numbers.npy", np.full((len(self.motornames), 6), -999999.0))
+
         # Load the array from the file
         numbers = np.load("_numbers.npy")
 
@@ -1636,6 +1728,16 @@ class ptyco_main_control(QObject):
         if getattr(self, "macro_window", None) is not None and self.macro_window.isVisible():
             self.macro_window.add_scan_param_snapshot()
 
+    def _open_sample_alignment_window(self):
+        """Open (or raise) the non-modal guided sample alignment window."""
+        if getattr(self, "sample_alignment_window", None) is None:
+            from sample_alignment import SampleAlignmentWindow
+
+            self.sample_alignment_window = SampleAlignmentWindow(self)
+        # SampleAlignmentWindow.show() also raises, activates, restarts the
+        # workflow on a fresh open, and starts its position poll timer.
+        self.sample_alignment_window.show()
+
     def _open_extra_scans_window(self):
         """Open (or raise) the non-modal Extra Scans window."""
         if getattr(self, "extra_scans_window", None) is None:
@@ -1705,6 +1807,8 @@ class ptyco_main_control(QObject):
                 apply_font_size_to_tree(self.macro_window, size)
             if getattr(self, "extra_scans_window", None) is not None:
                 apply_font_size_to_tree(self.extra_scans_window, size)
+            if getattr(self, "sample_alignment_window", None) is not None:
+                apply_font_size_to_tree(self.sample_alignment_window.ui, size)
             QSettings("ptychoSAXS", "ptychoSAXS").setValue("ui/fontSize", size)
 
         dlg.spinBox_fontSize.valueChanged.connect(_on_font_size_changed)
@@ -1739,6 +1843,16 @@ class ptyco_main_control(QObject):
         dlg.checkBox_xrfXSP3.setChecked(self.ui.actionXSP3.isChecked())
         dlg.checkBox_usOpticsScanSave.setChecked(
             getattr(self.parameters, "_save_us_optics", True)
+        )
+        # Sample alignment workflow mode. Lives in QSettings rather than the
+        # scan .ini because it is a per-operator UI preference, not a scan
+        # parameter. Read by sample_alignment.expert_mode_enabled().
+        from sample_alignment import EXPERT_KEY
+
+        dlg.checkBox_expertMode.setChecked(
+            QSettings("ptychoSAXS", "ptychoSAXS").value(
+                EXPERT_KEY, False, type=bool
+            )
         )
 
         # Radio buttons — grouped by id matching set_softglue_in(val)
@@ -1831,7 +1945,18 @@ class ptyco_main_control(QObject):
         self.set_shutter_close_after_scan(
             dlg.checkBox_closeShutterAfterScan.isChecked()
         )
-        self.parameters._save_us_optics = dlg.checkBox_usOpticsScanSave.isChecked()
+        # Stored as 0/1, not a bool: the ini round-trips numbers reliably,
+        # whereas a False written as the text "False" would read back truthy.
+        self.parameters._save_us_optics = int(
+            dlg.checkBox_usOpticsScanSave.isChecked()
+        )
+
+        # Sample alignment expert mode. Only takes effect the next time the
+        # alignment workflow is started, so toggling it mid-alignment never
+        # reshuffles pages underneath the operator.
+        QSettings("ptychoSAXS", "ptychoSAXS").setValue(
+            EXPERT_KEY, dlg.checkBox_expertMode.isChecked()
+        )
 
         # Softglue collection speed
         speed_id = btn_group.checkedId()

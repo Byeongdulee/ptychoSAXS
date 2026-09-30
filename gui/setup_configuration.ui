@@ -508,6 +508,30 @@ Optics on Scan</string>
     <bool>true</bool>
    </property>
   </widget>
+  <widget class="QCheckBox" name="checkBox_expertMode">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>300</y>
+     <width>165</width>
+     <height>22</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+   <property name="toolTip">
+    <string>Sample alignment workflow: merge steps onto fewer screens and skip the step-by-step unlocking. Takes effect the next time the alignment window is opened.</string>
+   </property>
+   <property name="text">
+    <string>Expert alignment</string>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+  </widget>
   <widget class="QLabel" name="label_fontSize">
    <property name="geometry">
     <rect>

@@ -5,8 +5,9 @@ In scope:
   - DebugSmaractCRLController: get_pos/mv/mvr/stop/set_pos/is_moving/
     set_speed/get_speed behavior and in-memory state tracking.
   - FakePV's get/put contract (reused by CRL_3dprint's X-ray-eye code).
-  - CRL_3dprint.ini default-creation-on-missing-file and read/write
-    round-trip (via _ensure_default_ini).
+  - CRL_3dprint.ini default-creation-on-missing-file, back-filling of
+    entries absent from an existing file, and read/write round-trip
+    (via _ensure_default_ini).
   - XY in/out JSON export/import schema round-trip (plain dict/json, no
     QFileDialog/Qt widgets involved).
   - The position-proximity/threshold function (_near) used by the status
@@ -134,10 +135,13 @@ def test_ensure_default_ini_creates_file_with_expected_sections(tmp_path):
     assert cfg["ui"]["font_size"] == str(DEFAULT_FONT_SIZE)
 
 
-def test_ensure_default_ini_does_not_overwrite_existing_file(tmp_path):
+def test_ensure_default_ini_keeps_saved_values_and_backfills_missing(tmp_path):
+    """An older .ini keeps every value it already has; only entries it is
+    missing (here: whole sections, and one key inside a section it does have)
+    are added from the defaults."""
     ini_path = tmp_path / "CRL_3dprint.ini"
     cfg = configparser.ConfigParser()
-    cfg["xy_preset"] = {"in_0": "1.234", "in_1": "0", "out_0": "0", "out_1": "0"}
+    cfg["xy_preset"] = {"in_0": "1.234", "in_1": "0", "out_0": "0"}  # no out_1
     with open(ini_path, "w") as f:
         cfg.write(f)
 
@@ -146,6 +150,10 @@ def test_ensure_default_ini_does_not_overwrite_existing_file(tmp_path):
     cfg2 = configparser.ConfigParser()
     cfg2.read(str(ini_path))
     assert cfg2["xy_preset"]["in_0"] == "1.234"  # untouched
+    assert cfg2["xy_preset"]["out_1"] == "0.0"  # back-filled key
+    assert cfg2["ui"]["font_size"] == str(DEFAULT_FONT_SIZE)  # back-filled section
+    assert "jog_remap_xy" in cfg2
+    assert "scalar_scan" in cfg2
 
 
 def test_ini_read_modify_write_preserves_other_sections(tmp_path):

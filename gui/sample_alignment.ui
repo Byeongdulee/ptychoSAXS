@@ -1,0 +1,1383 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SampleAlignmentDialog</class>
+ <widget class="QDialog" name="SampleAlignmentDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>960</width>
+    <height>460</height>
+   </rect>
+  </property>
+  <property name="font">
+   <font>
+    <pointsize>11</pointsize>
+   </font>
+  </property>
+  <property name="windowTitle">
+   <string>Sample Alignment</string>
+  </property>
+  <widget class="QStackedWidget" name="stackedWidget">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>10</y>
+     <width>940</width>
+     <height>440</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>11</pointsize>
+    </font>
+   </property>
+   <property name="currentIndex">
+    <number>0</number>
+   </property>
+
+   <!-- ============ page 0: check radiography mode ============ -->
+   <widget class="QWidget" name="page_radiography">
+    <widget class="QLabel" name="lb_radio_instructions">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>420</width>
+       <height>220</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Change to radiography mode:
+- Put X-ray eye in
+- Verify X-rays are on camera
+- If energy &gt; 12 keV, insert
+SAXS beamstop
+- Remove ZP optics</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_eye_in">
+     <property name="geometry">
+      <rect>
+       <x>460</x>
+       <y>20</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Insert the X-ray eye into the beam.</string>
+     </property>
+     <property name="text">
+      <string>X-ray eye in</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_eye_out">
+     <property name="geometry">
+      <rect>
+       <x>620</x>
+       <y>20</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Retract the X-ray eye out of the beam.</string>
+     </property>
+     <property name="text">
+      <string>X-ray eye out</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_xrays_ok">
+     <property name="geometry">
+      <rect>
+       <x>460</x>
+       <y>64</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Confirm X-rays are visible on the camera. Unlocks the rest of this page.</string>
+     </property>
+     <property name="text">
+      <string>X-rays on camera?</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_xrays_no">
+     <property name="geometry">
+      <rect>
+       <x>620</x>
+       <y>64</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>No X-rays on the camera - show troubleshooting steps.</string>
+     </property>
+     <property name="text">
+      <string>No</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_zp_out">
+     <property name="geometry">
+      <rect>
+       <x>460</x>
+       <y>108</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Move the zone plate optics to their saved Out position.</string>
+     </property>
+     <property name="text">
+      <string>Pull ZP optics out</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_zp_status">
+     <property name="geometry">
+      <rect>
+       <x>620</x>
+       <y>108</y>
+       <width>90</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="text">
+      <string>----</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_zp_note">
+     <property name="geometry">
+      <rect>
+       <x>460</x>
+       <y>146</y>
+       <width>440</width>
+       <height>44</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_radio_continue">
+     <property name="geometry">
+      <rect>
+       <x>460</x>
+       <y>200</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Continue</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_radio_cancel">
+     <property name="geometry">
+      <rect>
+       <x>620</x>
+       <y>200</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ============ page 1: check movement safe ============ -->
+   <widget class="QWidget" name="page_movement_safe">
+    <widget class="QLabel" name="lb_movesafe_title">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>700</width>
+       <height>48</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Check that moving the sample will not crash anything!
+Move vertical and horizontal at least once.</string>
+     </property>
+    </widget>
+    <widget class="QWidget" name="container_rows_movesafe" native="true">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>66</y>
+       <width>281</width>
+       <height>175</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_movesafe_question">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>252</y>
+       <width>420</width>
+       <height>24</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Fresh starts generally only happen at the beginning of an experiment</string>
+     </property>
+     <property name="text">
+      <string>Is this a fresh start or a sample change?</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_fresh_start">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>284</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Fresh start</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_sample_change">
+     <property name="geometry">
+      <rect>
+       <x>170</x>
+       <y>284</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Sample change</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_movesafe_cancel">
+     <property name="geometry">
+      <rect>
+       <x>330</x>
+       <y>284</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ============ page 2: roughly find sample center ============ -->
+   <widget class="QWidget" name="page_rough_center">
+    <widget class="QLabel" name="lb_rough_title">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>760</width>
+       <height>70</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Now roughly find a sample position to align on:
+- If the center of rotation is set, only use trans1/trans2!
+- If the center of rotation is not set, set X to ~1.3 mm</string>
+     </property>
+    </widget>
+    <widget class="QWidget" name="container_rows_rough" native="true">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>88</y>
+       <width>371</width>
+       <height>175</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_rough_continue">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>274</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Continue</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_rough_cancel">
+     <property name="geometry">
+      <rect>
+       <x>170</x>
+       <y>274</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ============ page 3: set rotation ============ -->
+   <widget class="QWidget" name="page_set_rotation">
+    <widget class="QLabel" name="lb_setrot_title">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>760</width>
+       <height>48</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Make a small step to verify rotating is safe.
+Also set rotation angle to align with trans1/trans2 axes.</string>
+     </property>
+    </widget>
+    <widget class="QWidget" name="container_rows_setrot" native="true">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>66</y>
+       <width>281</width>
+       <height>70</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_setrot_continue">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>148</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Continue</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_setrot_cancel">
+     <property name="geometry">
+      <rect>
+       <x>170</x>
+       <y>148</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ============ page 4: check rotation safe ============ -->
+   <widget class="QWidget" name="page_rotation_safe">
+    <widget class="QLabel" name="lb_rotsafe_title">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>760</width>
+       <height>26</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Check safe rotation range</string>
+     </property>
+    </widget>
+    <widget class="QWidget" name="container_rows_rotsafe" native="true">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>44</y>
+       <width>281</width>
+       <height>70</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_rot_360_ok">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>126</y>
+       <width>170</width>
+       <height>48</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>360 deg rotation OK
+Continue</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_set_low">
+     <property name="geometry">
+      <rect>
+       <x>200</x>
+       <y>126</y>
+       <width>170</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Copy the current phi angle into the lower soft limit.</string>
+     </property>
+     <property name="text">
+      <string>Set lower softlimit</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_phi_low">
+     <property name="geometry">
+      <rect>
+       <x>380</x>
+       <y>126</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>-540</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_set_high">
+     <property name="geometry">
+      <rect>
+       <x>200</x>
+       <y>166</y>
+       <width>170</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Copy the current phi angle into the upper soft limit.</string>
+     </property>
+     <property name="text">
+      <string>Set upper softlimit</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_phi_high">
+     <property name="geometry">
+      <rect>
+       <x>380</x>
+       <y>166</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>540</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_set_zero">
+     <property name="geometry">
+      <rect>
+       <x>200</x>
+       <y>206</y>
+       <width>170</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Copy the current phi angle in as the zero reference used to judge the safe arc.</string>
+     </property>
+     <property name="text">
+      <string>Set angle 0</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_phi_zero">
+     <property name="geometry">
+      <rect>
+       <x>380</x>
+       <y>206</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_rotsafe_hint">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>186</y>
+       <width>180</width>
+       <height>60</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Soft limits are not enforced on this page.</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_rotsafe_continue">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>258</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Continue</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_rotsafe_cancel">
+     <property name="geometry">
+      <rect>
+       <x>170</x>
+       <y>258</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ====== page 5 (expert): find center + set rotation + check safe ====== -->
+   <widget class="QWidget" name="page_position_and_rotation">
+    <widget class="QLabel" name="lb_posrot_title">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>900</width>
+       <height>70</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Roughly find a sample position to align on, then verify rotating is safe.
+- If the center of rotation is set, only use trans1/trans2, otherwise set X to ~1.3 mm
+- Set the rotation angle to align with the trans1/trans2 axes, then check the safe range</string>
+     </property>
+    </widget>
+    <widget class="QWidget" name="container_rows_posrot" native="true">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>88</y>
+       <width>371</width>
+       <height>210</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_x_rot_360_ok">
+     <property name="geometry">
+      <rect>
+       <x>420</x>
+       <y>88</y>
+       <width>170</width>
+       <height>48</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>360 deg rotation OK
+Continue</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_x_set_low">
+     <property name="geometry">
+      <rect>
+       <x>420</x>
+       <y>146</y>
+       <width>170</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Copy the current phi angle into the lower soft limit.</string>
+     </property>
+     <property name="text">
+      <string>Set lower softlimit</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_x_phi_low">
+     <property name="geometry">
+      <rect>
+       <x>600</x>
+       <y>146</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>-540</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_x_set_high">
+     <property name="geometry">
+      <rect>
+       <x>420</x>
+       <y>186</y>
+       <width>170</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Copy the current phi angle into the upper soft limit.</string>
+     </property>
+     <property name="text">
+      <string>Set upper softlimit</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_x_phi_high">
+     <property name="geometry">
+      <rect>
+       <x>600</x>
+       <y>186</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>540</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_x_set_zero">
+     <property name="geometry">
+      <rect>
+       <x>420</x>
+       <y>226</y>
+       <width>170</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Copy the current phi angle in as the zero reference used to judge the safe arc.</string>
+     </property>
+     <property name="text">
+      <string>Set angle 0</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_x_phi_zero">
+     <property name="geometry">
+      <rect>
+       <x>600</x>
+       <y>226</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_posrot_hint">
+     <property name="geometry">
+      <rect>
+       <x>420</x>
+       <y>266</y>
+       <width>360</width>
+       <height>30</height>
+      </rect>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Soft limits are not enforced on this page.</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_posrot_continue">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>310</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Continue</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_posrot_cancel">
+     <property name="geometry">
+      <rect>
+       <x>170</x>
+       <y>310</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ============ page 6: set first trans ============ -->
+   <widget class="QWidget" name="page_first_trans">
+    <widget class="QLabel" name="lb_firsttrans_title">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>820</width>
+       <height>48</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Set horizontal trans stage to bring sample to the center of rotation.
+Be sure to figure out which stage is horizontal!</string>
+     </property>
+    </widget>
+    <widget class="QWidget" name="container_rows_firsttrans" native="true">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>66</y>
+       <width>281</width>
+       <height>140</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_first_trans1">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>218</y>
+       <width>210</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Continue: trans1 horizontal</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_first_trans2">
+     <property name="geometry">
+      <rect>
+       <x>230</x>
+       <y>218</y>
+       <width>210</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Continue: trans2 horizontal</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_firsttrans_cancel">
+     <property name="geometry">
+      <rect>
+       <x>450</x>
+       <y>218</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ============ page 7: set second trans ============ -->
+   <widget class="QWidget" name="page_second_trans">
+    <widget class="QLabel" name="lb_secondtrans_title">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>820</width>
+       <height>70</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Set upstream/downstream trans stage to bring sample to the center of rotation.
+Make a small angle step and adjust trans stage to bring back to center</string>
+     </property>
+    </widget>
+    <widget class="QWidget" name="container_rows_secondtrans" native="true">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>88</y>
+       <width>281</width>
+       <height>105</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_second_finish">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>206</y>
+       <width>170</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Finished alignment</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_secondtrans_cancel">
+     <property name="geometry">
+      <rect>
+       <x>190</x>
+       <y>206</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ============ page 8 (expert): set both trans ============ -->
+   <widget class="QWidget" name="page_trans_both">
+    <widget class="QLabel" name="lb_transboth_title">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>900</width>
+       <height>90</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Set the horizontal trans stage to bring the sample to the center of rotation, using the 180 deg phi step.
+Then mark which stage was horizontal, reduce the phi step, and use the other trans stage:
+make a small angle step and adjust it to bring the sample back to center.</string>
+     </property>
+    </widget>
+    <widget class="QWidget" name="container_rows_transboth" native="true">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>108</y>
+       <width>281</width>
+       <height>140</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_transboth_prompt">
+     <property name="geometry">
+      <rect>
+       <x>320</x>
+       <y>108</y>
+       <width>180</width>
+       <height>24</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Horizontal motor is:</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_both_trans1">
+     <property name="geometry">
+      <rect>
+       <x>320</x>
+       <y>138</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Record trans1 as the horizontal stage.</string>
+     </property>
+     <property name="text">
+      <string>trans1</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_both_trans2">
+     <property name="geometry">
+      <rect>
+       <x>440</x>
+       <y>138</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Record trans2 as the horizontal stage.</string>
+     </property>
+     <property name="text">
+      <string>trans2</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_both_finish">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>260</y>
+       <width>170</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Finished alignment</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_transboth_cancel">
+     <property name="geometry">
+      <rect>
+       <x>190</x>
+       <y>260</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ============ page 9: is the center of rotation known? ============ -->
+   <widget class="QWidget" name="page_cor_known">
+    <widget class="QLabel" name="lb_cor_title">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>820</width>
+       <height>30</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Is the center of rotation identified on the X-ray eye?</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_cor_yes">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>58</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Yes, continue</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_cor_no">
+     <property name="geometry">
+      <rect>
+       <x>170</x>
+       <y>58</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>No</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_cor_cancel">
+     <property name="geometry">
+      <rect>
+       <x>290</x>
+       <y>58</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ============ page 10: set trans with small angles ============ -->
+   <widget class="QWidget" name="page_small_angle_trans">
+    <widget class="QLabel" name="lb_smallangle_title">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>900</width>
+       <height>90</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>First set horizontal trans to center of rotation.
+Then rotate a small step with phi and bring the sample
+back to the center with the upstream/downstream trans motor.</string>
+     </property>
+    </widget>
+    <widget class="QWidget" name="container_rows_smallangle" native="true">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>108</y>
+       <width>281</width>
+       <height>140</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_small_finish">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>260</y>
+       <width>170</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Finished alignment</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_smallangle_cancel">
+     <property name="geometry">
+      <rect>
+       <x>190</x>
+       <y>260</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ============ page 11: iterative alignment ============ -->
+   <widget class="QWidget" name="page_iterative">
+    <widget class="QLabel" name="lb_iter_script">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>520</width>
+       <height>390</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="textFormat">
+      <enum>Qt::RichText</enum>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+    <widget class="QWidget" name="container_rows_iter" native="true">
+     <property name="geometry">
+      <rect>
+       <x>550</x>
+       <y>10</y>
+       <width>281</width>
+       <height>175</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lb_iter_prompt">
+     <property name="geometry">
+      <rect>
+       <x>550</x>
+       <y>200</y>
+       <width>200</width>
+       <height>24</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Horizontal motor is:</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_iter_a">
+     <property name="geometry">
+      <rect>
+       <x>550</x>
+       <y>230</y>
+       <width>190</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>trans1</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_iter_b">
+     <property name="geometry">
+      <rect>
+       <x>750</x>
+       <y>230</y>
+       <width>140</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>trans2</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_iter_back">
+     <property name="geometry">
+      <rect>
+       <x>550</x>
+       <y>286</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Back one step</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_iter_finish">
+     <property name="geometry">
+      <rect>
+       <x>710</x>
+       <y>286</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Finished!</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_iter_cancel">
+     <property name="geometry">
+      <rect>
+       <x>830</x>
+       <y>286</y>
+       <width>100</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Abandon the alignment and close this window.</string>
+     </property>
+     <property name="text">
+      <string>Cancel</string>
+     </property>
+    </widget>
+   </widget>
+
+   <!-- ============ page 12: change sample ============ -->
+   <widget class="QWidget" name="page_change_sample">
+    <widget class="QLabel" name="lb_change_title">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>900</width>
+       <height>110</height>
+      </rect>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>This sample cannot be rotated far enough to align it.
+
+A full alignment needs a 180 deg rotation, and the safe range you set does not reach that far from the zero angle. Change the sample (or its mounting) so it clears the surrounding hardware through a wider angle, then start over.</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_start_over">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>136</y>
+       <width>150</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Start over</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_change_cancel">
+     <property name="geometry">
+      <rect>
+       <x>170</x>
+       <y>136</y>
+       <width>110</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Close this window.</string>
+     </property>
+     <property name="text">
+      <string>Close</string>
+     </property>
+    </widget>
+   </widget>
+
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

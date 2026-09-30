@@ -870,7 +870,10 @@ class InstrumentsStub:
 # ===========================================================================
 
 class FakePV:
-    """Stub for epics.PV. get() returns 0; put() prints the call."""
+    """Stub for epics.PV. get() returns 0; put() prints the call.
+    Always reports connected - debug mode has no real CA connections to lose."""
+
+    connected = True
 
     def __init__(self, pvname, *args, **kwargs):
         self._pvname = pvname
@@ -881,6 +884,9 @@ class FakePV:
 
     def put(self, val):
         print(f"[DEBUG] FakePV.put({self._pvname!r}, {val})")
+
+    def wait_for_connection(self, timeout=None):
+        return True
 
 
 class FakeMotorRecord:

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>scalarScanWindow</class>
+ <widget class="QWidget" name="scalarScanWindow">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>900</width><height>500</height></rect>
+  </property>
+  <property name="windowTitle"><string>Scalar Scan</string></property>
+  <layout class="QVBoxLayout" name="scalarscan_outer">
+   <item>
+    <widget class="QSplitter" name="scalarscan_splitter">
+     <property name="orientation"><enum>Qt::Horizontal</enum></property>
+     <widget class="QWidget" name="scalarscan_left">
+      <layout class="QVBoxLayout" name="scalarscan_left_layout">
+       <item>
+        <layout class="QGridLayout" name="scalarscan_grid">
+         <item row="0" column="0"><widget class="QLabel" name="scalarscan_hdr_0"><property name="text"><string>Motor</string></property></widget></item>
+         <item row="0" column="1"><widget class="QLabel" name="scalarscan_hdr_1"><property name="text"><string>from</string></property></widget></item>
+         <item row="0" column="2"><widget class="QLabel" name="scalarscan_hdr_2"><property name="text"><string>to</string></property></widget></item>
+         <item row="0" column="3"><widget class="QLabel" name="scalarscan_hdr_3"><property name="text"><string>step</string></property></widget></item>
+         <item row="0" column="4"><widget class="QLabel" name="scalarscan_hdr_4"><property name="text"><string>N pos</string></property></widget></item>
+         <item row="0" column="5"><widget class="QLabel" name="scalarscan_hdr_5"><property name="text"><string>Scan</string></property></widget></item>
+
+         <item row="1" column="0"><widget class="QLabel" name="scalarscan_lbl_axis_X"><property name="text"><string>X (mm)</string></property></widget></item>
+         <item row="1" column="1"><widget class="QLineEdit" name="scalarscan_edit_from_X"/></item>
+         <item row="1" column="2"><widget class="QLineEdit" name="scalarscan_edit_to_X"/></item>
+         <item row="1" column="3"><widget class="QLineEdit" name="scalarscan_edit_step_X"/></item>
+         <item row="1" column="4"><widget class="QLabel" name="scalarscan_lbl_npos_X"><property name="text"><string>0</string></property></widget></item>
+         <item row="1" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_X"><property name="text"><string>Scan</string></property></widget></item>
+
+         <item row="2" column="0"><widget class="QLabel" name="scalarscan_lbl_axis_Y"><property name="text"><string>Y (mm)</string></property></widget></item>
+         <item row="2" column="1"><widget class="QLineEdit" name="scalarscan_edit_from_Y"/></item>
+         <item row="2" column="2"><widget class="QLineEdit" name="scalarscan_edit_to_Y"/></item>
+         <item row="2" column="3"><widget class="QLineEdit" name="scalarscan_edit_step_Y"/></item>
+         <item row="2" column="4"><widget class="QLabel" name="scalarscan_lbl_npos_Y"><property name="text"><string>0</string></property></widget></item>
+         <item row="2" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_Y"><property name="text"><string>Scan</string></property></widget></item>
+
+         <item row="3" column="0"><widget class="QLabel" name="scalarscan_lbl_axis_TILT"><property name="text"><string>TILT (deg)</string></property></widget></item>
+         <item row="3" column="1"><widget class="QLineEdit" name="scalarscan_edit_from_TILT"/></item>
+         <item row="3" column="2"><widget class="QLineEdit" name="scalarscan_edit_to_TILT"/></item>
+         <item row="3" column="3"><widget class="QLineEdit" name="scalarscan_edit_step_TILT"/></item>
+         <item row="3" column="4"><widget class="QLabel" name="scalarscan_lbl_npos_TILT"><property name="text"><string>0</string></property></widget></item>
+         <item row="3" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_TILT"><property name="text"><string>Scan</string></property></widget></item>
+
+         <item row="4" column="0"><widget class="QLabel" name="scalarscan_lbl_axis_PITCH"><property name="text"><string>PITCH (deg)</string></property></widget></item>
+         <item row="4" column="1"><widget class="QLineEdit" name="scalarscan_edit_from_PITCH"/></item>
+         <item row="4" column="2"><widget class="QLineEdit" name="scalarscan_edit_to_PITCH"/></item>
+         <item row="4" column="3"><widget class="QLineEdit" name="scalarscan_edit_step_PITCH"/></item>
+         <item row="4" column="4"><widget class="QLabel" name="scalarscan_lbl_npos_PITCH"><property name="text"><string>0</string></property></widget></item>
+         <item row="4" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_PITCH"><property name="text"><string>Scan</string></property></widget></item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="scalarscan_exptime_row">
+         <item><widget class="QLabel" name="scalarscan_lbl_exptime"><property name="text"><string>exp time (s)</string></property></widget></item>
+         <item><widget class="QLineEdit" name="scalarscan_edit_exptime"/></item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="scalarscan_naccum_row">
+         <item><widget class="QLabel" name="scalarscan_lbl_naccum"><property name="text"><string>N accumulate</string></property></widget></item>
+         <item><widget class="QSpinBox" name="scalarscan_spin_naccum"/></item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="scalarscan_scalar_row">
+         <item><widget class="QLabel" name="scalarscan_lbl_scalar"><property name="text"><string>Scalar:</string></property></widget></item>
+         <item><widget class="QComboBox" name="scalarscan_combo_scalar"/></item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="scalarscan_buflen_row">
+         <item><widget class="QLabel" name="scalarscan_lbl_buflen"><property name="text"><string>Buffer length:</string></property></widget></item>
+         <item><widget class="QSpinBox" name="scalarscan_spin_buflen"/></item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QPushButton" name="scalarscan_btn_save"><property name="text"><string>Save buffer</string></property></widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="scalarscan_lbl_status"><property name="text"><string>Idle</string></property></widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="scalarscan_lbl_pv_status">
+         <property name="text"><string>All PVs connected</string></property>
+         <property name="wordWrap"><bool>true</bool></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="scalarscan_left_spacer">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeHint"><size><width>20</width><height>40</height></size></property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="scalarscan_right">
+      <layout class="QVBoxLayout" name="scalarscan_right_layout">
+       <item><widget class="PlotWidget" name="scalarscan_plot_top"/></item>
+       <item><widget class="PlotWidget" name="scalarscan_plot_bottom"/></item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>PlotWidget</class>
+   <extends>QWidget</extends>
+   <header>pyqtgraph</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

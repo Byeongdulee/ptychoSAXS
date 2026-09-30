@@ -23,6 +23,7 @@ from PyQt5.QtCore import (
 from threading import Lock
 import argparse
 from font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
+from ini_utils import INI_DIR, ensure_ini_defaults
 from resize_utils import ProportionalResizer
 import configparser
 import json
@@ -31,10 +32,8 @@ import re
 import os
 
 # INI file that persists in/out block positions across sessions.
-# Stored next to this script so it travels with the GUI directory.
-_OPTICS_INI = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "optics_motors.ini"
-)
+# Stored in gui/ini/ so it travels with the GUI directory.
+_OPTICS_INI = os.path.join(INI_DIR, "optics_motors.ini")
 try:
     from epics import PV
 except ImportError:
@@ -553,6 +552,29 @@ class ZPPresetBlock(MotorPresetBlock):
         self._save_ini()
 
 
+# Every section/key the preset blocks read out of optics_motors.ini, with the
+# value used when the file - or just that entry - does not exist yet. The .ini
+# is untracked per-installation state, so this is the only definition of a
+# fresh one. In/out positions default to empty rather than 0: a blank label is
+# treated as "no saved position", while a 0 would advertise the origin as a
+# real in/out target for the Move buttons.
+INI_DEFAULTS = {
+    "zp": {
+        "out_0": "",
+        "out_1": "",
+        "positions": json.dumps(ZPPresetBlock._DEFAULT_DATA),
+    },
+    "osa": {"in_0": "", "in_1": "", "out_0": "", "out_1": ""},
+    "bs": {"in_0": "", "in_1": "", "out_0": "", "out_1": ""},
+}
+
+
+def ensure_default_ini(path=_OPTICS_INI):
+    """Create optics_motors.ini from INI_DEFAULTS if it does not exist, and
+    add any individual entry missing from an existing file."""
+    ensure_ini_defaults(path, INI_DEFAULTS)
+
+
 class motor_control(QMainWindow):
     #    resized = QtCore.pyqtSignal()
 
@@ -580,6 +602,7 @@ class motor_control(QMainWindow):
         super(motor_control, self).__init__()
         self.debug_mode = debug_mode
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        ensure_default_ini()
         guiName = "motorGUI.ui"
         self.ui = uic.loadUi(guiName)
 

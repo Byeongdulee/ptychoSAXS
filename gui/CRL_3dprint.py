@@ -33,7 +33,9 @@ from PyQt5.QtWidgets import (
 )
 
 from font_utils import DEFAULT_FONT_SIZE, apply_font_size_to_tree
+from ini_utils import INI_DIR, ensure_ini_defaults
 from resize_utils import ProportionalResizer
+from handlers.scalar_scan import INI_DEFAULTS as SCALAR_SCAN_INI_DEFAULTS
 from handlers.scalar_scan import ScalarScanWindow
 
 _GUI_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -56,7 +58,7 @@ except ImportError:
     _HARDWARE_AVAILABLE = False
     _RAW_MOTOR_SLOTS = [("X", 0, "mm"), ("Y", 1, "mm"), ("TILT", 2, "deg"), ("PITCH", 3, "deg")]
 
-_CRL_INI = os.path.join(_GUI_DIR, "CRL_3dprint.ini")
+_CRL_INI = os.path.join(INI_DIR, "CRL_3dprint.ini")
 
 # Single source of truth for the 4 motors, in {"name", "unit"} form for readability.
 MOTOR_SLOTS = [{"name": name, "unit": unit} for name, _channel, unit in _RAW_MOTOR_SLOTS]
@@ -116,23 +118,36 @@ JOG_BUTTON_LABELS = ["up", "down", "left", "right"]
 PAD_STEP_INI_KEYS = {"ed_xy_tweak": "xy_pad", "ed_tp_tweak": "tp_pad"}
 
 
+def _default_jog_section(jog_map):
+    """Flatten a button->(axis, sign) map into its .ini key/value form."""
+    section = {}
+    for btn_name, (axis, sign) in jog_map.items():
+        section[f"{btn_name}_axis"] = axis
+        section[f"{btn_name}_sign"] = str(sign)
+    return section
+
+
+# Every section/key this GUI (and its scalar-scan window) reads out of
+# CRL_3dprint.ini, with the value used when the file - or just that entry -
+# does not exist yet. The .ini is untracked per-installation state, so this
+# is the only definition of a fresh one.
+INI_DEFAULTS = {
+    "xy_preset": {"in_0": "0.0", "in_1": "0.0", "out_0": "0.0", "out_1": "0.0"},
+    "ui": {"font_size": str(DEFAULT_FONT_SIZE), "window_geometry": ""},
+    "tweak_steps": dict(
+        [(slot["name"], "0.001" if slot["unit"] == "mm" else "0.010") for slot in MOTOR_SLOTS]
+        + [("xy_pad", "0.001"), ("tp_pad", "0.010")]
+    ),
+    "jog_remap_xy": _default_jog_section(XY_JOG_MAP),
+    "jog_remap_tp": _default_jog_section(TILTPITCH_JOG_MAP),
+    **SCALAR_SCAN_INI_DEFAULTS,
+}
+
+
 def _ensure_default_ini(path):
-    """Create a default CRL_3dprint.ini if none exists. Does nothing if it does."""
-    if os.path.exists(path):
-        return
-    cfg = configparser.ConfigParser()
-    cfg["xy_preset"] = {"in_0": "0.0", "in_1": "0.0", "out_0": "0.0", "out_1": "0.0"}
-    cfg["ui"] = {"font_size": str(DEFAULT_FONT_SIZE), "window_geometry": ""}
-    cfg["tweak_steps"] = {
-        "X": "0.001",
-        "Y": "0.001",
-        "TILT": "0.010",
-        "PITCH": "0.010",
-        "xy_pad": "0.001",
-        "tp_pad": "0.010",
-    }
-    with open(path, "w") as f:
-        cfg.write(f)
+    """Create CRL_3dprint.ini from INI_DEFAULTS if it does not exist, and
+    add any individual entry missing from an existing file."""
+    ensure_ini_defaults(path, INI_DEFAULTS)
 
 
 def _load_jog_map(section, default_map):
@@ -758,7 +773,10 @@ class CRL3DPrintControl(QObject):
     def _wire_xray_eye(self):
         _PV = self._pv_class()
         status = _PV("usxRIO:Galil2Bo0_STATUS.VAL")
-        eye_in = status.get() == 0
+        # STATUS.VAL == 0 means the eye is OUT of the beam. This read was
+        # inverted, so the In/Out buttons showed the opposite state; the
+        # convention here now matches optics_motors._is_xrayeye_out.
+        eye_in = status.get() != 0
         self._set_xrayeye_buttons(eye_in)
         self.ui.pushButton_xrayEyeIn.clicked.connect(self.put_xrayeye_in)
         self.ui.pushButton_xrayEyeOut.clicked.connect(self.put_xrayeye_out)

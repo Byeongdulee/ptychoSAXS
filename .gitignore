@@ -10,7 +10,10 @@
 *.userosscache
 *.sln.docstates
 gui/ptychoSAXS_launch.bat
-gui/CRL_3dprint.ini
+
+# Per-installation GUI state, recreated from defaults on startup
+gui/ini/
+gui/_numbers.npy
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

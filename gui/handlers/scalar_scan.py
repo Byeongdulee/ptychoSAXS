@@ -18,19 +18,15 @@ from collections import deque
 import h5py
 import numpy as np
 import pyqtgraph as pg
+from PyQt5 import uic
 from PyQt5.QtCore import QByteArray, QObject, QRunnable, Qt, QThreadPool, QTimer, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import (
     QApplication,
-    QComboBox,
     QFileDialog,
-    QGridLayout,
-    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QSpinBox,
-    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -61,19 +57,41 @@ PREAMP_PVS = {
     "IfCRL": ("12idc:A5sens_unit.VAL", "12idc:A5sens_num.VAL"),
 }
 
-POLL_INTERVAL_MS = 200  # 5 Hz
+POLL_INTERVAL_MS = 500  # 2 Hz
 DEFAULT_BUFLEN = 200
 DEFAULT_EXPTIME_S = "0.001"
 MOVE_PRIME_DELAY_S = 0.02  # let the controller's moving-status flag catch up before polling it
 MOVE_POLL_INTERVAL_S = 0.01
 POSITION_SETTLE_S = 0.1  # fixed mechanical-settle wait after each move, before the exposure
 ACCUMULATE_WAIT_S = 0.1  # wait between repeated measurements at the same position (N accumulate > 1)
+PV_CONNECT_TIMEOUT_S = 2.0  # one-time wait for a brand-new PV's initial connection, in _get_pv
 
-# This module lives in gui/handlers/, but CRL_3dprint.ini lives in gui/ -
+# This module lives in gui/handlers/, but CRL_3dprint.ini lives in gui/ini/ -
 # go up two directory levels (handlers/ -> gui/) to find it.
 _GUI_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_INI_PATH = os.path.join(_GUI_DIR, "CRL_3dprint.ini")
+_INI_PATH = os.path.join(_GUI_DIR, "ini", "CRL_3dprint.ini")
 _INI_SECTION = "scalar_scan"
+_UI_PATH = os.path.join(_GUI_DIR, "scalar_scan.ui")
+
+
+# Defaults for this window's section of CRL_3dprint.ini, used by
+# CRL_3dprint._ensure_default_ini() so a freshly created file already has
+# every key this module reads (each _ini_get below still keeps its own
+# fallback, for the case where a user deletes a line by hand).
+INI_DEFAULTS = {_INI_SECTION: dict(
+    [(f"{axis.lower()}_{k}", v)
+     for axis in SCAN_AXES
+     for k, v in (("from", "0.0"), ("to", "0.0"), ("step", "0.01"))]
+    + [
+        ("exp_time", DEFAULT_EXPTIME_S),
+        ("n_accumulate", "1"),
+        ("scalar", next(iter(SCALAR_PVS))),
+        ("buflen", str(DEFAULT_BUFLEN)),
+        ("last_save_path", ""),
+        ("last_scan_save_path", ""),
+        ("window_geometry", ""),
+    ]
+)}
 
 
 def _ini_get(key, fallback=""):
@@ -110,6 +128,21 @@ def _write_preamp_attrs(scalars_group, pv_class):
         ds = scalars_group[name]
         ds.attrs["preamp_unit"] = "" if unit is None else str(unit)
         ds.attrs["preamp_value"] = "" if value is None else str(value)
+
+
+def _get_or_create_pv(cache, pv_class, name):
+    """Shared by ScalarScanWindow._get_pv (GUI-thread call sites: scan
+    validation, exposure-time edits) and _PollWorker (background thread, for
+    the live-monitor poll). A brand-new PV connects asynchronously, so its
+    first-ever reference gets one bounded wait_for_connection() - after that,
+    the cached object's .connected just reflects pyepics' own connection
+    callback, no further blocking."""
+    pv = cache.get(name)
+    if pv is None:
+        pv = pv_class()(name)
+        pv.wait_for_connection(timeout=PV_CONNECT_TIMEOUT_S)
+        cache[name] = pv
+    return pv
 
 
 def _make_positions(frm: float, to: float, step: float) -> np.ndarray:
@@ -184,6 +217,8 @@ class _ScanWorker(QRunnable):
                 for k in range(self.n_accumulate):
                     time.sleep(self.exp_time)  # exposure/integration time
                     for name, pv in self.pvs.items():
+                        if not pv.connected:
+                            raise RuntimeError(f"PV unreachable during scan: {name}")
                         accum[name] += pv.get()
                     if k < self.n_accumulate - 1:
                         time.sleep(ACCUMULATE_WAIT_S)  # wait between repeated measurements
@@ -195,9 +230,58 @@ class _ScanWorker(QRunnable):
         except Exception:
             import traceback
 
-            self.signals.error.emit(traceback.format_exc())
+            tb = traceback.format_exc()
+            print(tb)
+            self.signals.error.emit(tb)
             return
         self.signals.finished.emit(self.axis, positions_out, values_out)
+
+
+class _PollSignals(QObject):
+    finished = pyqtSignal(float, float, dict)  # x, y, {scalar_name: (connected, value)}
+    error = pyqtSignal()
+
+
+class _PollWorker(QRunnable):
+    """One live-monitor poll cycle, off the GUI thread. pyepics' pv.get() has
+    no timeout configured anywhere in this codebase, so calling it on an
+    unreachable PV blocks the caller for pyepics' internal connection
+    timeout - on the GUI thread that means the whole window freezes. Running
+    each cycle here means a stuck PV only stalls this worker; the GUI thread
+    (and the next poll, once this one returns) is unaffected. PV creation
+    (including the one-time wait_for_connection for a brand-new PV) also
+    happens here rather than in _poll_live, so the GUI thread is never
+    touched even on the very first tick. A PV already known to be down
+    costs a single non-blocking pv.connected check instead of another
+    blocking get()."""
+
+    def __init__(self, controller, lock, pv_cache, pv_class, pv_names):
+        super().__init__()
+        self.controller = controller
+        self.lock = lock
+        self.pv_cache = pv_cache
+        self.pv_class = pv_class
+        self.pv_names = pv_names  # {scalar_name: pv_name}
+        self.signals = _PollSignals()
+
+    @pyqtSlot()
+    def run(self):
+        try:
+            with self.lock:
+                x = self.controller.get_pos("X")
+                y = self.controller.get_pos("Y")
+            results = {}
+            for name, pv_name in self.pv_names.items():
+                pv = _get_or_create_pv(self.pv_cache, self.pv_class, pv_name)
+                connected = pv.connected
+                results[name] = (connected, pv.get() if connected else None)
+        except Exception:
+            import traceback
+
+            print(traceback.format_exc())
+            self.signals.error.emit()
+            return
+        self.signals.finished.emit(x, y, results)
 
 
 class ScanResultWindow(QObject):
@@ -279,9 +363,11 @@ class ScalarScanWindow(QObject):
         self.soft_limits = soft_limits
         self._pv_cache = {}
         self._scan_worker = None
+        self._poll_worker = None
         self._scan_axis = None
         self._scan_display_scalar = None
         self._result_windows = []
+        self._pv_connected = {name: True for name in SCALAR_PVS}
 
         self._build_ui(parent_ui)
         self._init_buffers(self.spin_buflen.value())
@@ -320,68 +406,38 @@ class ScalarScanWindow(QObject):
     # -- construction ---------------------------------------------------
 
     def _build_ui(self, parent_ui):
-        self.win = _named(QWidget(parent_ui, Qt.Window), "scalarScanWindow")
-        self.win.setWindowTitle("Scalar Scan")
-        self.win.resize(900, 500)
-
-        outer = QVBoxLayout(self.win)
-        splitter = _named(QSplitter(Qt.Horizontal), "scalarscan_splitter")
-        outer.addWidget(splitter)
-
-        # -- left: all controls ---------------------------------------------
-        left_widget = _named(QWidget(), "scalarscan_left")
-        left = QVBoxLayout(left_widget)
-
-        grid = QGridLayout()
-        headers = ["Motor", "from", "to", "step", "N pos", "Scan"]
-        for col, text in enumerate(headers):
-            grid.addWidget(_named(QLabel(text), f"scalarscan_hdr_{col}"), 0, col)
+        self.win = uic.loadUi(_UI_PATH)
+        self.win.setParent(parent_ui, Qt.Window)
 
         self._edit_from = {}
         self._edit_to = {}
         self._edit_step = {}
         self._lbl_npos = {}
         self._btn_scan = {}
-        for row, axis in enumerate(SCAN_AXES, start=1):
-            grid.addWidget(
-                _named(QLabel(f"{axis} ({AXIS_UNITS[axis]})"), f"scalarscan_lbl_axis_{axis}"), row, 0
-            )
-
-            edit_from = _named(QLineEdit(_ini_get(f"{axis.lower()}_from", "0.0")), f"scalarscan_edit_from_{axis}")
-            grid.addWidget(edit_from, row, 1)
-            edit_from.editingFinished.connect(lambda a=axis, e=edit_from: _ini_set(f"{a.lower()}_from", e.text()))
+        for axis in SCAN_AXES:
+            edit_from = self.win.findChild(QLineEdit, f"scalarscan_edit_from_{axis}")
+            edit_from.setText(_ini_get(f"{axis.lower()}_from", "0.0"))
+            edit_from.editingFinished.connect(lambda a=axis: _ini_set(f"{a.lower()}_from", self._edit_from[a].text()))
             self._edit_from[axis] = edit_from
 
-            edit_to = _named(QLineEdit(_ini_get(f"{axis.lower()}_to", "0.0")), f"scalarscan_edit_to_{axis}")
-            grid.addWidget(edit_to, row, 2)
-            edit_to.editingFinished.connect(lambda a=axis, e=edit_to: _ini_set(f"{a.lower()}_to", e.text()))
+            edit_to = self.win.findChild(QLineEdit, f"scalarscan_edit_to_{axis}")
+            edit_to.setText(_ini_get(f"{axis.lower()}_to", "0.0"))
+            edit_to.editingFinished.connect(lambda a=axis: _ini_set(f"{a.lower()}_to", self._edit_to[a].text()))
             self._edit_to[axis] = edit_to
 
-            edit_step = _named(QLineEdit(_ini_get(f"{axis.lower()}_step", "0.01")), f"scalarscan_edit_step_{axis}")
-            grid.addWidget(edit_step, row, 3)
-            edit_step.editingFinished.connect(lambda a=axis, e=edit_step: _ini_set(f"{a.lower()}_step", e.text()))
+            edit_step = self.win.findChild(QLineEdit, f"scalarscan_edit_step_{axis}")
+            edit_step.setText(_ini_get(f"{axis.lower()}_step", "0.01"))
+            edit_step.editingFinished.connect(lambda a=axis: _ini_set(f"{a.lower()}_step", self._edit_step[a].text()))
             self._edit_step[axis] = edit_step
 
-            lbl_npos = _named(QLabel("0"), f"scalarscan_lbl_npos_{axis}")
-            grid.addWidget(lbl_npos, row, 4)
-            self._lbl_npos[axis] = lbl_npos
+            self._lbl_npos[axis] = self.win.findChild(QLabel, f"scalarscan_lbl_npos_{axis}")
+            self._btn_scan[axis] = self.win.findChild(QPushButton, f"scalarscan_btn_scan_{axis}")
 
-            btn_scan = _named(QPushButton("Scan"), f"scalarscan_btn_scan_{axis}")
-            grid.addWidget(btn_scan, row, 5)
-            self._btn_scan[axis] = btn_scan
-
-        left.addLayout(grid)
-
-        exptime_row = QHBoxLayout()
-        exptime_row.addWidget(_named(QLabel("exp time (s)"), "scalarscan_lbl_exptime"))
-        self.edit_exptime = _named(QLineEdit(_ini_get("exp_time", DEFAULT_EXPTIME_S)), "scalarscan_edit_exptime")
+        self.edit_exptime = self.win.scalarscan_edit_exptime
+        self.edit_exptime.setText(_ini_get("exp_time", DEFAULT_EXPTIME_S))
         self.edit_exptime.editingFinished.connect(self._on_exptime_edited)
-        exptime_row.addWidget(self.edit_exptime)
-        left.addLayout(exptime_row)
 
-        naccum_row = QHBoxLayout()
-        naccum_row.addWidget(_named(QLabel("N accumulate"), "scalarscan_lbl_naccum"))
-        self.spin_naccum = _named(QSpinBox(), "scalarscan_spin_naccum")
+        self.spin_naccum = self.win.scalarscan_spin_naccum
         self.spin_naccum.setMinimum(1)
         self.spin_naccum.setMaximum(10_000)
         try:
@@ -390,22 +446,14 @@ class ScalarScanWindow(QObject):
             saved_naccum = 1
         self.spin_naccum.setValue(saved_naccum)
         self.spin_naccum.valueChanged.connect(lambda v: _ini_set("n_accumulate", v))
-        naccum_row.addWidget(self.spin_naccum)
-        left.addLayout(naccum_row)
 
-        scalar_row = QHBoxLayout()
-        scalar_row.addWidget(_named(QLabel("Scalar:"), "scalarscan_lbl_scalar"))
-        self.combo_scalar = _named(QComboBox(), "scalarscan_combo_scalar")
+        self.combo_scalar = self.win.scalarscan_combo_scalar
         self.combo_scalar.addItems(list(SCALAR_PVS.keys()))
         saved_scalar = _ini_get("scalar", next(iter(SCALAR_PVS)))
         if saved_scalar in SCALAR_PVS:
             self.combo_scalar.setCurrentText(saved_scalar)
-        scalar_row.addWidget(self.combo_scalar)
-        left.addLayout(scalar_row)
 
-        buflen_row = QHBoxLayout()
-        buflen_row.addWidget(_named(QLabel("Buffer length:"), "scalarscan_lbl_buflen"))
-        self.spin_buflen = _named(QSpinBox(), "scalarscan_spin_buflen")
+        self.spin_buflen = self.win.scalarscan_spin_buflen
         self.spin_buflen.setMinimum(1)
         self.spin_buflen.setMaximum(1_000_000)
         try:
@@ -413,27 +461,15 @@ class ScalarScanWindow(QObject):
         except ValueError:
             saved_buflen = DEFAULT_BUFLEN
         self.spin_buflen.setValue(saved_buflen)
-        buflen_row.addWidget(self.spin_buflen)
-        left.addLayout(buflen_row)
 
-        self.btn_save = _named(QPushButton("Save buffer"), "scalarscan_btn_save")
-        left.addWidget(self.btn_save)
+        self.btn_save = self.win.scalarscan_btn_save
+        self.lbl_status = self.win.scalarscan_lbl_status
+        self.lbl_pv_status = self.win.scalarscan_lbl_pv_status
 
-        self.lbl_status = _named(QLabel("Idle"), "scalarscan_lbl_status")
-        left.addWidget(self.lbl_status)
+        self.plot_top = self.win.scalarscan_plot_top
+        self.plot_bottom = self.win.scalarscan_plot_bottom
 
-        left.addStretch(1)
-        splitter.addWidget(left_widget)
-
-        # -- right: just the two plots ---------------------------------------
-        right_widget = _named(QWidget(), "scalarscan_right")
-        right = QVBoxLayout(right_widget)
-        self.plot_top = pg.PlotWidget()
-        self.plot_bottom = pg.PlotWidget()
-        right.addWidget(self.plot_top)
-        right.addWidget(self.plot_bottom)
-        splitter.addWidget(right_widget)
-
+        splitter = self.win.scalarscan_splitter
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([300, 600])
@@ -469,23 +505,50 @@ class ScalarScanWindow(QObject):
         text = self.edit_exptime.text()
         _ini_set("exp_time", text)
         try:
-            self._get_pv(SCALER_TP_PV).put(float(text))
+            exptime = float(text)
         except ValueError:
-            pass
+            return
+        tp_pv = self._get_pv(SCALER_TP_PV)
+        if not tp_pv.connected:
+            print(f"[scalar_scan] PV unreachable: {SCALER_TP_PV} - exposure time not sent")
+            return
+        tp_pv.put(exptime)
 
     def _get_pv(self, name: str):
-        return self._pv_cache.setdefault(name, self._pv_class()(name))
+        return _get_or_create_pv(self._pv_cache, self._pv_class, name)
 
     def _poll_live(self):
-        if self._scan_worker is not None:
+        if self._scan_worker is not None or self._poll_worker is not None:
             return
-        with self.lock:
-            x = self.controller.get_pos("X")
-            y = self.controller.get_pos("Y")
+        worker = _PollWorker(self.controller, self.lock, self._pv_cache, self._pv_class, SCALAR_PVS)
+        worker.signals.finished.connect(self._on_poll_result)
+        worker.signals.error.connect(self._on_poll_error)
+        self._poll_worker = worker
+        QThreadPool.globalInstance().start(worker)
+
+    def _on_poll_error(self):
+        self._poll_worker = None
+
+    def _on_poll_result(self, x: float, y: float, results: dict):
+        self._poll_worker = None
         self.buf_x.append(x)
         self.buf_y.append(y)
-        for name, pv_name in SCALAR_PVS.items():
-            self.buf_scalars[name].append(self._get_pv(pv_name).get())
+
+        disconnected = []
+        for name, (connected, value) in results.items():
+            was_connected = self._pv_connected.get(name, True)
+            if connected and not was_connected:
+                print(f"[scalar_scan] PV reconnected: {SCALAR_PVS[name]} ({name})")
+            elif not connected and was_connected:
+                print(f"[scalar_scan] PV unreachable: {SCALAR_PVS[name]} ({name}) - pausing until reconnect")
+            self._pv_connected[name] = connected
+            if not connected:
+                disconnected.append(name)
+            self.buf_scalars[name].append(value if connected and value is not None else float("nan"))
+
+        self.lbl_pv_status.setText(
+            "Disconnected: " + ", ".join(disconnected) if disconnected else "All PVs connected"
+        )
         self._redraw_plots()
 
     def _redraw_plots(self):
@@ -547,8 +610,18 @@ class ScalarScanWindow(QObject):
             )
             return
 
-        self._get_pv(SCALER_TP_PV).put(exptime)
+        tp_pv = self._get_pv(SCALER_TP_PV)
         pvs = {name: self._get_pv(pv_name) for name, pv_name in SCALAR_PVS.items()}
+        unreachable = [name for name, pv in pvs.items() if not pv.connected]
+        if not tp_pv.connected:
+            unreachable.append("scaler TP")
+        if unreachable:
+            msg = f"Cannot start scan - PV(s) unreachable: {', '.join(unreachable)}"
+            print(f"[scalar_scan] {msg}")
+            QMessageBox.warning(self.win, "PV unreachable", msg)
+            return
+
+        tp_pv.put(exptime)
         self._scan_display_scalar = self.combo_scalar.currentText()
 
         self._scan_axis = axis
