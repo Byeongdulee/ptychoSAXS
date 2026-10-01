@@ -771,30 +771,33 @@ class CRL3DPrintControl(QObject):
         return PV
 
     def _wire_xray_eye(self):
-        _PV = self._pv_class()
-        status = _PV("usxRIO:Galil2Bo0_STATUS.VAL")
-        # STATUS.VAL == 0 means the eye is OUT of the beam. This read was
-        # inverted, so the In/Out buttons showed the opposite state; the
-        # convention here now matches optics_motors._is_xrayeye_out.
-        eye_in = status.get() != 0
-        self._set_xrayeye_buttons(eye_in)
+        # Shared with the optics GUI, the main panel and the sample alignment
+        # window through the command PV's readback -- see gui/xray_eye.py.
+        # This used to read the status PV with the opposite polarity to
+        # optics_motors, so the two GUIs showed contradictory states.
+        from xray_eye import XrayEye
+
+        self.xray_eye = XrayEye(self._pv_class(), debug=self.debug_mode)
+        self._refresh_xrayeye_buttons()
         self.ui.pushButton_xrayEyeIn.clicked.connect(self.put_xrayeye_in)
         self.ui.pushButton_xrayEyeOut.clicked.connect(self.put_xrayeye_out)
 
-    def _set_xrayeye_buttons(self, eye_in: bool):
-        self.ui.pushButton_xrayEyeIn.setEnabled(not eye_in)
-        self.ui.pushButton_xrayEyeOut.setEnabled(eye_in)
+    def _refresh_xrayeye_buttons(self):
+        """Offer whichever direction the eye is not already in; both stay
+        available while the state is unknown."""
+        state = self.xray_eye.is_in()
+        self.ui.pushButton_xrayEyeIn.setEnabled(state is not True)
+        self.ui.pushButton_xrayEyeOut.setEnabled(state is not False)
 
     def put_xrayeye_in(self):
-        self._set_xrayeye_buttons(eye_in=True)
         self._put_xrayeye(True)
 
     def put_xrayeye_out(self):
-        self._set_xrayeye_buttons(eye_in=False)
         self._put_xrayeye(False)
 
     def _put_xrayeye(self, ins: bool):
-        self._pv_class()("usxRIO:Galil2Bo0_CMD").put(1 if ins else 0)
+        self.xray_eye.set_in(ins)
+        self._refresh_xrayeye_buttons()
 
     # -- font size (own .ini, not the shared QSettings key) -------------------
 

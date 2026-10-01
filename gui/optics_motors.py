@@ -1,572 +1,196 @@
-from PyQt5 import uic, QtCore, QtGui
-from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog
+"""Simplified optics motor panel.
+
+Everything hardware-specific lives in the three tables at the top of this
+file -- MOTORS, AXIS_BLOCKS and SINGLE_ROWS. Remapping which physical axis a
+dpad or a row drives is a one-line edit there; no widget name, .ini key or
+signal connection needs to change with it.
+
+The full-featured original panel is kept alongside as optics_motors_full.py.
+Layout for both lives in gui/ui/.
+"""
+
+from PyQt5 import uic, QtCore
 from PyQt5.QtWidgets import (
+    QAbstractItemView,
+    QAction,
+    QApplication,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
+    QMainWindow,
+    QMenu,
     QMessageBox,
-    QInputDialog,
-    QDialog,
-    QDialogButtonBox,
+    QPushButton,
     QSlider,
-    QComboBox,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import (
-    QTimer,
-    QObject,
-    pyqtSlot,
-    pyqtSignal,
-    QRunnable,
-    QThreadPool,
-    QSize,
-    QSettings,
-)
+from PyQt5.QtCore import QObject, QSettings, QTimer
 from threading import Lock
+from collections import OrderedDict
+from datetime import datetime
 import argparse
+import configparser
+import csv
+import json
+import os
+import sys
+
 from font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
 from ini_utils import INI_DIR, ensure_ini_defaults
 from resize_utils import ProportionalResizer
-import configparser
-import json
-import sys
-import re
-import os
+from xray_eye import EYE_CMD_PV, XrayEye
 
-# INI file that persists in/out block positions across sessions.
-# Stored in gui/ini/ so it travels with the GUI directory.
+_GUI_DIR = os.path.dirname(os.path.abspath(__file__))
+UI_DIR = os.path.join(_GUI_DIR, "ui")
 _OPTICS_INI = os.path.join(INI_DIR, "optics_motors.ini")
+
+DEFAULT_SNAPSHOT_NAME = "ZP_optics_log.csv"
+
 try:
     from epics import PV
 except ImportError:
     PV = None  # replaced by FakePV in debug mode
-# try:
-#     import ptychosaxs_v2.tw_galil as gl
-#     MotorControlAvailable = True
-# except:
-#     MotorControlAvailable = False
-#     print("Galil is not working")
 
-# MotorControlAvailable = False
-_optics_dir = os.path.dirname(os.path.abspath(__file__))
-_repo_root = os.path.dirname(_optics_dir)
+_repo_root = os.path.dirname(_GUI_DIR)
 sys.path.append(os.path.join(_repo_root, "debug"))
 if _repo_root not in sys.path:
     sys.path.append(_repo_root)
-# import tw_galil as gl
-MotorControlAvailable = True
+
 try:
-    from ptychosaxs.optics import (
-        ptyoptics,
-        opticsbox,
-        OSA,
-        camera,
-        beamstop,
-        slit,
-        slit_CRL,
-        gentry,
-    )
+    from ptychosaxs.optics import opticsbox, OSA, camera, beamstop
 
-    # from newport_piezo import newport
     MotorControlAvailable = True
-except:
+except Exception:
     MotorControlAvailable = False
-    print("Piezo is NOT available.")
-
-
-class MotorPresetBlock:
-    """Reusable enable/disable block for saving and recalling motor in/out positions.
-
-    To add a new block, construct one more instance with the appropriate prefix
-    and motor label indices, then call update_status() inside updatepos().
-    """
-
-    THRESH = 0.005  # position comparison tolerance — adjust here if needed
-    DISABLED_TEXT_COLOR = "#606060"  # gray applied to labels when block is disabled
-
-    def __init__(
-        self,
-        parent,
-        prefix,
-        pos_lbl_indices,
-        in_lbl_names,
-        out_lbl_names,
-        extra_labels=None,
-    ):
-        """
-        parent          – the motor_control instance
-        prefix          – widget name prefix, e.g. 'osa'
-        pos_lbl_indices – list of 1-based motor label indices, e.g. [6, 8]
-        in_lbl_names    – label widget names for saved "In" positions
-        out_lbl_names   – label widget names for saved "Out" positions
-        extra_labels    – additional label names to gray out when disabled
-        """
-        self._parent = parent
-        self._ui = parent.ui
-        self._prefix = prefix
-        self._pos_lbl_indices = pos_lbl_indices
-        self._in_lbl_names = in_lbl_names
-        self._out_lbl_names = out_lbl_names
-        self._extra_labels = extra_labels or []
-        self._enabled = False
-        self._setup()
-
-    def _w(self, cls, name):
-        return self._ui.findChild(cls, name)
-
-    def _setup(self):
-        p = self._prefix
-        btn = self._w(QPushButton, f"pushButton_{p}Enable")
-        if btn:
-            btn.setText("Enable")
-            btn.setStyleSheet("background-color: #ffcccc;")
-            btn.clicked.connect(self._toggle)
-        btn_in = self._w(QPushButton, f"pushButton_{p}In")
-        if btn_in:
-            btn_in.clicked.connect(self._on_in)
-        btn_out = self._w(QPushButton, f"pushButton_{p}Out")
-        if btn_out:
-            btn_out.clicked.connect(self._on_out)
-        slider = self._w(QSlider, f"horizontalSlider_{p}MoveSet")
-        if slider:
-            self._install_slider_toggle(slider)
-        self._apply_enabled(False)
-        self._load_ini()
-
-    @staticmethod
-    def _install_slider_toggle(slider):
-        """Make a 2-state QSlider toggle on any click instead of seeking."""
-
-        class _ToggleFilter(QObject):
-            def eventFilter(self, obj, event):
-                if event.type() == QtCore.QEvent.MouseButtonPress:
-                    obj.setValue(1 - obj.value())
-                    return True  # consume — suppress Qt's own seek behaviour
-                return False
-
-        slider.installEventFilter(_ToggleFilter(slider))
-
-    def _apply_enabled(self, enabled):
-        p = self._prefix
-
-        # enable/disable interactive widgets
-        for cls, name in [
-            (QPushButton, f"pushButton_{p}In"),
-            (QPushButton, f"pushButton_{p}Out"),
-            (QSlider, f"horizontalSlider_{p}MoveSet"),
-            (QLabel, f"label_{p}Status"),
-        ]:
-            w = self._w(cls, name)
-            if w:
-                w.setEnabled(enabled)
-
-        # toggle-button label and color (green = block enabled, red = block disabled)
-        btn = self._w(QPushButton, f"pushButton_{p}Enable")
-        if btn:
-            if enabled:
-                btn.setText("Yes")
-                btn.setStyleSheet("background-color: #ccffcc;")
-            else:
-                btn.setText("No")
-                btn.setStyleSheet("background-color: #ffcccc;")
-
-        # gray out / restore all descriptive labels (but keep status label readable)
-        text_color = "black" if enabled else self.DISABLED_TEXT_COLOR
-        all_text_labels = (
-            self._in_lbl_names
-            + self._out_lbl_names
-            + self._extra_labels
-        )
-        for name in all_text_labels:
-            lbl = self._w(QLabel, name)
-            if lbl:
-                lbl.setStyleSheet(f"color: {text_color};")
-
-        self._enabled = enabled
-        if hasattr(self._parent, '_update_all_buttons'):
-            self._parent._update_all_buttons()
-
-    def _toggle(self):
-        self._apply_enabled(not self._enabled)
-
-    def _slider_mode(self):
-        s = self._w(QSlider, f"horizontalSlider_{self._prefix}MoveSet")
-        return s.value() if s else 0
-
-    def _move_motor(self, label_idx, target):
-        i = label_idx - 1
-        p = self._parent
-        ctrl = p.control[p.controller[i]]
-        axis = ctrl.motornames[p.motorindices[i]]
-        with p.lock:
-            ctrl.mv(axis, target, wait=False)
-
-    def _on_in(self):
-        if self._slider_mode() == 0:
-            for idx, lbl_name in zip(self._pos_lbl_indices, self._in_lbl_names):
-                lbl = self._w(QLabel, lbl_name)
-                if lbl and lbl.text():
-                    try:
-                        self._move_motor(idx, float(lbl.text()))
-                    except ValueError:
-                        pass
-        else:
-            for idx, lbl_name in zip(self._pos_lbl_indices, self._in_lbl_names):
-                src = self._w(QLabel, f"lbl_pos_{idx}")
-                dst = self._w(QLabel, lbl_name)
-                if src and dst:
-                    dst.setText(src.text())
-            self._save_ini()
-
-    def _on_out(self):
-        if self._parent._is_xrayeye_out() and not self._parent._confirm_xrayeye_guard():
-            return
-        if self._slider_mode() == 0:
-            for idx, lbl_name in zip(self._pos_lbl_indices, self._out_lbl_names):
-                lbl = self._w(QLabel, lbl_name)
-                if lbl and lbl.text():
-                    try:
-                        self._move_motor(idx, float(lbl.text()))
-                    except ValueError:
-                        pass
-        else:
-            for idx, lbl_name in zip(self._pos_lbl_indices, self._out_lbl_names):
-                src = self._w(QLabel, f"lbl_pos_{idx}")
-                dst = self._w(QLabel, lbl_name)
-                if src and dst:
-                    dst.setText(src.text())
-            self._save_ini()
-
-    def _load_ini(self):
-        """Restore saved in/out positions from optics_motors.ini into the UI labels."""
-        cfg = configparser.ConfigParser()
-        cfg.read(_OPTICS_INI)
-        sec = self._prefix
-        if sec not in cfg:
-            return
-        for i, lbl_name in enumerate(self._in_lbl_names):
-            val = cfg[sec].get(f"in_{i}", "").strip()
-            lbl = self._w(QLabel, lbl_name)
-            if lbl and val:
-                lbl.setText(val)
-        for i, lbl_name in enumerate(self._out_lbl_names):
-            val = cfg[sec].get(f"out_{i}", "").strip()
-            lbl = self._w(QLabel, lbl_name)
-            if lbl and val:
-                lbl.setText(val)
-
-    def _save_ini(self):
-        """Persist current in/out label values to optics_motors.ini."""
-        cfg = configparser.ConfigParser()
-        cfg.read(_OPTICS_INI)  # preserve other sections
-        sec = self._prefix
-        if sec not in cfg:
-            cfg[sec] = {}
-        for i, lbl_name in enumerate(self._in_lbl_names):
-            lbl = self._w(QLabel, lbl_name)
-            cfg[sec][f"in_{i}"] = lbl.text() if lbl else ""
-        for i, lbl_name in enumerate(self._out_lbl_names):
-            lbl = self._w(QLabel, lbl_name)
-            cfg[sec][f"out_{i}"] = lbl.text() if lbl else ""
-        with open(_OPTICS_INI, "w") as f:
-            cfg.write(f)
-
-    def update_status(self):
-        """Call from updatepos to refresh the In/Out status label."""
-        if not self._enabled:
-            return
-
-        def read(name):
-            lbl = self._w(QLabel, name)
-            if not lbl:
-                return None
-            try:
-                return float(lbl.text())
-            except ValueError:
-                return None
-
-        current = [read(f"lbl_pos_{idx}") for idx in self._pos_lbl_indices]
-        in_vals = [read(n) for n in self._in_lbl_names]
-        out_vals = [read(n) for n in self._out_lbl_names]
-
-        lbl_status = self._w(QLabel, f"label_{self._prefix}Status")
-        if not lbl_status:
-            return
-
-        def near(a, b):
-            return a is not None and b is not None and abs(a - b) <= self.THRESH
-
-        is_in = all(near(c, v) for c, v in zip(current, in_vals))
-        is_out = all(near(c, v) for c, v in zip(current, out_vals))
-
-        if is_in:
-            lbl_status.setText("In")
-            lbl_status.setStyleSheet("background-color: #00cc00; color: white;")
-        elif is_out:
-            lbl_status.setText("Out")
-            lbl_status.setStyleSheet("background-color: #cc0000; color: white;")
-        else:
-            lbl_status.setText("----")
-            lbl_status.setStyleSheet("")
-
-
-class ZPPresetBlock(MotorPresetBlock):
-    """Extends MotorPresetBlock with a named list of ZP 'In' positions.
-
-    _pos_store is a flat dict {name: [z_val, x_val]}. listWidget_zpList shows
-    all names; selecting one loads its z/x into the In display labels so
-    update_status() proximity checking works without modification.
-    """
-
-    # Initial data: {position_name: [z_val, x_val]}  None = not yet saved.
-    _DEFAULT_DATA = {
-        "test position 1": [None, None],
-        "test position 2": [None, None],
-    }
-
-    def __init__(
-        self,
-        parent,
-        prefix,
-        pos_lbl_indices,
-        in_lbl_names,
-        out_lbl_names,
-        extra_labels=None,
-    ):
-        self._pos_store = {k: list(v) for k, v in self._DEFAULT_DATA.items()}
-        self._listw = None
-        super().__init__(
-            parent, prefix, pos_lbl_indices, in_lbl_names, out_lbl_names, extra_labels
-        )
-        self._setup_zp()
-
-    # ------------------------------------------------------------------
-    # Setup
-    # ------------------------------------------------------------------
-
-    def _setup_zp(self):
-        from PyQt5.QtWidgets import QWidget, QAbstractItemView
-
-        # QWidget base used because QListWidget.bool() is False while hidden
-        self._listw = self._ui.findChild(QWidget, "listWidget_zpList")
-        btn_add_zp = self._w(QPushButton, "pushButton_addZp")
-
-        if self._listw is not None:
-            self._listw.setSelectionMode(QAbstractItemView.SingleSelection)
-            self._listw.currentItemChanged.connect(self._on_position_changed)
-
-        if btn_add_zp:
-            btn_add_zp.clicked.connect(self._on_add_zp_button)
-
-        QTimer.singleShot(0, self._populate_list)
-
-    # ------------------------------------------------------------------
-    # List management
-    # ------------------------------------------------------------------
-
-    def _populate_list(self):
-        if self._listw is None:
-            return
-        self._listw.blockSignals(True)
-        self._listw.clear()
-        for pos_name in self._pos_store:
-            self._listw.addItem(pos_name)
-        self._listw.blockSignals(False)
-        if self._listw.count() > 0:
-            self._listw.setCurrentRow(0)
-            self._load_position(self._listw.item(0).text())
-
-    def _on_position_changed(self, current, _):
-        if current is None:
-            return
-        self._load_position(current.text())
-
-    def _load_position(self, pos_name):
-        """Push stored z/x values into the In display labels."""
-        if pos_name not in self._pos_store:
-            return
-        vals = self._pos_store[pos_name]
-        for lbl_name, val in zip(self._in_lbl_names, vals):
-            lbl = self._w(QLabel, lbl_name)
-            if lbl:
-                lbl.setText("" if val is None else "%.3f" % val)
-
-    def _current_pos_name(self):
-        """Return the currently selected position name, or None."""
-        if self._listw is None:
-            return None
-        item = self._listw.currentItem()
-        return item.text() if item else None
-
-    # ------------------------------------------------------------------
-    # INI persistence (overrides base — flat positions JSON, no in labels)
-    # ------------------------------------------------------------------
-
-    def _load_ini(self):
-        """Restore ZP out positions and position store from the INI file.
-
-        In positions are not stored as flat values; they are always derived
-        from _pos_store when a list item is selected.
-        """
-        cfg = configparser.ConfigParser()
-        cfg.read(_OPTICS_INI)
-        sec = self._prefix
-        if sec not in cfg:
-            return
-        for i, lbl_name in enumerate(self._out_lbl_names):
-            val = cfg[sec].get(f"out_{i}", "").strip()
-            lbl = self._w(QLabel, lbl_name)
-            if lbl and val:
-                lbl.setText(val)
-        raw = cfg[sec].get("positions", "").strip()
-        if raw:
-            try:
-                self._pos_store = json.loads(raw)
-            except (json.JSONDecodeError, ValueError):
-                pass  # keep _DEFAULT_DATA on corrupt entry
-
-    def _save_ini(self):
-        """Persist ZP out positions and position store to the INI file."""
-        cfg = configparser.ConfigParser()
-        cfg.read(_OPTICS_INI)
-        sec = self._prefix
-        if sec not in cfg:
-            cfg[sec] = {}
-        for i, lbl_name in enumerate(self._out_lbl_names):
-            lbl = self._w(QLabel, lbl_name)
-            cfg[sec][f"out_{i}"] = lbl.text() if lbl else ""
-        cfg[sec]["positions"] = json.dumps(self._pos_store)
-        with open(_OPTICS_INI, "w") as f:
-            cfg.write(f)
-
-    # ------------------------------------------------------------------
-    # Enable/disable — pushButton_addZp stays always active
-    # ------------------------------------------------------------------
-
-    def _apply_enabled(self, enabled):
-        super()._apply_enabled(enabled)
-
-    # ------------------------------------------------------------------
-    # In-button override (reads/writes internal store instead of labels)
-    # ------------------------------------------------------------------
-
-    def _on_in(self):
-        pos_name = self._current_pos_name()
-        if self._slider_mode() == 0:
-            # Move — use internally stored values (labels are display-only)
-            if pos_name and pos_name in self._pos_store:
-                vals = self._pos_store[pos_name]
-                for idx, val in zip(self._pos_lbl_indices, vals):
-                    if val is not None:
-                        self._move_motor(idx, val)
-        else:
-            # Save — write current motor positions into store, then refresh labels
-            if pos_name:
-                new_vals = []
-                for idx in self._pos_lbl_indices:
-                    src = self._w(QLabel, f"lbl_pos_{idx}")
-                    try:
-                        new_vals.append(float(src.text()) if src else None)
-                    except ValueError:
-                        new_vals.append(None)
-                self._pos_store[pos_name] = new_vals
-                self._load_position(pos_name)
-                self._save_ini()
-
-    # ------------------------------------------------------------------
-    # Add / Remove — launched from the choice dialog on pushButton_addZp
-    # ------------------------------------------------------------------
-
-    def _on_add_zp_button(self):
-        from PyQt5.QtWidgets import QVBoxLayout
-
-        dlg = QDialog()
-        dlg.setWindowTitle("ZP Positions")
-        layout = QVBoxLayout(dlg)
-        btn_add = QPushButton("Add ZP")
-        btn_remove = QPushButton("Remove ZP")
-        layout.addWidget(btn_add)
-        layout.addWidget(btn_remove)
-        result = [None]
-
-        def _pick_add():
-            result[0] = "add"
-            dlg.accept()
-
-        def _pick_remove():
-            result[0] = "remove"
-            dlg.accept()
-
-        btn_add.clicked.connect(_pick_add)
-        btn_remove.clicked.connect(_pick_remove)
-        dlg.exec_()
-        if result[0] == "add":
-            self._add_position()
-        elif result[0] == "remove":
-            self._remove_position()
-
-    def _add_position(self):
-        name, ok = QInputDialog.getText(None, "Add ZP Position", "Position name:")
-        if not (ok and name.strip()):
-            return
-        name = name.strip()
-        if name not in self._pos_store:
-            self._pos_store[name] = [None, None]
-        if self._listw is not None:
-            existing = [self._listw.item(i).text() for i in range(self._listw.count())]
-            if name not in existing:
-                self._listw.addItem(name)
-            for i in range(self._listw.count()):
-                if self._listw.item(i).text() == name:
-                    self._listw.setCurrentRow(i)
-                    break
-        self._save_ini()
-
-    def _remove_position(self):
-        if not self._pos_store:
-            return
-        from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout
-
-        dlg = QDialog()
-        dlg.setWindowTitle("Remove ZP Position")
-        layout = QVBoxLayout(dlg)
-        combo = QComboBox()
-        for name in self._pos_store:
-            combo.addItem(name)
-        layout.addWidget(combo)
-        btn_row = QHBoxLayout()
-        btn_ok = QPushButton("Remove")
-        btn_cancel = QPushButton("Cancel")
-        btn_row.addWidget(btn_ok)
-        btn_row.addWidget(btn_cancel)
-        layout.addLayout(btn_row)
-        btn_ok.clicked.connect(dlg.accept)
-        btn_cancel.clicked.connect(dlg.reject)
-        if dlg.exec_() != QDialog.Accepted:
-            return
-        name = combo.currentText()
-        self._pos_store.pop(name, None)
-        if self._listw is not None:
-            for i in range(self._listw.count()):
-                if self._listw.item(i).text() == name:
-                    self._listw.takeItem(i)
-                    break
-        self._save_ini()
-
-
-# Every section/key the preset blocks read out of optics_motors.ini, with the
-# value used when the file - or just that entry - does not exist yet. The .ini
-# is untracked per-installation state, so this is the only definition of a
-# fresh one. In/out positions default to empty rather than 0: a blank label is
-# treated as "no saved position", while a 0 would advertise the origin as a
-# real in/out target for the Move buttons.
-INI_DEFAULTS = {
-    "zp": {
-        "out_0": "",
-        "out_1": "",
-        "positions": json.dumps(ZPPresetBlock._DEFAULT_DATA),
-    },
-    "osa": {"in_0": "", "in_1": "", "out_0": "", "out_1": ""},
-    "bs": {"in_0": "", "in_1": "", "out_0": "", "out_1": ""},
+    print("Optics motor control is NOT available.")
+
+
+# ---------------------------------------------------------------------------
+# Hardware map -- the only place motors are named.
+#
+# Each entry is display_name -> (controller, index of the axis within that
+# controller's PV list). The controllers come from ptychosaxs.optics:
+#   opticsbox  12idc:m10, m11, m12, m13, m14
+#   OSA        12idc:m9, m15, m16
+#   camera     12idc:m2
+#   beamstop   12ideSFT:m4, m5
+#
+# The CL slits are deliberately absent: this panel neither drives nor stops
+# them, so Stop All must leave them alone.
+# ---------------------------------------------------------------------------
+MOTORS = OrderedDict([
+    ("BS_ver",      ("opticsbox", 0)),
+    ("BS_hor",      ("opticsbox", 1)),
+    ("ZP_ver",      ("opticsbox", 2)),
+    ("ZP_hor",      ("opticsbox", 3)),
+    ("BSZP_Ztrans", ("opticsbox", 4)),
+    ("OSA_X",       ("OSA", 0)),
+    ("OSA_Z",       ("OSA", 1)),
+    ("OSA_Y",       ("OSA", 2)),
+    ("SAXS_Z",      ("camera", 0)),
+    ("SAXSBS_hor",  ("beamstop", 0)),
+    ("SAXSBS_ver",  ("beamstop", 1)),
+])
+
+# PV record base for each motor, for tooltips only -- nothing here is used to
+# talk to hardware (that goes through MOTORS/the controllers above). Must be
+# kept in step with the pvlist order in ptychosaxs/optics.py's opticsbox,
+# OSA, camera and beamstop classes. Readback reads "<base>.RBV"; Move to
+# writes "<base>.VAL" (ptychosaxs/epicsmotor.py's get_pos/mv).
+PV_BASES = {
+    "BS_ver":      "12idc:m10",
+    "BS_hor":      "12idc:m11",
+    "ZP_ver":      "12idc:m12",
+    "ZP_hor":      "12idc:m13",
+    "BSZP_Ztrans": "12idc:m14",
+    "OSA_X":       "12idc:m9",
+    "OSA_Z":       "12idc:m15",
+    "OSA_Y":       "12idc:m16",
+    "SAXS_Z":      "12idc:m2",
+    "SAXSBS_hor":  "12ideSFT:m4",
+    "SAXSBS_ver":  "12ideSFT:m5",
 }
+
+
+class AxisBlock:
+    """One dpad + in/out registry column.
+
+    `prefix` selects the widget family in optics_motors.ui (pb_<prefix>_up,
+    lbl_<prefix>_in_0, ...). `section` is the optics_motors.ini section the
+    saved positions go in -- changing `prefix` without changing `section`
+    keeps an existing installation's saved positions.
+    """
+
+    def __init__(self, prefix, title, ver, hor, section, has_list=False):
+        self.prefix = prefix
+        self.title = title
+        self.ver = ver
+        self.hor = hor
+        self.section = section
+        self.has_list = has_list
+
+    @property
+    def motors(self):
+        return [self.ver, self.hor]
+
+
+AXIS_BLOCKS = OrderedDict((b.prefix, b) for b in [
+    AxisBlock("bs",     "BS",      ver="BS_ver",     hor="BS_hor",     section="bs"),
+    AxisBlock("zp",     "ZP",      ver="ZP_ver",     hor="ZP_hor",     section="zp",
+              has_list=True),
+    AxisBlock("osa",    "OSA",     ver="OSA_Y",      hor="OSA_X",      section="osa"),
+    AxisBlock("saxsbs", "SAXS BS", ver="SAXSBS_ver", hor="SAXSBS_hor", section="SAXSbs"),
+])
+
+# Single-axis rows: widget prefix -> motor. "ztrans" additionally owns a
+# one-value position registry (frame_ztrans_reg + listWidget_ztransList).
+SINGLE_ROWS = OrderedDict([
+    ("osaz",   "OSA_Z"),
+    ("ztrans", "BSZP_Ztrans"),
+    ("saxsz",  "SAXS_Z"),
+])
+
+# Blocks All In / All Out drives. The SAXS beamstop only joins when the Edit
+# menu says so -- All Out retracting a beamstop an experiment relies on is a
+# worse surprise than having to move it by hand.
+ALL_IN_OUT_BLOCKS = ["osa", "bs", "zp"]
+OPTIONAL_ALL_BLOCK = "saxsbs"
+
+_DEFAULT_ZP_POSITIONS = {"test position 1": [None, None]}
+_DEFAULT_ZTRANS_POSITIONS = {"test position 1": [None]}
+
+
+def _position_defaults():
+    """{section: {key: default}} for every block's saved in/out positions.
+
+    In/out positions default to empty rather than 0: a blank label means "no
+    saved position", while a 0 would advertise the origin as a real in/out
+    target for the Move buttons.
+    """
+    defaults = {}
+    for block in AXIS_BLOCKS.values():
+        entries = {"out_0": "", "out_1": ""}
+        if block.has_list:
+            entries["positions"] = json.dumps(_DEFAULT_ZP_POSITIONS)
+        else:
+            entries["in_0"] = ""
+            entries["in_1"] = ""
+        defaults[block.section] = entries
+    return defaults
+
+
+INI_DEFAULTS = dict(
+    _position_defaults(),
+    ztrans={"out_0": "", "positions": json.dumps(_DEFAULT_ZTRANS_POSITIONS)},
+    invert={"%s_%s" % (p, axis): "0"
+            for p in AXIS_BLOCKS for axis in ("ver", "hor")},
+    options={"saxsbs_in_all": "0"},
+)
 
 
 def ensure_default_ini(path=_OPTICS_INI):
@@ -575,710 +199,916 @@ def ensure_default_ini(path=_OPTICS_INI):
     ensure_ini_defaults(path, INI_DEFAULTS)
 
 
+def read_saxsbs_in_all(path=_OPTICS_INI):
+    """Whether All In / All Out should drive the SAXS beamstop too."""
+    cfg = configparser.ConfigParser()
+    try:
+        cfg.read(path)
+    except (configparser.Error, OSError):
+        return False
+    return cfg.getboolean("options", "saxsbs_in_all", fallback=False)
+
+
+def write_saxsbs_in_all(enabled, path=_OPTICS_INI):
+    _write_ini_value("options", "saxsbs_in_all", "1" if enabled else "0", path)
+
+
+def _write_ini_value(section, key, value, path=_OPTICS_INI):
+    cfg = configparser.ConfigParser()
+    cfg.read(path)
+    if not cfg.has_section(section):
+        cfg.add_section(section)
+    cfg[section][key] = value
+    with open(path, "w") as f:
+        cfg.write(f)
+
+
+class _SliderToggle(QObject):
+    """Makes a 2-state QSlider flip on any click instead of seeking."""
+
+    def eventFilter(self, obj, event):
+        if event.type() == QtCore.QEvent.MouseButtonPress:
+            obj.setValue(1 - obj.value())
+            return True  # consume -- suppress Qt's own seek behaviour
+        return False
+
+
+class PresetBlock:
+    """Enable toggle plus In/Out recall for one group of motors.
+
+    Every widget it touches is named after `prefix`, so a block needs no
+    per-widget configuration: pb_<p>_enable / _in / _out, slider_<p>_moveSet,
+    lbl_<p>_status, frame_<p>_reg, and lbl_<p>_in_<i> / lbl_<p>_out_<i> for
+    each motor.
+
+    With `has_list`, the In side is a named set of positions (listWidget_
+    <p>List) rather than a single saved value, and the In labels mirror
+    whichever entry is selected.
+    """
+
+    THRESH = 0.005  # position comparison tolerance
+    DISABLED_TEXT_COLOR = "#606060"
+    # Clearing the status pill back to "no colour" still has to say
+    # transparent, or the column stylesheet's grey shows instead of the
+    # registry's pale yellow.
+    NEUTRAL_STYLE = "background-color: transparent;"
+
+    def __init__(self, panel, prefix, section, motors, has_list=False,
+                 default_positions=None, name_indicator=False):
+        self.panel = panel
+        self.ui = panel.ui
+        self.prefix = prefix
+        self.section = section
+        self.motors = list(motors)
+        self.has_list = has_list
+        self.positions = {k: list(v) for k, v in (default_positions or {}).items()}
+        self.enabled = False
+        self.name_indicator = name_indicator
+
+        # True stored positions, always in mm regardless of the display unit
+        # setting -- the labels only ever show a formatted view of these.
+        self._in_values = [None] * len(self.motors)
+        self._out_values = [None] * len(self.motors)
+
+        self._list = self.ui.findChild(QWidget, "listWidget_%sList" % prefix)
+        self._connect()
+        self._load_ini()
+        self.refresh_display()
+        self._apply_enabled(False)
+        if self.has_list:
+            self._populate_list()
+
+    # -- widget helpers ----------------------------------------------------
+
+    def _w(self, cls, name):
+        return self.ui.findChild(cls, name)
+
+    def _in_label(self, i):
+        return self._w(QLabel, "lbl_%s_in_%d" % (self.prefix, i))
+
+    def _out_label(self, i):
+        return self._w(QLabel, "lbl_%s_out_%d" % (self.prefix, i))
+
+    # -- setup -------------------------------------------------------------
+
+    def _connect(self):
+        p = self.prefix
+        self._w(QPushButton, "pb_%s_enable" % p).clicked.connect(self._toggle)
+        self._w(QPushButton, "pb_%s_in" % p).clicked.connect(self.on_in)
+        self._w(QPushButton, "pb_%s_out" % p).clicked.connect(self.on_out)
+        slider = self._w(QSlider, "slider_%s_moveSet" % p)
+        slider.installEventFilter(_SliderToggle(slider))
+        if self.has_list:
+            self._list.setSelectionMode(QAbstractItemView.SingleSelection)
+            self._list.currentItemChanged.connect(self._on_selection_changed)
+            self._w(QPushButton, "pb_%s_addPos" % p).clicked.connect(self._edit_positions)
+
+    def _apply_enabled(self, enabled):
+        p = self.prefix
+        for cls, name in [(QPushButton, "pb_%s_in" % p),
+                          (QPushButton, "pb_%s_out" % p),
+                          (QSlider, "slider_%s_moveSet" % p),
+                          (QLabel, "lbl_%s_status" % p)]:
+            self._w(cls, name).setEnabled(enabled)
+
+        btn = self._w(QPushButton, "pb_%s_enable" % p)
+        btn.setText("Yes" if enabled else "No")
+        btn.setStyleSheet("background-color: %s;"
+                          % ("#ccffcc" if enabled else "#ffcccc"))
+
+        # Grey the whole registry out, status pill excepted -- it keeps its
+        # own In/Out colouring. The explicit transparent background overrides
+        # the grey the enclosing column's stylesheet cascades onto every
+        # child, so the registry's pale yellow shows through.
+        status = self._w(QLabel, "lbl_%s_status" % p)
+        colour = "black" if enabled else self.DISABLED_TEXT_COLOR
+        for lbl in self._w(QWidget, "frame_%s_reg" % p).findChildren(QLabel):
+            if lbl is not status:
+                lbl.setStyleSheet(
+                    "color: %s; background-color: transparent;" % colour)
+
+        self.enabled = enabled
+        self.panel.update_all_buttons()
+
+    def _toggle(self):
+        self._apply_enabled(not self.enabled)
+
+    def _move_set_mode(self):
+        """0 = the In/Out buttons move motors, 1 = they save positions."""
+        return self._w(QSlider, "slider_%s_moveSet" % self.prefix).value()
+
+    # -- In / Out ----------------------------------------------------------
+
+    def will_move_on_out(self):
+        """True when Out moves motors rather than saving their positions."""
+        return self._move_set_mode() == 0
+
+    def on_in(self):
+        if self._move_set_mode() == 0:
+            for motor, value in zip(self.motors, self._stored("in")):
+                if value is not None:
+                    self.panel.move_abs(motor, value)
+        elif self.has_list:
+            name = self._selected_name()
+            if name:
+                self.positions[name] = [self.panel.read(m) for m in self.motors]
+                self._show_position(name)
+                self._save_ini()
+        else:
+            self._capture("in")
+
+    def on_out(self):
+        # Only a real move needs the eye guard -- saving a position moves
+        # nothing and must not interrogate the operator.
+        if self.will_move_on_out():
+            if self.panel.is_xrayeye_out() and not self.panel.confirm_xrayeye_guard():
+                return
+            for motor, value in zip(self.motors, self._stored("out")):
+                if value is not None:
+                    self.panel.move_abs(motor, value)
+        else:
+            self._capture("out")
+
+    def _capture(self, kind):
+        """Copy the live readbacks into this block's saved `kind` positions."""
+        values = self._in_values if kind == "in" else self._out_values
+        for i, motor in enumerate(self.motors):
+            values[i] = self.panel.read(motor)
+        self.refresh_display()
+        self._save_ini()
+
+    def _stored(self, kind):
+        """The saved `kind` positions (mm), one per motor, None where unset."""
+        return list(self._in_values if kind == "in" else self._out_values)
+
+    # -- display -------------------------------------------------------
+
+    def refresh_display(self):
+        """Redraw the in/out labels from the stored mm values, in whichever
+        unit the panel is currently showing positions in."""
+        fmt = self.panel._fmt_pos
+        if not self.has_list:
+            for i in range(len(self.motors)):
+                self._in_label(i).setText(fmt(self._in_values[i]))
+        for i in range(len(self.motors)):
+            self._out_label(i).setText(fmt(self._out_values[i]))
+        if self.has_list:
+            name = self._selected_name()
+            if name:
+                self._show_position(name)
+
+    # -- named position list ----------------------------------------------
+
+    def _selected_name(self):
+        item = self._list.currentItem()
+        return item.text() if item else None
+
+    def _populate_list(self, select=None):
+        names = list(self.positions)
+        self._list.blockSignals(True)
+        self._list.clear()
+        self._list.addItems(names)
+        self._list.blockSignals(False)
+        if names:
+            row = names.index(select) if select in names else 0
+            self._list.setCurrentRow(row)
+            self._show_position(names[row])
+
+    def _on_selection_changed(self, current, _previous):
+        if current is not None:
+            self._show_position(current.text())
+
+    def _show_position(self, name):
+        """Push a stored named position into the In labels (display only)."""
+        for i, value in enumerate(self.positions.get(name, [])):
+            self._in_label(i).setText(self.panel._fmt_pos(value))
+
+    def _edit_positions(self):
+        choice = _choice_dialog(self.ui, "Positions", ["Add", "Remove"])
+        if choice == "Add":
+            name, ok = QInputDialog.getText(self.ui, "Add position", "Position name:")
+            name = name.strip() if ok else ""
+            if not name:
+                return
+            self.positions.setdefault(name, [None] * len(self.motors))
+        elif choice == "Remove":
+            if not self.positions:
+                return
+            name = _choice_dialog(self.ui, "Remove position", list(self.positions),
+                                  combo=True)
+            if name is None:
+                return
+            self.positions.pop(name, None)
+            name = None
+        else:
+            return
+        self._populate_list(select=name)
+        self._save_ini()
+
+    # -- persistence -------------------------------------------------------
+
+    def _load_ini(self):
+        cfg = configparser.ConfigParser()
+        cfg.read(_OPTICS_INI)
+        if not cfg.has_section(self.section):
+            return
+        section = cfg[self.section]
+        for i in range(len(self.motors)):
+            if not self.has_list:
+                value = section.get("in_%d" % i, "").strip()
+                self._in_values[i] = float(value) if value else None
+            value = section.get("out_%d" % i, "").strip()
+            self._out_values[i] = float(value) if value else None
+        if self.has_list:
+            try:
+                self.positions = json.loads(section.get("positions", "") or "{}")
+            except ValueError:
+                pass  # keep the defaults on a corrupt entry
+
+    def _save_ini(self):
+        cfg = configparser.ConfigParser()
+        cfg.read(_OPTICS_INI)  # preserve the other sections
+        if not cfg.has_section(self.section):
+            cfg.add_section(self.section)
+        for i in range(len(self.motors)):
+            if not self.has_list:
+                v = self._in_values[i]
+                cfg[self.section]["in_%d" % i] = "" if v is None else "%.6f" % v
+            v = self._out_values[i]
+            cfg[self.section]["out_%d" % i] = "" if v is None else "%.6f" % v
+        if self.has_list:
+            cfg[self.section]["positions"] = json.dumps(self.positions)
+        with open(_OPTICS_INI, "w") as f:
+            cfg.write(f)
+
+    # -- status ------------------------------------------------------------
+
+    def update_status(self, readbacks):
+        if not self.enabled:
+            return
+        label = self._w(QLabel, "lbl_%s_status" % self.prefix)
+        live = [readbacks[m] for m in self.motors]
+
+        def matches(saved):
+            return all(s is not None and abs(c - s) <= self.THRESH
+                       for c, s in zip(live, saved))
+
+        if self.name_indicator:
+            for name, saved in self.positions.items():
+                if matches(saved):
+                    label.setText(name if len(name) <= 5 else name[:4] + "…")
+                    label.setStyleSheet(self.NEUTRAL_STYLE)
+                    return
+            label.setText("---")
+            label.setStyleSheet(self.NEUTRAL_STYLE)
+            return
+
+        if matches(self._stored("in")):
+            label.setText("In")
+            label.setStyleSheet("background-color: #00cc00; color: white;")
+        elif matches(self._stored("out")):
+            label.setText("Out")
+            label.setStyleSheet("background-color: #cc0000; color: white;")
+        else:
+            label.setText("----")
+            label.setStyleSheet(self.NEUTRAL_STYLE)
+
+    def status_text(self):
+        return self._w(QLabel, "lbl_%s_status" % self.prefix).text()
+
+
+def _choice_dialog(parent, title, options, combo=False):
+    """Pick one of `options`. Returns the chosen string, or None if cancelled."""
+    dlg = QDialog(parent)
+    dlg.setWindowTitle(title)
+    layout = QVBoxLayout(dlg)
+    picked = [None]
+
+    if combo:
+        box = QComboBox()
+        box.addItems(options)
+        layout.addWidget(box)
+        row = QHBoxLayout()
+        ok, cancel = QPushButton("OK"), QPushButton("Cancel")
+        row.addWidget(ok)
+        row.addWidget(cancel)
+        layout.addLayout(row)
+        ok.clicked.connect(dlg.accept)
+        cancel.clicked.connect(dlg.reject)
+        if dlg.exec_() != QDialog.Accepted:
+            return None
+        return box.currentText()
+
+    for option in options:
+        button = QPushButton(option)
+        layout.addWidget(button)
+        button.clicked.connect(
+            lambda _checked=False, o=option: (picked.__setitem__(0, o), dlg.accept()))
+    dlg.exec_()
+    return picked[0]
+
+
 class motor_control(QMainWindow):
-    #    resized = QtCore.pyqtSignal()
+    """The optics panel window."""
 
-    MOTOR_PREC = "%0.4f"
-
-    # Direction button → (1-based motor label index, step sign, tweak QLineEdit name)
-    # Step value is read from the named QLineEdit and treated as MICRONS.
-    # To remap a button, change its motor index or tweak widget here.
-    DIR_BUTTON_MAP = {
-        "pb_osa_left":  (6, -1, "ed_osa_tweak"),
-        "pb_osa_right": (6, +1, "ed_osa_tweak"),
-        "pb_osa_down":  (8, -1, "ed_osa_tweak"),
-        "pb_osa_up":    (8, +1, "ed_osa_tweak"),
-        "pb_bs_left":   (2, -1, "ed_bs_tweak"),
-        "pb_bs_right":  (2, +1, "ed_bs_tweak"),
-        "pb_bs_down":   (1, -1, "ed_bs_tweak"),
-        "pb_bs_up":     (1, +1, "ed_bs_tweak"),
-        "pb_zp_left":   (4, -1, "ed_zp_tweak"),
-        "pb_zp_right":  (4, +1, "ed_zp_tweak"),
-        "pb_zp_down":   (3, -1, "ed_zp_tweak"),
-        "pb_zp_up":     (3, +1, "ed_zp_tweak"),
-    }
+    # Positions are in mm internally and here, at 1 um resolution -- this is
+    # also what every saved/exported mm value is formatted with.
+    PREC = "%0.3f"
+    UNITS_SETTINGS_KEY = "opticsMotors/unitsUm"
+    MM_PER_UM = 0.001
 
     def __init__(self, debug_mode=False):
         super(motor_control, self).__init__()
         self.debug_mode = debug_mode
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         ensure_default_ini()
-        guiName = "motorGUI.ui"
-        self.ui = uic.loadUi(guiName)
-
-        # list all possible motors
-        # this should came from the pts.
-        # controller = ['galil', 'smarAct', 'newport']
-        self.control = {}
-        if self.debug_mode:
-            from debug_stubs import (
-                DebugOpticsbox,
-                DebugOSA,
-                DebugCamera,
-                DebugBeamstop,
-                DebugSlit,
-            )
-
-            self.control["opticsbox"] = DebugOpticsbox()
-            self.control["OSA"] = DebugOSA()
-            self.control["camera"] = DebugCamera()
-            self.control["beamstop"] = DebugBeamstop()
-            self.control["slit"] = DebugSlit()
-        elif MotorControlAvailable:
-            self.control["opticsbox"] = opticsbox()
-            self.control["OSA"] = OSA()
-            self.control["camera"] = camera()
-            self.control["beamstop"] = beamstop()
-            self.control["slit"] = slit()
-        else:
-            raise RuntimeError(
-                "Motor control hardware (optics) is not available. Run with --debug_mode to use stubs."
-            )
-        # self.control["slit_CRL"] = slit_CRL()
-        self.motornames = []
-        self.motorunits = []
-        self.motorindices = []
-        self.controller = []
-        for i, m in enumerate(self.control["opticsbox"].motors):
-            self.motornames.append(m.DESC)
-            self.motorunits.append(m.EGU)
-            self.controller.append("opticsbox")
-            self.motorindices.append(i)
-
-        for i, m in enumerate(self.control["OSA"].motors):
-            self.motornames.append(m.DESC)
-            self.motorunits.append(m.EGU)
-            self.controller.append("OSA")
-            self.motorindices.append(i)
-
-        for i, m in enumerate(self.control["camera"].motors):
-            self.motornames.append(m.DESC)
-            self.motorunits.append(m.EGU)
-            self.controller.append("camera")
-            self.motorindices.append(i)
-
-        for i, m in enumerate(self.control["beamstop"].motors):
-            self.motornames.append(m.DESC)
-            self.motorunits.append(m.EGU)
-            self.controller.append("beamstop")
-            self.motorindices.append(i)
-
-        for i, m in enumerate(self.control["slit"].motors):
-            self.motornames.append(m.name)
-            self.motorunits.append(m.units)
-            self.controller.append("slit")
-            self.motorindices.append(i)
-
-        # for i, m in enumerate(self.control["slit_CRL"].motors):
-        #     self.motornames.append(m.name)
-        #     self.motorunits.append(m.units)
-        #     self.controller.append('slit_CRL')
-        #     self.motorindices.append(i)
-
-        print(self.motornames)
+        self.ui = uic.loadUi(os.path.join(UI_DIR, "optics_motors.ui"))
         self.lock = Lock()
-        self.threadpool = QThreadPool.globalInstance()
-        enable = True
-        for i, name in enumerate(self.motornames):
-            n = i + 1
-            self.enable_motors(n, enable)
 
-        # update GUI
-        for i, name in enumerate(self.motornames):
-            n = i + 1
-            controller = self.control[self.controller[i]]
-            axisname = controller.motornames[self.motorindices[i]]
-            lbl_name = self.ui.findChild(QLabel, "lbl_motor_%i" % n)
-            lbl_pos = self.ui.findChild(QLabel, "lbl_pos_%i" % n)
-            btn_tweakL = self.ui.findChild(QPushButton, "btn_tweak%iL" % n)
-            btn_tweakR = self.ui.findChild(QPushButton, "btn_tweak%iR" % n)
-            ed_mv = self.ui.findChild(QLineEdit, "edit_%i" % n)
-            ed_reset = self.ui.findChild(QLineEdit, "edit_reset_%i" % n)
-            btn_stop = self.ui.findChild(QPushButton, "btn_lup_%i" % n)
-            if lbl_name:
-                lbl_name.setText(name)
-            if lbl_pos:
-                lbl_pos.setText(str(controller.get_pos(axisname)))
-            if btn_tweakL:
-                btn_tweakL.clicked.connect(lambda: self.mvr(-1, -1))
-            if btn_tweakR:
-                btn_tweakR.clicked.connect(lambda: self.mvr(-1, 1))
-            if ed_mv:
-                ed_mv.returnPressed.connect(lambda: self.mv(-1, None))
-            if ed_reset:
-                ed_reset.returnPressed.connect(lambda: self.reset(-1))
-            if btn_stop:
-                btn_stop.setText("Stop")
-                btn_stop.clicked.connect(lambda: self.stop(-1))
+        self.control = self._build_controllers()
+        self.invert = self._load_inverts()
+        self._units_um = bool(QSettings("ptychoSAXS", "ptychoSAXS")
+                              .value(self.UNITS_SETTINGS_KEY, False, type=bool))
 
-        # menu
-        # Vestigial: these controllers ("ptyoptics"/"galil"/"newport") never
-        # appear in self.controller (only opticsbox/OSA/camera/beamstop/slit
-        # are ever instantiated above), so set_ui_enability never matches
-        # anything for them. Left connected-but-commented in case a real
-        # SmarAct/Newport/Galil stage is added later.
-        # self.ui.actionSmarAct_3.triggered.connect(self.enable_ptyoptics)
-        # self.ui.actionNewport.triggered.connect(self.enable_galil)
-        # self.ui.actionNewport_Piezo.triggered.connect(self.enable_newport)
-        self.ui.actionIn.triggered.connect(self.put_xrayeye_in)
-        self.ui.actionOut.triggered.connect(self.put_xrayeye_out)
-        if self.debug_mode:
+        self._build_blocks()
+        self._connect_motor_widgets()
+        self._connect_menus()
+        self._connect_buttons()
+
+        if debug_mode:
             from debug_stubs import FakePV as _PV
         else:
             _PV = PV
-        status = _PV("usxRIO:Galil2Bo0_STATUS.VAL")
-        if status.get() == 0:
-            self.ui.actionOut.setEnabled(False)
-            self.ui.actionIn.setEnabled(True)
-            self._set_xrayeye_buttons(eye_in=True)
-        else:
-            self.ui.actionOut.setEnabled(True)
-            self.ui.actionIn.setEnabled(False)
-            self._set_xrayeye_buttons(eye_in=False)
-
-        # pushButton_xrayEyeIn / Out track the menu items
-        btn_eye_in = self.ui.findChild(QPushButton, "pushButton_xrayEyeIn")
-        btn_eye_out = self.ui.findChild(QPushButton, "pushButton_xrayEyeOut")
-        if btn_eye_in:
-            btn_eye_in.clicked.connect(self.put_xrayeye_in)
-        if btn_eye_out:
-            btn_eye_out.clicked.connect(self.put_xrayeye_out)
-
-        # Copy current positions into move-to boxes
-        btn_copy = self.ui.findChild(QPushButton, "pushButton_copyCurrent")
-        if btn_copy:
-            btn_copy.clicked.connect(self.copy_current_positions)
-
-        # OSA preset block: OSA_X = lbl_pos_6, OSA_Z = lbl_pos_7
-        self.osa_block = MotorPresetBlock(
-            self,
-            "osa",
-            pos_lbl_indices=[8, 6],
-            in_lbl_names=["lbl_osayIn", "lbl_osaxIn"],
-            out_lbl_names=["lbl_osayOut", "lbl_osaxOut"],
-            extra_labels=[
-                "label_osaxInName",
-                "label_osaxOutName",
-                "label_osayInName",
-                "label_osayOutName",
-                "label_3",
-                "label_2",
-            ],
-        )
-
-        # Beamstop preset block: BS_ver = lbl_pos_1, BS_hor = lbl_pos_2
-        self.bs_block = MotorPresetBlock(
-            self,
-            "bs",
-            pos_lbl_indices=[1, 2],
-            in_lbl_names=["lbl_bszIn", "lbl_bsxIn"],
-            out_lbl_names=["lbl_bszOut", "lbl_bsxOut"],
-            extra_labels=[
-                "label_bsxInName",
-                "label_bsxOutName",
-                "label_bszInName",
-                "label_bszOutName",
-                "label_bsMoveSet",
-                "label_14",
-                "label_bsStatus",
-            ],
-        )
-
-        # Zone plate preset block: ZP_ver = lbl_pos_3, ZP_hor = lbl_pos_4
-        self.zp_block = ZPPresetBlock(
-            self,
-            "zp",
-            pos_lbl_indices=[3, 4],
-            in_lbl_names=["lbl_zpzIn", "lbl_zpxIn"],
-            out_lbl_names=["lbl_zpzOut", "lbl_zpxOut"],
-            extra_labels=[
-                "label_zpxInName",
-                "label_zpxOutName",
-                "label_zpzInName",
-                "label_zpzOutName",
-                "label_zpMoveSet",
-                "label_16",
-                "label_zpStatus",
-                "pushButton_addZp",
-            ],
-        )
-
-        # Export / Import positions buttons
-        btn_export = self.ui.findChild(QPushButton, "pushButton_exportPos")
-        if btn_export:
-            btn_export.clicked.connect(self.export_positions)
-        btn_import = self.ui.findChild(QPushButton, "pushButton_importPos")
-        if btn_import:
-            btn_import.clicked.connect(self.import_positions)
-
-        # Exit button
-        btn_exit = self.ui.findChild(QPushButton, "pushButton_exit")
-        if btn_exit:
-            btn_exit.clicked.connect(QApplication.instance().quit)
-
-        # Direction buttons (micron-step nudge)
-        self._connect_dir_buttons()
-
-        # All-In / All-Out buttons
-        btn_all_in = self.ui.findChild(QPushButton, "pushButton_allIn")
-        btn_all_out = self.ui.findChild(QPushButton, "pushButton_allOut")
-        if btn_all_in:
-            btn_all_in.clicked.connect(self._all_in)
-        if btn_all_out:
-            btn_all_out.clicked.connect(self._all_out)
-        self._update_all_buttons()
+        self.xray_eye = XrayEye(_PV, debug=debug_mode)
+        self._refresh_xrayeye_ui()
+        self.update_all_buttons()
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.updatepos)
         self.timer.start(100)
-        def _save_geom_and_close(event):
-            QSettings("ptychoSAXS", "ptychoSAXS").setValue(
-                "opticsMotorsWindow/geometry", self.ui.saveGeometry()
-            )
+        self._restore_window()
+
+    # -- hardware ----------------------------------------------------------
+
+    def _build_controllers(self):
+        if self.debug_mode:
+            from debug_stubs import (
+                DebugBeamstop, DebugCamera, DebugOpticsbox, DebugOSA)
+            return {"opticsbox": DebugOpticsbox(), "OSA": DebugOSA(),
+                    "camera": DebugCamera(), "beamstop": DebugBeamstop()}
+        if not MotorControlAvailable:
+            raise RuntimeError(
+                "Motor control hardware (optics) is not available. "
+                "Run with --debug_mode to use stubs.")
+        return {"opticsbox": opticsbox(), "OSA": OSA(), "camera": camera(),
+                "beamstop": beamstop()}
+
+    def _axis(self, motor):
+        controller_name, index = MOTORS[motor]
+        controller = self.control[controller_name]
+        return controller, controller.motornames[index]
+
+    def read(self, motor):
+        controller, axis = self._axis(motor)
+        with self.lock:
+            return float(controller.get_pos(axis))
+
+    def move_abs(self, motor, value):
+        controller, axis = self._axis(motor)
+        with self.lock:
+            controller.mv(axis, value, wait=False)
+
+    def move_rel(self, motor, delta):
+        controller, axis = self._axis(motor)
+        with self.lock:
+            controller.mvr(axis, delta, wait=False)
+
+    # -- display units -------------------------------------------------
+
+    def _fmt_pos(self, value_mm):
+        """Format an internal mm position for display in the current unit.
+
+        um mode shows integers only -- 1 um is the display resolution limit,
+        so a fractional um would be false precision.
+        """
+        if value_mm is None:
+            return ""
+        if self._units_um:
+            return "%d" % round(value_mm / self.MM_PER_UM)
+        return self.PREC % value_mm
+
+    def _parse_pos(self, text):
+        """Inverse of _fmt_pos: user-typed text in the current display unit
+        to an internal mm float. Raises ValueError on bad input."""
+        value = float(text)
+        return value * self.MM_PER_UM if self._units_um else value
+
+    # -- construction ------------------------------------------------------
+
+    def _build_blocks(self):
+        self.blocks = OrderedDict()
+        for prefix, spec in AXIS_BLOCKS.items():
+            self.blocks[prefix] = PresetBlock(
+                self, prefix, spec.section, spec.motors, has_list=spec.has_list,
+                default_positions=_DEFAULT_ZP_POSITIONS if spec.has_list else None)
+        self.blocks["ztrans"] = PresetBlock(
+            self, "ztrans", "ztrans", [SINGLE_ROWS["ztrans"]], has_list=True,
+            default_positions=_DEFAULT_ZTRANS_POSITIONS, name_indicator=True)
+
+    def _connect_motor_widgets(self):
+        """Label, move-to box and nudge buttons for every mapped motor."""
+        for prefix, spec in AXIS_BLOCKS.items():
+            for axis, motor in (("ver", spec.ver), ("hor", spec.hor)):
+                self._connect_move_to("ed_mv_%s_%s" % (prefix, axis), motor)
+                self._set_readback_tooltip("lbl_rb_%s_%s" % (prefix, axis), motor)
+            self.ui.findChild(QLabel, "lbl_%s_title" % prefix).setText(spec.title)
+            self._connect_dpad(prefix, spec)
+
+        for prefix, motor in SINGLE_ROWS.items():
+            self.ui.findChild(QLabel, "lbl_name_%s" % prefix).setText(motor)
+            self._connect_move_to("ed_mv_%s" % prefix, motor)
+            self._set_readback_tooltip("lbl_rb_%s" % prefix, motor)
+            step_box = "ed_%s_step" % prefix
+            self.ui.findChild(QPushButton, "pb_%s_minus" % prefix).clicked.connect(
+                lambda _c=False, m=motor, s=step_box: self.move_rel(m, -self._step(s)))
+            self.ui.findChild(QPushButton, "pb_%s_plus" % prefix).clicked.connect(
+                lambda _c=False, m=motor, s=step_box: self.move_rel(m, self._step(s)))
+
+    def _set_readback_tooltip(self, widget_name, motor):
+        self.ui.findChild(QLabel, widget_name).setToolTip(
+            "Readback: %s.RBV" % PV_BASES[motor])
+
+    def _connect_move_to(self, widget_name, motor):
+        edit = self.ui.findChild(QLineEdit, widget_name)
+        edit.setToolTip("Move to: %s.VAL" % PV_BASES[motor])
+        edit.returnPressed.connect(
+            lambda e=edit, m=motor: self._move_to_typed(e, m))
+
+    def _move_to_typed(self, edit, motor):
+        try:
+            target = self._parse_pos(edit.text())
+        except ValueError:
+            QMessageBox.warning(self.ui, "Move",
+                                "%r is not a number." % edit.text())
+            return
+        self.move_abs(motor, target)
+
+    def _connect_dpad(self, prefix, spec):
+        step_box = "ed_%s_step" % prefix
+        for button, axis, motor, sign in [
+                ("up", "ver", spec.ver, +1), ("down", "ver", spec.ver, -1),
+                ("right", "hor", spec.hor, +1), ("left", "hor", spec.hor, -1)]:
+            self.ui.findChild(QPushButton, "pb_%s_%s" % (prefix, button)).clicked.connect(
+                lambda _c=False, p=prefix, a=axis, m=motor, s=sign, box=step_box:
+                self.move_rel(m, s * self._direction(p, a) * self._step(box)))
+
+        for suffix, factor in (("stepDown", 0.1), ("stepUp", 10.0)):
+            self.ui.findChild(QPushButton, "pb_%s_%s" % (prefix, suffix)).clicked.connect(
+                lambda _c=False, box=step_box, f=factor: self._scale_step(box, f))
+
+    def _step(self, widget_name):
+        """The dpad/tweak step in mm, 0 when the box does not hold a number."""
+        try:
+            return float(self.ui.findChild(QLineEdit, widget_name).text())
+        except ValueError:
+            return 0.0
+
+    def _scale_step(self, widget_name, factor):
+        edit = self.ui.findChild(QLineEdit, widget_name)
+        try:
+            value = float(edit.text())
+        except ValueError:
+            return
+        edit.setText(("%g" % (value * factor)))
+
+    def _direction(self, prefix, axis):
+        return -1 if self.invert[(prefix, axis)] else 1
+
+    def _load_inverts(self):
+        cfg = configparser.ConfigParser()
+        cfg.read(_OPTICS_INI)
+        return {(p, axis): cfg.getboolean("invert", "%s_%s" % (p, axis), fallback=False)
+                for p in AXIS_BLOCKS for axis in ("ver", "hor")}
+
+    def _set_invert(self, prefix, axis, inverted):
+        self.invert[(prefix, axis)] = inverted
+        _write_ini_value("invert", "%s_%s" % (prefix, axis), "1" if inverted else "0")
+
+    # -- display units -------------------------------------------------
+
+    def _toggle_units(self):
+        self._units_um = not self._units_um
+        QSettings("ptychoSAXS", "ptychoSAXS").setValue(
+            self.UNITS_SETTINGS_KEY, self._units_um)
+        self._update_units_display()
+        for block in self.blocks.values():
+            block.refresh_display()
+
+    def _update_units_display(self):
+        if self._units_um:
+            self.ui.lbl_pos_units.setText("All positions in um")
+            self._units_action.setText("Change units to mm")
+        else:
+            self.ui.lbl_pos_units.setText("All positions in mm")
+            self._units_action.setText("Change units to um")
+
+    # -- menus and standalone buttons --------------------------------------
+
+    def _connect_menus(self):
+        self.ui.actionIn.triggered.connect(self.put_xrayeye_in)
+        self.ui.actionIn.setToolTip("Writes 1 to %s" % EYE_CMD_PV)
+        self.ui.actionOut.triggered.connect(self.put_xrayeye_out)
+        self.ui.actionOut.setToolTip("Writes 0 to %s" % EYE_CMD_PV)
+        self.ui.actionSnapshotMotors.triggered.connect(self.snapshot_motors)
+        self.ui.actionExportPositions.triggered.connect(self.export_positions)
+        self.ui.actionImportPositions.triggered.connect(self.import_positions)
+        self.ui.actionRedefineMotor.triggered.connect(self.redefine_motor)
+        self.ui.actionSAXSbs_in_all.setChecked(read_saxsbs_in_all())
+        self.ui.actionSAXSbs_in_all.toggled.connect(self._on_saxsbs_in_all)
+
+        # Built here, not in the .ui, so its label can flip between the two
+        # phrasings instead of being a checkbox.
+        self._units_action = QAction(self.ui)
+        self.ui.menuEdit.insertAction(self.ui.actionRedefineMotor, self._units_action)
+        self.ui.menuEdit.insertSeparator(self.ui.actionRedefineMotor)
+        self._units_action.triggered.connect(self._toggle_units)
+        self._update_units_display()
+
+        # Built here rather than in the .ui so that remapping AXIS_BLOCKS
+        # keeps the menu in step with the dpads it controls.
+        invert_menu = QMenu("Invert dpad direction", self.ui)
+        self.ui.menuEdit.insertMenu(self.ui.actionRedefineMotor, invert_menu)
+        self.ui.menuEdit.insertSeparator(self.ui.actionRedefineMotor)
+        for prefix, spec in AXIS_BLOCKS.items():
+            for axis in ("ver", "hor"):
+                action = invert_menu.addAction("%s %s" % (spec.title, axis))
+                action.setCheckable(True)
+                action.setChecked(self.invert[(prefix, axis)])
+                action.toggled.connect(
+                    lambda checked, p=prefix, a=axis: self._set_invert(p, a, checked))
+
+    def _connect_buttons(self):
+        self.ui.pushButton_xrayEyeIn.clicked.connect(self.put_xrayeye_in)
+        self.ui.pushButton_xrayEyeIn.setToolTip("Writes 1 to %s" % EYE_CMD_PV)
+        self.ui.pushButton_xrayEyeOut.clicked.connect(self.put_xrayeye_out)
+        self.ui.pushButton_xrayEyeOut.setToolTip("Writes 0 to %s" % EYE_CMD_PV)
+        self.ui.pushButton_stopAll.clicked.connect(self.stop_all)
+        self.ui.pushButton_exit.clicked.connect(QApplication.instance().quit)
+        self.ui.pushButton_allIn.clicked.connect(self.all_in)
+        self.ui.pushButton_allOut.clicked.connect(self.all_out)
+
+    def _restore_window(self):
+        settings = QSettings("ptychoSAXS", "ptychoSAXS")
+
+        def save_geometry_and_close(event):
+            settings.setValue("opticsMotorsWindow/geometry", self.ui.saveGeometry())
             event.accept()
 
-        self.ui.closeEvent = _save_geom_and_close
+        self.ui.closeEvent = save_geometry_and_close
         self.ui.show()
 
         # QMainWindow only resolves its central widget's real size once the
-        # window is actually shown (layout activation is deferred) — force
-        # that to happen now, before snapshotting the as-designed layout, so
-        # the reference size/geometry used for proportional rescaling is
-        # accurate. Capturing this before restoreGeometry() means later
-        # rescales are always relative to the true .ui-authored arrangement.
+        # window is shown, so force that before snapshotting the as-designed
+        # layout the proportional rescaling is measured against.
         QApplication.processEvents()
         self._main_resizer = ProportionalResizer(self.ui.centralWidget())
-        # motorGUI.ui bakes a 1600px-wide cap on both the window itself and
-        # its central widget (ptycoSAXS.ui only has it on the central
-        # widget) — lift both so the window can actually grow past it.
-        self.ui.setMaximumSize(16777215, 16777215)
-        self.ui.centralWidget().setMaximumSize(16777215, 16777215)
-        self.ui.setMinimumSize(
-            int(self._main_resizer.orig_size.width() * 0.4),
-            int(self._main_resizer.orig_size.height() * 0.4),
-        )
+        self.ui.setMinimumSize(int(self._main_resizer.orig_size.width() * 0.4),
+                               int(self._main_resizer.orig_size.height() * 0.4))
 
-        _geom = QSettings("ptychoSAXS", "ptychoSAXS").value("opticsMotorsWindow/geometry")
-        if _geom is not None:
-            self.ui.restoreGeometry(_geom)
-        # The restored (or otherwise resolved) window size may differ from
-        # the design-time size captured above — resync widget geometry to it
-        # immediately instead of waiting for the user to resize manually.
+        geometry = settings.value("opticsMotorsWindow/geometry")
+        if geometry is not None:
+            self.ui.restoreGeometry(geometry)
         self._main_resizer.rescale()
 
-        self.ui.spinBox_fontSize.setValue(
-            QSettings("ptychoSAXS", "ptychoSAXS").value(
-                "ui/fontSize", DEFAULT_FONT_SIZE, type=int
-            )
-        )
-
-        def _on_font_size_changed(size):
-            apply_font_size_to_tree(self.ui, size)
-            QSettings("ptychoSAXS", "ptychoSAXS").setValue("ui/fontSize", size)
-
-        self.ui.spinBox_fontSize.valueChanged.connect(_on_font_size_changed)
-
+        saved_size = settings.value("ui/fontSize", DEFAULT_FONT_SIZE, type=int)
+        self.ui.spinBox_fontSize.setValue(saved_size)
+        self.ui.spinBox_fontSize.valueChanged.connect(self._on_font_size_changed)
         apply_saved_font_size(self.ui)
-        # self.resized.connect(self.resizeFunction)
+        QTimer.singleShot(0, lambda: self._update_title_fonts(saved_size))
 
-    def _set_xrayeye_buttons(self, eye_in: bool):
-        """Sync pushButton_xrayEyeIn/Out enabled state to match the menu items."""
-        btn_in = self.ui.findChild(QPushButton, "pushButton_xrayEyeIn")
-        btn_out = self.ui.findChild(QPushButton, "pushButton_xrayEyeOut")
-        if btn_in:
-            btn_in.setEnabled(eye_in)
-        if btn_out:
-            btn_out.setEnabled(not eye_in)
+    def _update_title_fonts(self, size):
+        """Re-apply the sizes that sit above the panel-wide font size.
+
+        apply_font_size_to_tree puts every widget on `size`, so anything
+        meant to stand out has to be pushed back up afterwards.
+        """
+        for prefix in AXIS_BLOCKS:
+            label = self.ui.findChild(QLabel, "lbl_%s_title" % prefix)
+            f = label.font()
+            f.setPointSize(size + 4)
+            f.setBold(True)
+            label.setFont(f)
+
+        stop = self.ui.pushButton_stopAll
+        f = stop.font()
+        f.setPointSize(size + 2)
+        stop.setFont(f)
+
+    def _on_font_size_changed(self, size):
+        apply_font_size_to_tree(self.ui, size)
+        self._update_title_fonts(size)
+        QSettings("ptychoSAXS", "ptychoSAXS").setValue("ui/fontSize", size)
+
+    # -- X-ray eye ---------------------------------------------------------
+
+    def _refresh_xrayeye_ui(self):
+        """Offer whichever direction the eye is not already in.
+
+        State comes from the command record, so an eye moved from the main
+        panel or the sample alignment window shows up here too.
+        """
+        state = self.xray_eye.is_in()
+        self.ui.actionIn.setEnabled(state is not True)
+        self.ui.actionOut.setEnabled(state is not False)
+        self.ui.pushButton_xrayEyeIn.setEnabled(state is not True)
+        self.ui.pushButton_xrayEyeOut.setEnabled(state is not False)
 
     def put_xrayeye_in(self):
-        self.ui.actionIn.setEnabled(False)
-        self.ui.actionOut.setEnabled(True)
-        self._set_xrayeye_buttons(eye_in=False)
         self.put_xrayeye(True)
 
     def put_xrayeye_out(self):
-        self.ui.actionOut.setEnabled(False)
-        self.ui.actionIn.setEnabled(True)
-        self._set_xrayeye_buttons(eye_in=True)
         self.put_xrayeye(False)
 
-    def _is_xrayeye_out(self):
-        """Return True if the X-ray eye is currently OUT."""
-        action_in = self.ui.actionIn
-        return action_in and action_in.isEnabled()
+    def put_xrayeye(self, ins=True):
+        try:
+            self.xray_eye.set_in(ins)
+        except Exception as exc:
+            QMessageBox.warning(self.ui, "X-ray eye",
+                                "Could not command the X-ray eye:\n%s" % exc)
+        self._refresh_xrayeye_ui()
 
-    def _confirm_xrayeye_guard(self):
-        """Show confirmation dialog warning about X-ray eye position. Return True if user confirms."""
+    def is_xrayeye_out(self):
+        """Unknown counts as out, so the move guard still warns rather than
+        silently letting optics move with no idea where the eye is."""
+        return self.xray_eye.is_in() is not True
+
+    def confirm_xrayeye_guard(self):
+        if getattr(self, "_eye_guard_suppressed", False):
+            return True  # All Out already asked once for the whole batch
         reply = QMessageBox.warning(
-            self.ui,
-            "X-ray Eye Out",
+            self.ui, "X-ray Eye Out",
             "The X-ray eye is currently OUT.\nAre you sure you want to proceed?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         return reply == QMessageBox.Yes
 
-    def put_xrayeye(self, ins=True):
-        if self.debug_mode:
-            from debug_stubs import FakePV as _PV
+    # -- All In / All Out --------------------------------------------------
+
+    def _active_blocks(self):
+        prefixes = list(ALL_IN_OUT_BLOCKS)
+        if self.ui.actionSAXSbs_in_all.isChecked():
+            prefixes.append(OPTIONAL_ALL_BLOCK)
+        return [self.blocks[p] for p in prefixes]
+
+    def _on_saxsbs_in_all(self, checked):
+        write_saxsbs_in_all(checked)
+        self.update_all_buttons()
+
+    def all_in(self):
+        for block in self._active_blocks():
+            block.on_in()
+
+    def all_out(self):
+        # Ask once for the whole batch, and only if at least one block will
+        # actually move. Each block guards itself too, so suppress those.
+        movers = [b for b in self._active_blocks() if b.will_move_on_out()]
+        if movers and self.is_xrayeye_out() and not self.confirm_xrayeye_guard():
+            return
+        self._eye_guard_suppressed = True
+        try:
+            for block in self._active_blocks():
+                block.on_out()
+        finally:
+            self._eye_guard_suppressed = False
+
+    def update_all_buttons(self):
+        """All In / All Out only work once every block they drive is enabled."""
+        if len(getattr(self, "blocks", {})) < len(AXIS_BLOCKS):
+            return  # still constructing
+        ready = all(block.enabled for block in self._active_blocks())
+        self.ui.pushButton_allIn.setEnabled(ready)
+        self.ui.pushButton_allOut.setEnabled(ready)
+
+    def _update_all_status(self):
+        texts = [block.status_text() for block in self._active_blocks()]
+        label = self.ui.label_allStatus
+        if all(t == "In" for t in texts):
+            label.setText("In")
+            label.setStyleSheet("background-color: #00cc00; color: white;")
+        elif all(t == "Out" for t in texts):
+            label.setText("Out")
+            label.setStyleSheet("background-color: #cc0000; color: white;")
         else:
-            _PV = PV
-        pvs = _PV("usxRIO:Galil2Bo0_CMD")
-        pvs.put(1 if ins else 0)
+            label.setText("----")
+            label.setStyleSheet("")
 
-    def copy_current_positions(self):
-        """Copy each motor's current position label into its Move-to edit box."""
-        for i in range(len(self.motornames)):
-            n = i + 1
-            lbl = self.ui.findChild(QLabel, "lbl_pos_%i" % n)
-            ed = self.ui.findChild(QLineEdit, "edit_%i" % n)
-            if lbl and ed:
-                ed.setText(lbl.text())
+    def stop_all(self):
+        for motor in MOTORS:
+            controller, axis = self._axis(motor)
+            try:
+                with self.lock:
+                    controller.stop(axis)
+            except Exception as exc:
+                print("Could not stop %s: %s" % (motor, exc))
 
-    def export_positions(self):
-        """Save all in/out block positions and ZP store to a user-chosen JSON file."""
+    # -- Edit menu ---------------------------------------------------------
+
+    def redefine_motor(self):
+        """Tell a controller that its current position is some other number."""
+        dlg = uic.loadUi(os.path.join(UI_DIR, "redefine_motor.ui"))
+        dlg.comboBox_motor.addItems(list(MOTORS))
+
+        def show_current():
+            dlg.label_currentPos.setText(
+                self._fmt_pos(self.read(dlg.comboBox_motor.currentText())))
+
+        def redefine():
+            text = dlg.lineEdit_newPos.text().strip()
+            try:
+                value = self._parse_pos(text)
+            except ValueError:
+                QMessageBox.warning(dlg, "Redefine motor",
+                                    "%r is not a number." % text)
+                return
+            motor = dlg.comboBox_motor.currentText()
+            controller, axis = self._axis(motor)
+            try:
+                with self.lock:
+                    controller.set_pos(axis, value)
+            except Exception as exc:
+                QMessageBox.warning(dlg, "Redefine motor",
+                                    "Could not redefine %s:\n%s" % (motor, exc))
+                return
+            dlg.accept()
+
+        dlg.comboBox_motor.currentIndexChanged.connect(show_current)
+        dlg.pushButton_redefine.clicked.connect(redefine)
+        dlg.pushButton_cancel.clicked.connect(dlg.reject)
+        show_current()
+        apply_saved_font_size(dlg)
+        dlg.exec_()
+
+    # -- File menu ---------------------------------------------------------
+
+    def snapshot_motors(self):
+        """Append every motor's position, timestamped, to a CSV log."""
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        positions = []
+        for motor in MOTORS:
+            try:
+                positions.append(self.PREC % self.read(motor))
+            except Exception as exc:
+                print("Could not read %s: %s" % (motor, exc))
+                positions.append("")
+
+        settings = QSettings("ptychoSAXS", "ptychoSAXS")
+        last = settings.value("opticsMotors/snapshotPath", "")
         path, _ = QFileDialog.getSaveFileName(
-            self.ui, "Export Positions", "optics_positions.json", "JSON Files (*.json)"
-        )
+            self.ui, "Snapshot motors",
+            last or os.path.join(_GUI_DIR, DEFAULT_SNAPSHOT_NAME),
+            "CSV Files (*.csv)",
+            options=QFileDialog.DontConfirmOverwrite)
         if not path:
             return
+        note, ok = QInputDialog.getText(self.ui, "Snapshot motors",
+                                        "Note for this snapshot (optional):")
+        if not ok:
+            return
 
-        def read_lbl(block, lbl_name):
-            lbl = block._w(QLabel, lbl_name)
-            if lbl:
-                try:
-                    return float(lbl.text())
-                except ValueError:
-                    pass
-            return None
+        new_file = not os.path.exists(path) or os.path.getsize(path) == 0
+        try:
+            with open(path, "a", newline="") as f:
+                writer = csv.writer(f)
+                if new_file:
+                    writer.writerow(
+                        ["Timestamp"]
+                        + ["%s (mm)" % motor for motor in MOTORS]
+                        + ["Notes"])
+                writer.writerow([stamp] + positions + [note])
+        except OSError as exc:
+            QMessageBox.warning(self.ui, "Snapshot motors",
+                                "Could not write %s:\n%s" % (path, exc))
+            return
+        settings.setValue("opticsMotors/snapshotPath", path)
 
-        def motor_name(block, idx_in_block):
-            list_idx = block._pos_lbl_indices[idx_in_block] - 1
-            return (
-                self.motornames[list_idx]
-                if list_idx < len(self.motornames)
-                else f"motor_{idx_in_block}"
-            )
-
-        def block_in_out(block):
-            return {
-                "in": {
-                    motor_name(block, i): read_lbl(block, n)
-                    for i, n in enumerate(block._in_lbl_names)
-                },
-                "out": {
-                    motor_name(block, i): read_lbl(block, n)
-                    for i, n in enumerate(block._out_lbl_names)
-                },
-            }
-
-        data = {
-            "osa": block_in_out(self.osa_block),
-            "bs": block_in_out(self.bs_block),
-            "zp": {
-                "out": {
-                    motor_name(self.zp_block, i): read_lbl(self.zp_block, n)
-                    for i, n in enumerate(self.zp_block._out_lbl_names)
-                },
-                "positions": self.zp_block._pos_store,
-            },
-        }
+    def export_positions(self):
+        """Save every block's in/out positions to a user-chosen JSON file."""
+        path, _ = QFileDialog.getSaveFileName(
+            self.ui, "Export Positions", "optics_positions.json",
+            "JSON Files (*.json)")
+        if not path:
+            return
+        data = {}
+        for prefix, block in self.blocks.items():
+            entry = {"out": dict(zip(block.motors, block._stored("out")))}
+            if block.has_list:
+                entry["positions"] = block.positions
+            else:
+                entry["in"] = dict(zip(block.motors, block._stored("in")))
+            data[prefix] = entry
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
 
     def import_positions(self):
-        """Load positions from a JSON file produced by export_positions."""
+        """Load positions from a file produced by export_positions."""
         path, _ = QFileDialog.getOpenFileName(
-            self.ui, "Import Positions", "", "JSON Files (*.json)"
-        )
+            self.ui, "Import Positions", "", "JSON Files (*.json)")
         if not path:
             return
         try:
             with open(path) as f:
                 data = json.load(f)
-        except (json.JSONDecodeError, OSError) as e:
-            QMessageBox.warning(self.ui, "Import Error", str(e))
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self.ui, "Import Error", str(exc))
             return
 
-        def motor_name(block, idx_in_block):
-            list_idx = block._pos_lbl_indices[idx_in_block] - 1
-            return (
-                self.motornames[list_idx]
-                if list_idx < len(self.motornames)
-                else f"motor_{idx_in_block}"
-            )
-
-        def write_lbl(block, lbl_name, val):
-            lbl = block._w(QLabel, lbl_name)
-            if lbl and val is not None:
-                lbl.setText("%.3f" % val)
-
-        def apply_block(block, section):
-            sec = data.get(section, {})
-            for i, lbl_name in enumerate(block._in_lbl_names):
-                mname = motor_name(block, i)
-                write_lbl(block, lbl_name, sec.get("in", {}).get(mname))
-            for i, lbl_name in enumerate(block._out_lbl_names):
-                mname = motor_name(block, i)
-                write_lbl(block, lbl_name, sec.get("out", {}).get(mname))
+        for prefix, block in self.blocks.items():
+            entry = data.get(prefix, {})
+            for kind in ("in", "out"):
+                if kind == "in" and block.has_list:
+                    continue  # has_list blocks keep "in" in `positions`, below
+                values = block._in_values if kind == "in" else block._out_values
+                for i, motor in enumerate(block.motors):
+                    value = entry.get(kind, {}).get(motor)
+                    if value is not None:
+                        values[i] = float(value)
+            positions = entry.get("positions")
+            if block.has_list and isinstance(positions, dict):
+                block.positions = positions
+                block._populate_list()
+            block.refresh_display()
             block._save_ini()
 
-        apply_block(self.osa_block, "osa")
-        apply_block(self.bs_block, "bs")
+    # -- periodic refresh --------------------------------------------------
 
-        zp_sec = data.get("zp", {})
-        for i, lbl_name in enumerate(self.zp_block._out_lbl_names):
-            mname = motor_name(self.zp_block, i)
-            write_lbl(self.zp_block, lbl_name, zp_sec.get("out", {}).get(mname))
-        positions = zp_sec.get("positions")
-        if isinstance(positions, dict):
-            self.zp_block._pos_store = positions
-            self.zp_block._populate_list()
-        self.zp_block._save_ini()
-
-    def _all_in(self):
-        for block in (self.osa_block, self.bs_block, self.zp_block):
-            block._on_in()
-
-    def _all_out(self):
-        if self._is_xrayeye_out() and not self._confirm_xrayeye_guard():
-            return
-        for block in (self.osa_block, self.bs_block, self.zp_block):
-            block._on_out()
-
-    def _update_all_buttons(self):
-        """Enable All In/All Out buttons only if all three blocks are enabled."""
-        if not hasattr(self, 'osa_block') or not hasattr(self, 'bs_block') or not hasattr(self, 'zp_block'):
-            return
-        all_enabled = all(block._enabled for block in (self.osa_block, self.bs_block, self.zp_block))
-        btn_all_in = self.ui.findChild(QPushButton, "pushButton_allIn")
-        btn_all_out = self.ui.findChild(QPushButton, "pushButton_allOut")
-        if btn_all_in:
-            btn_all_in.setEnabled(all_enabled)
-        if btn_all_out:
-            btn_all_out.setEnabled(all_enabled)
-
-    def _update_all_status(self):
-        """Aggregate OSA / BS / ZP status labels into label_allStatus."""
-        lbl_all = self.ui.findChild(QLabel, "label_allStatus")
-        if not lbl_all:
-            return
-        status_names = ["label_osaStatus", "label_bsStatus", "label_zpStatus"]
-        texts = []
-        for name in status_names:
-            lbl = self.ui.findChild(QLabel, name)
-            texts.append(lbl.text() if lbl else "")
-        if all(t == "In" for t in texts):
-            src = self.ui.findChild(QLabel, "label_osaStatus")
-            lbl_all.setText("In")
-            lbl_all.setStyleSheet(
-                src.styleSheet() if src else "background-color: #00cc00; color: white;"
-            )
-        elif all(t == "Out" for t in texts):
-            src = self.ui.findChild(QLabel, "label_osaStatus")
-            lbl_all.setText("Out")
-            lbl_all.setStyleSheet(
-                src.styleSheet() if src else "background-color: #cc0000; color: white;"
-            )
-        else:
-            lbl_all.setText("----")
-            lbl_all.setStyleSheet("")
-
-    def _connect_dir_buttons(self):
-        """Wire each direction button from DIR_BUTTON_MAP to _dir_step."""
-        for btn_name, (motor_1based, sign, tweak_widget) in self.DIR_BUTTON_MAP.items():
-            btn = self.ui.findChild(QPushButton, btn_name)
-            if btn:
-                btn.clicked.connect(
-                    lambda checked=False, m=motor_1based, s=sign, t=tweak_widget: (
-                        self._dir_step(m, s, t)
-                    )
-                )
-
-    def _dir_step(self, motor_1based, sign, tweak_widget):
-        """Nudge a motor by sign * tweak-box value (microns → mm)."""
-        ed = self.ui.findChild(QLineEdit, tweak_widget)
-        try:
-            step_um = float(ed.text()) if ed else 1.0
-        except ValueError:
-            step_um = 1.0
-        step_mm = step_um / 1000.0
-        motor_idx = motor_1based - 1
-        controller = self.control[self.controller[motor_idx]]
-        axis = controller.motornames[self.motorindices[motor_idx]]
-        with self.lock:
-            controller.mvr(axis, sign * step_mm, wait=False)
-
-    def enable_motors(self, n, enable):
-        def _set(w, val):
-            if w:
-                w.setEnabled(val)
-
-        _set(self.ui.findChild(QLabel, "lbl_motor_%i" % n), enable)
-        _set(self.ui.findChild(QLabel, "lbl_pos_%i" % n), enable)
-        _set(self.ui.findChild(QPushButton, "btn_tweak%iL" % n), enable)
-        _set(self.ui.findChild(QPushButton, "btn_tweak%iR" % n), enable)
-        _set(self.ui.findChild(QPushButton, "btn_lup_%i" % n), enable)
-        _set(self.ui.findChild(QPushButton, "btn_SAXSscan_%i" % n), False)
-        _set(self.ui.findChild(QLineEdit, "edit_%i" % n), enable)
-        _set(self.ui.findChild(QLineEdit, "edit_%i_tweak" % n), enable)
-        _set(self.ui.findChild(QLineEdit, "edit_reset_%i" % n), enable)
-
-    def set_ui_enability(self, controller="smarAct", enable=True):
-        for i, con in enumerate(self.controller):
-            if con == controller:
-                self.enable_motors(i + 1, enable)
-
-    # def enable_smarAct(self):
-    #     if self.ui.actionSmarAct_3.isChecked():
-    #         enable = True
-    #     else:
-    #         enable = False
-    #     self.set_ui_enability('smarAct', enable=enable)
-
-    def enable_galil(self):
-        if self.ui.actionGalil.isChecked():
-            enable = True
-        else:
-            enable = False
-        self.set_ui_enability("galil", enable=enable)
-
-    def enable_newport(self):
-        if self.ui.actionNewport_Piezo.isChecked():
-            enable = True
-        else:
-            enable = False
-        self.set_ui_enability("newport", enable=enable)
-
-    def enable_ptyoptics(self):
-        if self.ui.actionOptics.isChecked():
-            enable = True
-        else:
-            enable = False
-        self.set_ui_enability("ptyoptics", enable=enable)
-
-    def stop(self, motornumber=-1):
-        if motornumber < 0:
-            pb = self.sender()
-            objname = pb.objectName()
-            val_text = pb.text()
-            n = int(re.findall(r"\d+", objname)[0])
-            # n = [int(s) for s in objname.split('_') if s.isdigit()][0]
-            motornumber = n - 1
-
-        controller = self.control[self.controller[motornumber]]
-        axis = controller.motornames[self.motorindices[motornumber]]
-        controller.stop(axis)
-
-    def reset(self, motornumber=-1):
-        if motornumber < 0:
-            pb = self.sender()
-            objname = pb.objectName()
-            val_text = pb.text()
-            n = int(re.findall(r"\d+", objname)[0])
-            # n = [int(s) for s in objname.split('_') if s.isdigit()][0]
-            motornumber = n - 1
-
-        controller = self.control[self.controller[motornumber]]
-        axis = controller.motornames[self.motorindices[motornumber]]
-        try:
-            val = int(val_text)
-        except ValueError:
-            print("Invalid input for reset value.")
-            return
-        with self.lock:
-            controller.set_pos(axis, val)
-
-    def mv(self, motornumber=-1, val=None):
-        if motornumber < 0:
-            pb = self.sender()
-            objname = pb.objectName()
-            val_text = pb.text()
-            n = int(re.findall(r"\d+", objname)[0])
-            motornumber = n - 1
-
-        controller = self.control[self.controller[motornumber]]
-        axis = controller.motornames[self.motorindices[motornumber]]
-        self.signalmotor = axis
-        self.signalmotorunit = controller.motorunits[self.motorindices[motornumber]]
-        self.set_ui_enability(controller, False)
-        if type(val) == type(None):
-            try:
-                val = float(val_text)
-            except:
-                print("Text box is empty.")
-                return
-        with self.lock:
-            controller.mv(axis, val, wait=False)
-        self.set_ui_enability(controller, True)
-
-    def mvr(self, motornumber=-1, sign=1, val=0):
-        if motornumber == -1:
-            pb = self.sender()
-            objname = pb.objectName()
-            n = int(re.findall(r"\d+", objname)[0])
-            # n = [int(s) for s in objname.split('_') if s.isdigit()][0]
-            motornumber = n - 1
-        # print("motornumber is ", motornumber)
-        controller = self.control[self.controller[motornumber]]
-        axis = controller.motornames[self.motorindices[motornumber]]
-        self.signalmotor = axis
-        # print("axis is ", axis)
-        # print("sign is ", sign)
-        self.signalmotorunit = controller.motorunits[self.motorindices[motornumber]]
-        self.set_ui_enability(controller, False)
-        if val == 0:
-            val = float(self.ui.findChild(QLineEdit, "edit_%i_tweak" % n).text())
-        # print(f"Move {axis} by {sign*val}")
-
-        controller.mvr(axis, sign * val, wait=False)
-        self.set_ui_enability(controller, True)
-
-    def updatepos(self, axis="", val=None):
-        # done = False
-        # timeout = 10
-        # ct0 = time.time()
-        if len(axis) == 0:
-            for i, name in enumerate(self.motornames):
-                controller = self.control[self.controller[i]]
-                axis = controller.motornames[self.motorindices[i]]
-                if val is None:
-                    with self.lock:
-                        val = controller.get_pos(axis)
-                        # print(val)
-                lbl = self.ui.findChild(QLabel, "lbl_pos_%i" % (i + 1))
-                if lbl:
-                    lbl.setText(self.MOTOR_PREC % val)
-                val = None
-            self.osa_block.update_status()
-            self.bs_block.update_status()
-            self.zp_block.update_status()
-            self._update_all_status()
-        else:
-            motornumber = self.motornames.index(axis)
-            controller = self.control[self.controller[motornumber]]
-            axis = controller.motornames[self.motorindices[motornumber]]
-            if val is None:
-                with self.lock:
-                    print(axis, " This is in line 3042")
-                    val = controller.get_pos(axis)
-            i = motornumber
-            lbl = self.ui.findChild(QLabel, "lbl_pos_%i" % (i + 1))
-            if lbl:
-                lbl.setText("%0.6f" % val)
+    def updatepos(self):
+        readbacks = {}
+        for prefix, spec in AXIS_BLOCKS.items():
+            for axis, motor in (("ver", spec.ver), ("hor", spec.hor)):
+                readbacks[motor] = self.read(motor)
+                self.ui.findChild(
+                    QLabel, "lbl_rb_%s_%s" % (prefix, axis)
+                ).setText(self._fmt_pos(readbacks[motor]))
+        for prefix, motor in SINGLE_ROWS.items():
+            readbacks[motor] = self.read(motor)
+            self.ui.findChild(QLabel, "lbl_rb_%s" % prefix).setText(
+                self._fmt_pos(readbacks[motor]))
+        for block in self.blocks.values():
+            block.update_status(readbacks)
+        self._update_all_status()
+        # Picks up an eye command issued by the main panel or the sample
+        # alignment window, which share this state through the command PV.
+        self._refresh_xrayeye_ui()
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--debug_mode",
-        action="store_true",
-        help="Run without connecting to motors or EPICS PVs",
-    )
-    args, _ = parser.parse_known_args()  # parse_known_args so Qt args pass through
+        "--debug_mode", action="store_true",
+        help="Run without connecting to motors or EPICS PVs")
+    args, _ = parser.parse_known_args()  # so Qt args pass through
 
     app = QApplication(sys.argv)
-    motor_panel = motor_control(debug_mode=args.debug_mode)
+    motor_control(debug_mode=args.debug_mode)
     sys.exit(app.exec_())
 
 

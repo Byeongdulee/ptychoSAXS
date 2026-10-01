@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>683</width>
+    <width>980</width>
     <height>520</height>
    </rect>
   </property>
@@ -22,23 +22,33 @@
    <item>
     <widget class="QStackedWidget" name="stackedWidget">
      <property name="currentIndex">
-      <number>5</number>
+      <number>0</number>
      </property>
+
+     <!-- ================= page 0: check radiography mode ================= -->
      <widget class="QWidget" name="page_radiography">
       <layout class="QHBoxLayout" name="layout_radiography">
        <item>
         <widget class="QLabel" name="lb_radio_instructions">
-         <property name="text">
-          <string/>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
+         <property name="minimumSize">
+          <size>
+           <width>340</width>
+           <height>0</height>
+          </size>
          </property>
          <property name="alignment">
           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
          </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Change to radiography mode:
+- Put X-ray eye in
+- Verify X-rays are on camera
+- If energy &gt; 12 keV, insert
+SAXS beamstop
+- Remove ZP optics</string>
          </property>
         </widget>
        </item>
@@ -66,6 +76,19 @@
              </property>
             </widget>
            </item>
+           <item>
+            <spacer name="spacer_eye">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
           </layout>
          </item>
          <item>
@@ -90,6 +113,19 @@
              </property>
             </widget>
            </item>
+           <item>
+            <spacer name="spacer_xrays">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
           </layout>
          </item>
          <item>
@@ -112,13 +148,26 @@
                <height>0</height>
               </size>
              </property>
-             <property name="text">
-              <string>----</string>
-             </property>
              <property name="alignment">
               <set>Qt::AlignCenter</set>
              </property>
+             <property name="text">
+              <string>----</string>
+             </property>
             </widget>
+           </item>
+           <item>
+            <spacer name="spacer_zp">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
            </item>
           </layout>
          </item>
@@ -173,15 +222,28 @@
              </property>
             </widget>
            </item>
+           <item>
+            <spacer name="spacer_saxs_bs">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
           </layout>
          </item>
          <item>
           <widget class="QLabel" name="lb_zp_note">
-           <property name="text">
-            <string/>
-           </property>
            <property name="wordWrap">
             <bool>true</bool>
+           </property>
+           <property name="text">
+            <string/>
            </property>
           </widget>
          </item>
@@ -236,18 +298,18 @@
        </item>
       </layout>
      </widget>
+
+     <!-- ================= page 1: check movement safe ================= -->
      <widget class="QWidget" name="page_movement_safe">
       <layout class="QVBoxLayout" name="layout_movement_safe">
        <item>
         <widget class="QLabel" name="lb_movesafe_title">
-         <property name="text">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Check movement is OK&lt;/span&gt;&lt;/p&gt;&lt;p&gt;- Move vertical and horizontal at least once.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Check that moving the sample will not crash anything!
+Move vertical and horizontal at least once.</string>
          </property>
         </widget>
        </item>
@@ -310,23 +372,19 @@
        </item>
       </layout>
      </widget>
+
+     <!-- ================= page 2: roughly find sample center ================= -->
      <widget class="QWidget" name="page_rough_center">
       <layout class="QVBoxLayout" name="layout_rough_center">
        <item>
         <widget class="QLabel" name="lb_rough_title">
-         <property name="text">
-          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'MS Shell Dlg 2'; font-size:11pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Roughly find the sample&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;- Choose the horizontal trans motor&lt;br /&gt;- If the center of rotation is set, only use trans1/trans2!&lt;br /&gt;- If the center of rotation is not set, set X to ~1.3 mm&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Now roughly find a sample position to align on:
+- If the center of rotation is set, only use trans1/trans2!
+- If the center of rotation is not set, set X to ~1.3 mm</string>
          </property>
         </widget>
        </item>
@@ -423,18 +481,19 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
+     <!-- ============ page 3: align rotation to trans axes (detour) ============ -->
      <widget class="QWidget" name="page_rotation_axes">
       <layout class="QVBoxLayout" name="layout_rotation_axes">
        <item>
         <widget class="QLabel" name="lb_rotaxes_title">
-         <property name="text">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Set phi for trans1/trans2 alignment&lt;/span&gt;&lt;/p&gt;&lt;p&gt;- One stage should move exactly parallel to the X-rays&lt;br/&gt;- One stage should move horizontally&lt;br/&gt;- Select which stage moves horizontally&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Set the rotation angle so the trans1/trans2 axes line up with the X-ray propagation direction.
+One trans stage should then move the sample across the beam, and the other along it.
+When the axes are lined up, press Done to go back to finding the sample center.</string>
          </property>
         </widget>
        </item>
@@ -442,31 +501,11 @@ p, li { white-space: pre-wrap; }
         <widget class="QWidget" name="container_rows_rotaxes" native="true"/>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="layout_rotaxes_picker">
+        <layout class="QHBoxLayout" name="layout_rotaxes_buttons">
          <item>
-          <widget class="QLabel" name="lb_rotaxes_transh_prompt">
+          <widget class="QPushButton" name="pb_rotaxes_done">
            <property name="text">
-            <string>Horizontal motor is:</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="pb_rotaxes_trans1">
-           <property name="toolTip">
-            <string>Record trans1 as the horizontal stage (transH) and go back to roughly finding the sample center.</string>
-           </property>
-           <property name="text">
-            <string>trans1</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="pb_rotaxes_trans2">
-           <property name="toolTip">
-            <string>Record trans2 as the horizontal stage (transH) and go back to roughly finding the sample center.</string>
-           </property>
-           <property name="text">
-            <string>trans2</string>
+            <string>Done</string>
            </property>
           </widget>
          </item>
@@ -500,18 +539,18 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
+     <!-- ================= page 4: set rotation ================= -->
      <widget class="QWidget" name="page_set_rotation">
       <layout class="QVBoxLayout" name="layout_set_rotation">
        <item>
         <widget class="QLabel" name="lb_setrot_title">
-         <property name="text">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Verify phi rotation is safe&lt;/span&gt;&lt;/p&gt;&lt;p&gt;- Make a small step while watching sample stage for crashes.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Make a small step to verify rotating is safe.
+Also set rotation angle to align with trans1/trans2 axes.</string>
          </property>
         </widget>
        </item>
@@ -557,15 +596,14 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
+     <!-- ================= page 5: check rotation safe ================= -->
      <widget class="QWidget" name="page_rotation_safe">
       <layout class="QVBoxLayout" name="layout_rotation_safe">
        <item>
         <widget class="QLabel" name="lb_rotsafe_title">
          <property name="text">
-          <string>&lt;b&gt;Check safe rotation range&lt;/b&gt;</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
+          <string>Check safe rotation range</string>
          </property>
         </widget>
        </item>
@@ -574,20 +612,30 @@ p, li { white-space: pre-wrap; }
        </item>
        <item>
         <layout class="QGridLayout" name="layout_rotsafe_limits">
-         <item row="0" column="2">
+         <item row="0" column="0">
           <widget class="QPushButton" name="pb_set_low">
            <property name="toolTip">
             <string>Copy the current phi angle into the lower soft limit.</string>
            </property>
            <property name="text">
-            <string>Copy current phi</string>
+            <string>Set lower softlimit</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="ed_phi_low">
+           <property name="text">
+            <string>-270</string>
            </property>
           </widget>
          </item>
          <item row="1" column="0">
-          <widget class="QLabel" name="lb_cap_phi_high">
+          <widget class="QPushButton" name="pb_set_high">
+           <property name="toolTip">
+            <string>Copy the current phi angle into the upper soft limit.</string>
+           </property>
            <property name="text">
-            <string>Upper soft limit</string>
+            <string>Set upper softlimit</string>
            </property>
           </widget>
          </item>
@@ -598,20 +646,13 @@ p, li { white-space: pre-wrap; }
            </property>
           </widget>
          </item>
-         <item row="1" column="2">
-          <widget class="QPushButton" name="pb_set_high">
-           <property name="toolTip">
-            <string>Copy the current phi angle into the upper soft limit.</string>
-           </property>
-           <property name="text">
-            <string>Copy current phi</string>
-           </property>
-          </widget>
-         </item>
          <item row="2" column="0">
-          <widget class="QLabel" name="lb_cap_phi_zero">
+          <widget class="QPushButton" name="pb_set_zero">
+           <property name="toolTip">
+            <string>Copy the current phi angle in as the zero reference used to judge the safe arc.</string>
+           </property>
            <property name="text">
-            <string>Angle 0</string>
+            <string>Set angle 0</string>
            </property>
           </widget>
          </item>
@@ -622,17 +663,7 @@ p, li { white-space: pre-wrap; }
            </property>
           </widget>
          </item>
-         <item row="2" column="2">
-          <widget class="QPushButton" name="pb_set_zero">
-           <property name="toolTip">
-            <string>Copy the current phi angle in as the zero reference used to judge the safe arc.</string>
-           </property>
-           <property name="text">
-            <string>Copy current phi</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="3" rowspan="3">
+         <item row="0" column="2" rowspan="3">
           <spacer name="spacer_rotsafe_limits">
            <property name="orientation">
             <enum>Qt::Horizontal</enum>
@@ -645,45 +676,32 @@ p, li { white-space: pre-wrap; }
            </property>
           </spacer>
          </item>
-         <item row="0" column="1">
-          <widget class="QLineEdit" name="ed_phi_low">
-           <property name="text">
-            <string>-270</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="0">
-          <widget class="QLabel" name="lb_cap_phi_low">
-           <property name="text">
-            <string>Lower soft limit</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="1">
-          <widget class="QPushButton" name="pb_phi_full360">
-           <property name="text">
-            <string>Full 360 deg OK</string>
-           </property>
-          </widget>
-         </item>
         </layout>
        </item>
        <item>
         <widget class="QLabel" name="lb_rotsafe_hint">
-         <property name="text">
-          <string>Soft limits are not enforced on this page, so you can rotate past them to find them. They are enforced everywhere else.</string>
-         </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Soft limits are not enforced on this page, so you can rotate past them to find them. They are enforced everywhere else.</string>
          </property>
         </widget>
        </item>
        <item>
         <layout class="QHBoxLayout" name="layout_rotsafe_buttons">
          <item>
+          <widget class="QPushButton" name="pb_rot_360_ok">
+           <property name="text">
+            <string>360 deg rotation OK
+Continue</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QPushButton" name="pb_rotsafe_continue">
            <property name="text">
-            <string>Soft limits set, continue</string>
+            <string>Continue</string>
            </property>
           </widget>
          </item>
@@ -717,18 +735,19 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
+     <!-- ====== page 6 (expert): find center + set rotation + check safe ====== -->
      <widget class="QWidget" name="page_position_and_rotation">
       <layout class="QVBoxLayout" name="layout_position_and_rotation">
        <item>
         <widget class="QLabel" name="lb_posrot_title">
-         <property name="text">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Roughly find sample position&lt;/span&gt;&lt;/p&gt;&lt;p&gt;- If the center of rotation is set, only use trans1/trans2, otherwise unlock and set X to ~1.3 mm&lt;br/&gt;- Set the rotation angle to align with the trans1/trans2 axes, then check the safe range&lt;br/&gt;- Verify rotating is safe&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Roughly find a sample position to align on, then verify rotating is safe.
+- If the center of rotation is set, only use trans1/trans2, otherwise unlock and set X to ~1.3 mm
+- Set the rotation angle to align with the trans1/trans2 axes, then check the safe range</string>
          </property>
         </widget>
        </item>
@@ -739,78 +758,13 @@ p, li { white-space: pre-wrap; }
          </item>
          <item>
           <layout class="QGridLayout" name="layout_posrot_limits">
-           <item row="2" column="0">
-            <widget class="QLabel" name="lb_x_cap_phi_zero">
-             <property name="text">
-              <string>Angle 0</string>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="2">
-            <widget class="QPushButton" name="pb_x_set_zero">
-             <property name="toolTip">
-              <string>Copy the current phi angle in as the zero reference used to judge the safe arc.</string>
-             </property>
-             <property name="text">
-              <string>Copy current phi</string>
-             </property>
-            </widget>
-           </item>
-           <item row="2" column="1">
-            <widget class="QLineEdit" name="ed_x_phi_zero">
-             <property name="text">
-              <string>0</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="2">
-            <widget class="QPushButton" name="pb_x_set_high">
-             <property name="toolTip">
-              <string>Copy the current phi angle into the upper soft limit.</string>
-             </property>
-             <property name="text">
-              <string>Copy current phi</string>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="0" colspan="3">
-            <widget class="QLabel" name="lb_posrot_hint">
-             <property name="text">
-              <string>Soft limits are not enforced on this page. They are enforced everywhere else.</string>
-             </property>
-             <property name="wordWrap">
-              <bool>true</bool>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="2">
+           <item row="0" column="0">
             <widget class="QPushButton" name="pb_x_set_low">
              <property name="toolTip">
               <string>Copy the current phi angle into the lower soft limit.</string>
              </property>
              <property name="text">
-              <string>Copy current phi</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="1">
-            <widget class="QLineEdit" name="ed_x_phi_high">
-             <property name="text">
-              <string>270</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QLabel" name="lb_x_cap_phi_high">
-             <property name="text">
-              <string>Upper soft limit</string>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="0">
-            <widget class="QLabel" name="lb_x_cap_phi_low">
-             <property name="text">
-              <string>Lower soft limit</string>
+              <string>Set lower softlimit</string>
              </property>
             </widget>
            </item>
@@ -821,10 +775,47 @@ p, li { white-space: pre-wrap; }
              </property>
             </widget>
            </item>
-           <item row="3" column="1">
-            <widget class="QPushButton" name="pb_x_phi_full360">
+           <item row="1" column="0">
+            <widget class="QPushButton" name="pb_x_set_high">
+             <property name="toolTip">
+              <string>Copy the current phi angle into the upper soft limit.</string>
+             </property>
              <property name="text">
-              <string>Full 360deg OK</string>
+              <string>Set upper softlimit</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QLineEdit" name="ed_x_phi_high">
+             <property name="text">
+              <string>270</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="0">
+            <widget class="QPushButton" name="pb_x_set_zero">
+             <property name="toolTip">
+              <string>Copy the current phi angle in as the zero reference used to judge the safe arc.</string>
+             </property>
+             <property name="text">
+              <string>Set angle 0</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QLineEdit" name="ed_x_phi_zero">
+             <property name="text">
+              <string>0</string>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="0" colspan="2">
+            <widget class="QLabel" name="lb_posrot_hint">
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+             <property name="text">
+              <string>Soft limits are not enforced on this page. They are enforced everywhere else.</string>
              </property>
             </widget>
            </item>
@@ -879,9 +870,17 @@ p, li { white-space: pre-wrap; }
        <item>
         <layout class="QHBoxLayout" name="layout_posrot_buttons">
          <item>
+          <widget class="QPushButton" name="pb_x_rot_360_ok">
+           <property name="text">
+            <string>360 deg rotation OK
+Continue</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QPushButton" name="pb_posrot_continue">
            <property name="text">
-            <string>Soft limits set, continue</string>
+            <string>Continue</string>
            </property>
           </widget>
          </item>
@@ -915,18 +914,17 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
+     <!-- ================= page 7: set first trans ================= -->
      <widget class="QWidget" name="page_first_trans">
       <layout class="QVBoxLayout" name="layout_first_trans">
        <item>
         <widget class="QLabel" name="lb_firsttrans_title">
-         <property name="text">
-          <string>Set horizontal trans stage to bring sample to the center of rotation.</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Set horizontal trans stage to bring sample to the center of rotation.</string>
          </property>
         </widget>
        </item>
@@ -979,18 +977,18 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
+     <!-- ================= page 8: set second trans ================= -->
      <widget class="QWidget" name="page_second_trans">
       <layout class="QVBoxLayout" name="layout_second_trans">
        <item>
         <widget class="QLabel" name="lb_secondtrans_title">
-         <property name="text">
-          <string>Set upstream/downstream trans stage to bring sample to the center of rotation.&lt;br/&gt;Make a small angle step and adjust trans stage to bring back to center</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Set upstream/downstream trans stage to bring sample to the center of rotation.
+Make a small angle step and adjust trans stage to bring back to center</string>
          </property>
         </widget>
        </item>
@@ -1036,18 +1034,18 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
+     <!-- ============ page 9 (expert): set both trans ============ -->
      <widget class="QWidget" name="page_trans_both">
       <layout class="QVBoxLayout" name="layout_trans_both">
        <item>
         <widget class="QLabel" name="lb_transboth_title">
-         <property name="text">
-          <string>Set the horizontal trans stage to bring the sample to the center of rotation, using the 180 deg phi step.&lt;br/&gt;Then reduce the phi step and use the other trans stage: make a small angle step and adjust it to bring the sample back to center.</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Set the horizontal trans stage to bring the sample to the center of rotation, using the 180 deg phi step.
+Then reduce the phi step and use the other trans stage: make a small angle step and adjust it to bring the sample back to center.</string>
          </property>
         </widget>
        </item>
@@ -1093,18 +1091,17 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
+     <!-- ============ page 10: is the center of rotation known? ============ -->
      <widget class="QWidget" name="page_cor_known">
       <layout class="QVBoxLayout" name="layout_cor_known">
        <item>
         <widget class="QLabel" name="lb_cor_title">
-         <property name="text">
-          <string>Is the center of rotation identified on the X-ray eye?</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Is the center of rotation identified on the X-ray eye?</string>
          </property>
         </widget>
        </item>
@@ -1154,18 +1151,19 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
+     <!-- ============ page 11: set trans with small angles ============ -->
      <widget class="QWidget" name="page_small_angle_trans">
       <layout class="QVBoxLayout" name="layout_small_angle_trans">
        <item>
         <widget class="QLabel" name="lb_smallangle_title">
-         <property name="text">
-          <string>First set horizontal trans to center of rotation.&lt;br/&gt;Then rotate a small step with phi and bring the sample&lt;br/&gt;back to the center with the upstream/downstream trans motor.</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>First set horizontal trans to center of rotation.
+Then rotate a small step with phi and bring the sample
+back to the center with the upstream/downstream trans motor.</string>
          </property>
         </widget>
        </item>
@@ -1211,6 +1209,8 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
+     <!-- ============ page 12: iterative alignment ============ -->
      <widget class="QWidget" name="page_iterative">
       <layout class="QHBoxLayout" name="layout_iterative">
        <item>
@@ -1221,17 +1221,17 @@ p, li { white-space: pre-wrap; }
            <height>0</height>
           </size>
          </property>
-         <property name="text">
-          <string/>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="alignment">
           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
          </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="textFormat">
+          <enum>Qt::RichText</enum>
+         </property>
+         <property name="text">
+          <string/>
          </property>
         </widget>
        </item>
@@ -1312,21 +1312,22 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
+     <!-- ============ page 13: change sample ============ -->
      <widget class="QWidget" name="page_change_sample">
       <layout class="QVBoxLayout" name="layout_change_sample">
        <item>
         <widget class="QLabel" name="lb_change_title">
-         <property name="text">
-          <string>This sample cannot be rotated far enough to align it.&lt;br/&gt;&lt;br/&gt;A full alignment needs a 180 deg rotation, and the safe range you set does not reach that far from the zero angle. Change the sample (or its mounting) so it clears the surrounding hardware through a wider angle, then start over.</string>
-         </property>
-         <property name="textFormat">
-          <enum>Qt::RichText</enum>
-         </property>
          <property name="alignment">
           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
          </property>
          <property name="wordWrap">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>This sample cannot be rotated far enough to align it.
+
+A full alignment needs a 180 deg rotation, and the safe range you set does not reach that far from the zero angle. Change the sample (or its mounting) so it clears the surrounding hardware through a wider angle, then start over.</string>
          </property>
         </widget>
        </item>
@@ -1369,8 +1370,11 @@ p, li { white-space: pre-wrap; }
        </item>
       </layout>
      </widget>
+
     </widget>
    </item>
+
+   <!-- ====== footer: present on every page, so it lives outside the stack ====== -->
    <item>
     <widget class="Line" name="line_footer">
      <property name="orientation">
@@ -1404,7 +1408,7 @@ p, li { white-space: pre-wrap; }
        </property>
        <property name="sizeHint" stdset="0">
         <size>
-         <width>20</width>
+         <width>40</width>
          <height>20</height>
         </size>
        </property>

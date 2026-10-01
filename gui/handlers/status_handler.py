@@ -22,9 +22,15 @@ QDS_UNIT_MM = 2
 
 
 class StatusHandler:
+    # After this many consecutive POST failures, stop retrying for the rest
+    # of the session (e.g. running --debug off the beamline network, where
+    # every attempt would otherwise throw and spam the console).
+    STATUS_POST_MAX_FAILURES = 5
+
     def __init__(self, window) -> None:
         self.w = window
         self.ui = window.ui
+        self._status_post_failures = 0
         self._connect_signals()
 
     def _connect_signals(self) -> None:
@@ -158,8 +164,23 @@ class StatusHandler:
         self.w.messages["parameters"] = parameters
         msg = json.dumps(self.w.messages)
         status = {"status": msg}
-        if _requests is not None:
-            res = _requests.post(status_url, json=status)
+
+        # No beamline network in debug mode, and don't keep hammering a host
+        # that has already failed repeatedly this session.
+        if self.w.DEBUG_MODE or _requests is None:
+            return
+        if self._status_post_failures >= self.STATUS_POST_MAX_FAILURES:
+            return
+        try:
+            _requests.post(status_url, json=status, timeout=5)
+            self._status_post_failures = 0
+        except _requests.exceptions.RequestException as e:
+            self._status_post_failures += 1
+            print("[status] beamline status POST failed (%d/%d): %s" % (
+                self._status_post_failures, self.STATUS_POST_MAX_FAILURES, e,
+            ))
+            if self._status_post_failures >= self.STATUS_POST_MAX_FAILURES:
+                print("[status] giving up on beamline status POST for this session")
 
     # ------------------------------------------------------------------
     # QDS position and display

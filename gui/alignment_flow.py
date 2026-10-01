@@ -18,6 +18,10 @@ stage. Two branches hang off the "Check movement safe" page:
 never changes the route, only how many screens the route is spread across.
 """
 
+# Prefixed to every window title, with the current step's name after a dash.
+WINDOW_TITLE_BASE = "Sample Alignment"
+
+
 # ---------------------------------------------------------------------------
 # Pages
 # ---------------------------------------------------------------------------
@@ -32,6 +36,7 @@ class Page:
     RADIOGRAPHY = "radiography"
     MOVEMENT_SAFE = "movement_safe"
     ROUGH_CENTER = "rough_center"
+    ROTATION_AXES = "rotation_axes"  # side trip off the rough-centre page
     SET_ROTATION = "set_rotation"
     ROTATION_SAFE = "rotation_safe"
     POSITION_AND_ROTATION = "position_and_rotation"  # expert: rough+rotation+safe
@@ -44,12 +49,14 @@ class Page:
     CHANGE_SAMPLE = "change_sample"
 
 
-# Human-readable titles. These are what the navigation tooltips name, so they
-# read as destinations ("Goes to: Set second trans"), not as instructions.
+# Human-readable step names. This is the single place they are written: they
+# name the destination in every navigation tooltip AND appear after the dash
+# in the window title, so editing one here changes both.
 PAGE_TITLES = {
     Page.RADIOGRAPHY: "Check radiography mode",
     Page.MOVEMENT_SAFE: "Check movement safe",
     Page.ROUGH_CENTER: "Roughly find sample center",
+    Page.ROTATION_AXES: "Align rotation to trans axes",
     Page.SET_ROTATION: "Set rotation",
     Page.ROTATION_SAFE: "Check rotation safe",
     Page.POSITION_AND_ROTATION: "Find sample center and set rotation",
@@ -61,6 +68,12 @@ PAGE_TITLES = {
     Page.ITERATIVE: "Iterative alignment",
     Page.CHANGE_SAMPLE: "Change sample for better alignment",
 }
+
+
+def window_title(page):
+    """"Sample Alignment - <step>" for the title bar."""
+    return "%s - %s" % (WINDOW_TITLE_BASE, PAGE_TITLES[page])
+
 
 # Sentinel destination: the action finishes the workflow and closes the window.
 CLOSE = "__close__"
@@ -85,21 +98,24 @@ class Branch:
 class Action:
     """One per button that changes flow state.
 
-    UNLOCK_ALL is the odd one out: it is a view-local escape hatch on the
-    iterative page that enables every motor row for the current sub-step only.
-    It appears here so iterative_state() can report its label, but it never
-    navigates -- destination() returns None for it.
+    UNLOCK_ALL is the odd one out: it is the footer's view-local escape hatch
+    that enables whatever motor rows the current page has disabled, for that
+    visit only. It is listed here for completeness but never navigates --
+    destination() returns None for it.
     """
 
     RADIO_CONTINUE = "radio_continue"
     MOVE_FRESH_START = "move_fresh_start"
     MOVE_SAMPLE_CHANGE = "move_sample_change"
     ROUGH_CONTINUE = "rough_continue"
+    NEED_ROTATION = "need_rotation"
+    ROTAXES_DONE = "rotaxes_done"
     ROT_CONTINUE = "rot_continue"
     ROTSAFE_360_OK = "rotsafe_360_ok"
     ROTSAFE_CONTINUE = "rotsafe_continue"
     TRANS1_HORIZONTAL = "trans1_horizontal"
     TRANS2_HORIZONTAL = "trans2_horizontal"
+    FIRST_TRANS_CONTINUE = "first_trans_continue"
     TRANS_FINISH = "trans_finish"
     COR_YES = "cor_yes"
     COR_NO = "cor_no"
@@ -107,27 +123,30 @@ class Action:
     ITER_BACK = "iter_back"
     ITER_FINISH = "iter_finish"
     UNLOCK_ALL = "unlock_all"
+    GO_BACK = "go_back"
     START_OVER = "start_over"
 
 
 # Actions that move the user to another page. The view gives exactly these a
-# "Goes to: <page>" tooltip; everything else keeps a descriptive one.
+# destination tooltip; everything else keeps a descriptive one.
 NAV_ACTIONS = frozenset({
     Action.RADIO_CONTINUE,
     Action.MOVE_FRESH_START,
     Action.MOVE_SAMPLE_CHANGE,
     Action.ROUGH_CONTINUE,
+    Action.NEED_ROTATION,
+    Action.ROTAXES_DONE,
     Action.ROT_CONTINUE,
     Action.ROTSAFE_360_OK,
     Action.ROTSAFE_CONTINUE,
-    Action.TRANS1_HORIZONTAL,
-    Action.TRANS2_HORIZONTAL,
+    Action.FIRST_TRANS_CONTINUE,
     Action.TRANS_FINISH,
     Action.COR_YES,
     Action.COR_NO,
     Action.ITER_NEXT,
     Action.ITER_BACK,
     Action.ITER_FINISH,
+    Action.GO_BACK,
     Action.START_OVER,
 })
 
@@ -136,37 +155,41 @@ NAV_ACTIONS = frozenset({
 # Iterative alignment sub-steps
 # ---------------------------------------------------------------------------
 
-# Sub-step ids. 23 is the combined "steps 2 & 3" loop the operator repeats
-# until satisfied -- it is one screen state, not two.
-ITER_STEPS = (0, 1, 23, 4)
+# Sub-step ids. Step 0 (choosing which trans stage is horizontal) is no longer
+# one of them -- that question is asked once, on the rough-centre page -- so
+# the iterative page opens at step 1 with both stages already labelled. 23 is
+# the combined "steps 2 & 3" loop the operator repeats until satisfied.
+ITER_STEPS = (1, 23, 4)
 
-# The on-screen script, revealed progressively. The preamble is always shown
-# in black; each step group is revealed as the operator reaches it.
+# The on-screen script, revealed progressively. There is no step 0 here:
+# working out which trans stage is horizontal has already happened, back on
+# the rough-centre page, so transH and transD are known by the time this page
+# is reached.
 ITER_PREAMBLE = (
-    "The goal here is to simultaneously set the center of rotation, X-ray beam "
-    "path, and sample at the same point in 3d space. This is accomplished with "
-    "an iterative algorithm, requiring just the phi, X, and whichever of "
-    "trans1/trans2 moves horizontally.",
+    "Iterative alignment of rotation, X-rays, and sample\n"
+    "The goal here is to simultaneously set the center of rotation, X-ray beam   "
+    "path, and sample at the same point in 3d space. This is accomplished with   "
+    "an iterative algorithm, requiring just the phi, X, and transH - the trans   "
+    "stage you identified as horizontal.",
 )
 
 ITER_STEP_LINES = {
-    0: (
-        "Step 0: Figure out which of trans1 and trans2 move horizontally, "
-        "call it transH.",
-    ),
     1: (
-        "Step 1: Roughly place the sample at the center of the X-ray eye using "
-        "transH, mark that spot.",
+        " ",
+        "Step 1: Roughly place the sample at the center of the X-ray eye using   "
+        "transH, mark that spot.", " ",
     ),
     23: (
+        " "
         "Step 2a: Rotate phi 0 -> 180 deg.",
         "Step 2b: Use transH to move the sample halfway back to the mark.",
-        "Step 2c: Rotate phi -> 0 deg, make sure sample moves less, otherwise "
-        "try again.",
+        "Step 2c: Rotate phi -> 0 deg, make sure sample moves less, otherwise   "
+        "try again.", " ",
         "Step 3: Use X to bring the sample back to the mark.",
-        "Repeat steps 2-3 until satisfied.",
+        "Repeat steps 2-3 until satisfied.", " ",
     ),
     4: (
+        " "
         "Step 4: Align transD, the unused trans motor, by rotating phi by "
         "<= 90 deg.",
     ),
@@ -177,9 +200,36 @@ ITER_STEP_LINES = {
 ITER_PHI_STEP = 180.0
 ITER_PHI_STEP_FINAL = 10.0
 
+# Motor rows each page starts with disabled, keyed by page. X is locked
+# wherever the sample is being centred, because moving it takes the sample off
+# the centre of rotation -- the footer's "Unlock all" button, behind a
+# confirmation, is the only way to enable it. The iterative page is absent
+# here because it locks per sub-step; iterative_state() reports that instead.
+PAGE_LOCKED_MOTORS = {
+    Page.MOVEMENT_SAFE: frozenset({"X"}),
+    Page.ROUGH_CENTER: frozenset({"X"}),
+    Page.POSITION_AND_ROTATION: frozenset({"X"}),
+}
+
+# Pages that align transH and must leave the downstream stage alone. Which
+# real motor that is only becomes known once transH is picked, so it cannot
+# live in the static table above -- see AlignmentFlow.locked_rows.
+PAGES_LOCKING_TRANS_D = frozenset({Page.FIRST_TRANS})
+
+
+def locked_motors(page):
+    """Row keys `page` disables regardless of the transH choice."""
+    return PAGE_LOCKED_MOTORS.get(page, frozenset())
+
+
 # Rotating this far either side of the zero angle is enough for the 180 deg
 # flip that the trans and iterative alignments both depend on.
 SAFE_ARC_DEG = 180.0
+
+# Phi soft limits and zero angle, used until the operator sets their own.
+PHI_LOW_DEFAULT = -270.0
+PHI_HIGH_DEFAULT = 270.0
+PHI_ZERO_DEFAULT = 0.0
 
 
 def iterative_script_lines(step):
@@ -210,9 +260,9 @@ class AlignmentFlow:
         self.expert = bool(expert)
         # Soft limits and the zero angle persist across runs (the view loads
         # them from QSettings), so start() must not reset them.
-        self.phi_low = -540.0
-        self.phi_high = 540.0
-        self.phi_zero = 0.0
+        self.phi_low = PHI_LOW_DEFAULT
+        self.phi_high = PHI_HIGH_DEFAULT
+        self.phi_zero = PHI_ZERO_DEFAULT
         self.start()
 
     # -- lifecycle ---------------------------------------------------------
@@ -221,14 +271,15 @@ class AlignmentFlow:
         """Reset to the first page and clear all per-run state.
 
         Expert mode is only re-read here -- at the start of a run -- so that
-        toggling the setup checkbox mid-alignment never reshuffles pages
-        underneath the operator.
+        toggling the checkbox mid-alignment never reshuffles pages underneath
+        the operator.
         """
         if expert is not None:
             self.expert = bool(expert)
         self.page = Page.RADIOGRAPHY
+        self._history = []
         self.branch = None
-        self.horizontal = None  # "trans1" or "trans2"
+        self.horizontal = None  # "trans1" or "trans2", picked on the rough page
         self.rotation_safe = None
         # Radiography page unlock chain
         self.xrays_confirmed = False
@@ -241,10 +292,32 @@ class AlignmentFlow:
         self.rotated_once = False
         self.softlimit_set = False
         # Iterative page
-        self.iter_step = 0
+        self.iter_step = ITER_STEPS[0]
         # Set when the fresh-start branch is entered; the view consumes it to
         # ask permission before moving hexapod X to its default.
         self.pending_hexapod_x_prompt = False
+        return self.page
+
+    # -- history -----------------------------------------------------------
+
+    @property
+    def history(self):
+        """Pages visited on the way here, oldest first. Read-only view."""
+        return tuple(self._history)
+
+    def previous_page(self):
+        """Where Back would land, or None on the first page."""
+        return self._history[-1] if self._history else None
+
+    def back(self):
+        """Pop one page off the history.
+
+        Only the page changes: the branch, the transH choice and the soft
+        limits are all left alone, and no motor is moved back. Retracing a
+        path is for re-reading a screen, not for undoing work.
+        """
+        if self._history:
+            self.page = self._history.pop()
         return self.page
 
     # -- soft limits -------------------------------------------------------
@@ -296,22 +369,50 @@ class AlignmentFlow:
             return self.expert or (self.xrays_confirmed and self.zp_out)
         if action in (Action.MOVE_FRESH_START, Action.MOVE_SAMPLE_CHANGE):
             return self.expert or (self.moved_z and self.moved_lateral)
+        if action == Action.ROUGH_CONTINUE:
+            # Every later page labels its rows transH/transD, so the choice
+            # has to be made before leaving this page.
+            return self.horizontal is not None
         if action == Action.ROT_CONTINUE:
             return self.rotated_once
+        if action == Action.ROTSAFE_360_OK:
+            return self._transh_chosen_if_needed()
         if action == Action.ROTSAFE_CONTINUE:
-            return self.softlimit_set
+            return self.softlimit_set and self._transh_chosen_if_needed()
+        if action in (Action.GO_BACK, Action.ROTAXES_DONE):
+            return bool(self._history)
         if action == Action.ITER_BACK:
             return self.iter_step != ITER_STEPS[0]
         if action == Action.ITER_FINISH:
             return self.iter_step == ITER_STEPS[-1]
         if action == Action.ITER_NEXT:
-            # Step 0 advances via the trans1/trans2 picker, step 4 is terminal.
-            return self.iter_step in (1, 23)
-        if action in (Action.TRANS1_HORIZONTAL, Action.TRANS2_HORIZONTAL):
-            if self.page == Page.ITERATIVE:
-                return self.iter_step == 0
-            return True
+            return self.iter_step != ITER_STEPS[-1]
         return True
+
+    def locked_rows(self, page=None):
+        """Row keys `page` starts with disabled, with transD resolved.
+
+        The static table cannot name the downstream trans stage, because
+        which one it is depends on the transH pick made at runtime.
+        """
+        page = self.page if page is None else page
+        locked = set(locked_motors(page))
+        if page in PAGES_LOCKING_TRANS_D and self.trans_d:
+            locked.add(self.trans_d)
+        return frozenset(locked)
+
+    def _transh_chosen_if_needed(self):
+        """Guard the exits of the expert merged page.
+
+        In user mode the transH picker lives on the rough-centre page and
+        ROUGH_CONTINUE enforces it. The expert page absorbs that step, so its
+        own exits have to enforce it instead -- otherwise the iterative page
+        opens with no horizontal stage chosen and its step 1, which drives
+        only transH, has nothing to enable.
+        """
+        if self.page != Page.POSITION_AND_ROTATION:
+            return True
+        return self.horizontal is not None
 
     # -- routing -----------------------------------------------------------
 
@@ -341,12 +442,16 @@ class AlignmentFlow:
         the operator's answer when they override the auto-decision dialog.
         Returns CLOSE for terminal actions, or None for non-navigating ones.
         """
+        if action in (Action.GO_BACK, Action.ROTAXES_DONE):
+            return self.previous_page()
         if action == Action.RADIO_CONTINUE:
             return Page.MOVEMENT_SAFE
         if action in (Action.MOVE_FRESH_START, Action.MOVE_SAMPLE_CHANGE):
             return self._positioning_page()
         if action == Action.ROUGH_CONTINUE:
             return Page.SET_ROTATION
+        if action == Action.NEED_ROTATION:
+            return Page.ROTATION_AXES
         if action == Action.ROT_CONTINUE:
             return Page.ROTATION_SAFE
         if action == Action.ROTSAFE_360_OK:
@@ -355,10 +460,10 @@ class AlignmentFlow:
             if rotation_safe is None:
                 rotation_safe = self.rotation_arc_ok()
             return self._after_rotation_safe(rotation_safe)
+        if action == Action.FIRST_TRANS_CONTINUE:
+            return Page.SECOND_TRANS
         if action in (Action.TRANS1_HORIZONTAL, Action.TRANS2_HORIZONTAL):
-            if self.page == Page.FIRST_TRANS:
-                return Page.SECOND_TRANS
-            return self.page  # iterative / expert picker: stays put
+            return self.page  # the picker records a choice, it does not move
         if action == Action.TRANS_FINISH:
             return CLOSE
         if action == Action.COR_YES:
@@ -388,14 +493,13 @@ class AlignmentFlow:
             return "Finishes the alignment and closes this window"
         if target is None:
             return ""
+        if action in (Action.GO_BACK, Action.ROTAXES_DONE):
+            return ("Goes back to: %s (nothing is undone and no motor moves)"
+                    % PAGE_TITLES[target])
         if action == Action.ITER_BACK:
             return ("Goes back one step of the iterative alignment "
                     "(does not undo any motor moves)")
         if action == Action.ITER_NEXT:
-            return "Goes to: the next step of the iterative alignment"
-        if (self.page == Page.ITERATIVE
-                and action in (Action.TRANS1_HORIZONTAL, Action.TRANS2_HORIZONTAL)):
-            # The picker both records the choice and advances step 0 -> 1.
             return "Goes to: the next step of the iterative alignment"
         if target == self.page:
             return ""
@@ -410,6 +514,8 @@ class AlignmentFlow:
         """
         if action == Action.START_OVER:
             return self.start()
+        if action in (Action.GO_BACK, Action.ROTAXES_DONE):
+            return self.back()
 
         target = self.destination(action, rotation_safe=rotation_safe)
         if target is None:
@@ -433,12 +539,8 @@ class AlignmentFlow:
                                   else bool(rotation_safe))
         elif action == Action.TRANS1_HORIZONTAL:
             self.horizontal = "trans1"
-            if self.page == Page.ITERATIVE and self.iter_step == 0:
-                self.iter_step = 1
         elif action == Action.TRANS2_HORIZONTAL:
             self.horizontal = "trans2"
-            if self.page == Page.ITERATIVE and self.iter_step == 0:
-                self.iter_step = 1
         elif action == Action.ITER_NEXT:
             index = ITER_STEPS.index(self.iter_step)
             if index + 1 < len(ITER_STEPS):
@@ -447,11 +549,9 @@ class AlignmentFlow:
             index = ITER_STEPS.index(self.iter_step)
             if index > 0:
                 self.iter_step = ITER_STEPS[index - 1]
-            if self.iter_step == 0:
-                # Back at the picker, so the transH/transD choice is undone.
-                self.horizontal = None
 
-        if target != CLOSE:
+        if target != CLOSE and target != self.page:
+            self._history.append(self.page)
             self.page = target
         return target
 
@@ -459,7 +559,7 @@ class AlignmentFlow:
 
     @property
     def trans_h(self):
-        """The trans motor chosen as horizontal, or None before step 0 ends."""
+        """The trans motor chosen as horizontal, or None before it is picked."""
         return self.horizontal
 
     @property
@@ -483,16 +583,21 @@ class AlignmentFlow:
         trans_h = self.trans_h
         trans_d = self.trans_d
 
-        if step == 0:
-            motors = {"trans1", "trans2"}
-        elif step == 1:
-            motors = {trans_h} if trans_h else set()
+        if step == 1:
+            # transH is always known by now (its picker gates every route to
+            # this page). If it somehow is not, offer both trans stages
+            # rather than enabling nothing and stranding the operator.
+            motors = {trans_h} if trans_h else {"trans1", "trans2"}
         elif step == 23:
             # Everything except transD: phi and X do the alignment, transH
             # takes up the halfway correction.
-            motors = {"phi", "X"} | ({trans_h} if trans_h else set())
-        else:  # step 4
-            motors = {"phi", "trans1", "trans2"}
+            motors = {"phi", "X"} | ({trans_h} if trans_h
+                                     else {"trans1", "trans2"})
+        else:
+            # Step 4 aligns transD with small phi steps. transH is already
+            # set from steps 1-3 and must not be disturbed, and X is done.
+            motors = {"phi"} | ({trans_d} if trans_d
+                                else {"trans1", "trans2"})
 
         state = {
             "step": step,
@@ -501,23 +606,11 @@ class AlignmentFlow:
             "phi_editable": step == 4,
             "trans_h": trans_h,
             "trans_d": trans_d,
-            "prompt": "Horizontal motor is:" if step == 0 else "",
             "back": {"enabled": self.can(Action.ITER_BACK)},
             "finish": {"enabled": self.can(Action.ITER_FINISH)},
-            "btn_b": {
-                "text": "trans2" if step == 0 else "Unlock all",
-                "enabled": True,
-                "action": Action.TRANS2_HORIZONTAL if step == 0 else Action.UNLOCK_ALL,
-            },
         }
 
-        if step == 0:
-            state["btn_a"] = {
-                "text": "trans1",
-                "enabled": True,
-                "action": Action.TRANS1_HORIZONTAL,
-            }
-        elif step == 1:
+        if step == 1:
             state["btn_a"] = {
                 "text": "Center found",
                 "enabled": True,

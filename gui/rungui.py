@@ -81,6 +81,7 @@ import datetime
 import pathlib
 import time
 import re
+import urllib.parse
 import numpy as np
 from typing import List
 from threading import Lock
@@ -173,6 +174,95 @@ except ImportError:
 
     py12inifunc = _Py12IniFuncStub()
 
+# ── py12inifunc safety wrapper ───────────────────────────────────────────
+#
+# py12inifunc's on-disk format is one line per attribute:
+#   "<description>, <key> : <value>\n"
+# read back by splitting on ',' then on ':' with no maxsplit, and by
+# treating any value with more than one whitespace-separated token as a
+# list of floats. That breaks in two ways this GUI actually hits:
+#   - a text value containing ',', ':' or a space (e.g. an absolute Windows
+#     path like "C:\Users\...\log.txt" chosen via a file-browse dialog)
+#     desyncs the ',' / ':' split for every future read AND write --
+#     writeini() re-reads the whole file first to learn the existing line
+#     layout, so one bad line corrupts every other field too.
+#   - softglue_channels is a list of channel letters (e.g. ["B","C","D"]),
+#     not numbers, so py12inifunc's float-list parsing/formatting for
+#     multi-token values raises on both read and write.
+#
+# SafeIni percent-encodes these fields immediately before handing them to
+# the real writeini()/readini(), and decodes them immediately after, so
+# every other line of this codebase keeps seeing plain, real values.
+INI_TEXT_FIELDS = ("logfilename", "working_folder", "base_linux_datafolder", "scan_name")
+INI_LIST_FIELDS = ("softglue_channels",)
+
+
+def _ini_quote_text(value):
+    # py12inifunc parses an all-whitespace value as an empty *list*, not an
+    # empty string (readini's `val.split()` on "" yields []), so an empty
+    # string needs its own non-blank placeholder to round-trip correctly.
+    s = str(value)
+    return urllib.parse.quote(s, safe="/") if s else "-"
+
+
+def _ini_unquote_text(value):
+    return "" if value == "-" else urllib.parse.unquote(value)
+
+
+def _ini_quote_list(values):
+    return urllib.parse.quote(",".join(str(v) for v in values) or "-", safe="")
+
+
+def _ini_unquote_list(raw):
+    decoded = urllib.parse.unquote(raw)
+    return [] if decoded in ("", "-") else decoded.split(",")
+
+
+if isinstance(py12inifunc.ini, type):
+
+    class SafeIni(py12inifunc.ini):
+        def readini(self, ini_name=""):
+            super().readini(ini_name)
+            for field in INI_TEXT_FIELDS:
+                val = getattr(self, field, None)
+                if isinstance(val, str):
+                    setattr(self, field, _ini_unquote_text(val))
+                elif isinstance(val, list) and not val:
+                    # py12inifunc's empty-list-for-blank-value quirk (see
+                    # _ini_quote_text) -- shouldn't occur once the on-disk
+                    # value has gone through _ini_quote_text, but a
+                    # hand-edited or not-yet-migrated .ini could still hit it.
+                    setattr(self, field, "")
+            for field in INI_LIST_FIELDS:
+                val = getattr(self, field, None)
+                if isinstance(val, str):
+                    setattr(self, field, _ini_unquote_list(val))
+
+        def writeini(self, ini_name=""):
+            saved = {}
+            for field in INI_TEXT_FIELDS:
+                val = getattr(self, field, None)
+                if isinstance(val, str):
+                    saved[field] = val
+                    setattr(self, field, _ini_quote_text(val))
+            for field in INI_LIST_FIELDS:
+                val = getattr(self, field, None)
+                if isinstance(val, list):
+                    saved[field] = val
+                    setattr(self, field, _ini_quote_list(val))
+            try:
+                super().writeini(ini_name)
+            finally:
+                for field, val in saved.items():
+                    setattr(self, field, val)
+
+    _IniClass = SafeIni
+else:
+    # py12inifunc import failed and py12inifunc.ini is the stub factory
+    # method, not a class -- nothing to subclass, and its readini/writeini
+    # are already no-ops.
+    _IniClass = py12inifunc.ini
+
 import analysis.planeeqn as eqn
 
 # ==========================================================================
@@ -262,7 +352,7 @@ INI_DEFAULT_ENTRIES = [
     ("Reference Position X", "_ref_X", "0.0000"),
     ("Reference Position Y", "_ref_Z", "0.0000"),
     ("Reference Position Z", "_ref_Z2", "0.0000"),
-    ("Working Folder Name", "working_folder", ""),
+    ("Working Folder Name", "working_folder", _ini_quote_text("")),
     ("Unit of QDS (nm. um. mm for 0. 1. 2)", "_qds_unit", "%.4f" % QDS_UNIT_DEFAULT),
     ("Axis of QDS X", "_qds_x_sensor", "0.0000"),
     ("Axis of QDS Y", "_qds_y_sensor", "1.0000"),
@@ -272,8 +362,8 @@ INI_DEFAULT_ENTRIES = [
     ("Radial Distance of the QDS V laser (mm)", "_qds_R_vert", "10.0000"),
     ("Azimuthal Angular Position of the QDS V laser (deg)", "_qds_th0_vert", "-30.0000"),
     ("Radial Distance of the QDS H laser (mm)", "_qds_R_cyl", "50.0000"),
-    ("SoftGlue Channels", "softglue_channels", " B  C  D "),
-    ("Log File Name", "logfilename", ""),
+    ("SoftGlue Channels", "softglue_channels", _ini_quote_list(["B", "C", "D"])),
+    ("Log File Name", "logfilename", _ini_quote_text("")),
     ("Scan Number", "scan_number", "0.0000"),
     ("Flyscan step time-exptime", "_fly_idletime", "0.0000"),
     (
@@ -283,7 +373,7 @@ INI_DEFAULT_ENTRIES = [
     ),
     ("Scan Time", "scan_time", "-1.0000"),
     ("Base Name of Data Files in Linux", "base_linux_datafolder", "/net/s12data/export/12id-c/"),
-    ("Scan Name", "scan_name", ""),
+    ("Scan Name", "scan_name", _ini_quote_text("")),
     ("Number of Frames per Exposure", "_pulses_per_step", "1.0000"),
     ("ABC", "_step_acq_time", "1.0000"),
     ("ABC", "_fly_acq_time", "0.0330"),
@@ -294,7 +384,11 @@ INI_DEFAULT_ENTRIES = [
 
 def ensure_default_ini(path=inifilename):
     """Create pty-co-saxs.ini from INI_DEFAULT_ENTRIES if it does not exist,
-    and append any single entry missing from an existing file.
+    append any single entry missing from an existing file, and repair any
+    INI_TEXT_FIELDS/INI_LIST_FIELDS line still holding a raw, pre-SafeIni
+    value (a value with a ',', ':' or space, or a multi-token
+    softglue_channels list) that would otherwise crash py12inifunc's ','/':'
+    split, or its whitespace-token float parsing, on the very next read.
 
     Entries already in the file keep their saved value; only absent ones are
     added, so a GUI upgrade that needs a new field no longer requires the
@@ -305,21 +399,36 @@ def ensure_default_ini(path=inifilename):
         with open(path) as f:
             text = f.read()
 
+    lines = text.splitlines()
     present = set()
-    for line in text.splitlines():
-        if "," in line and ":" in line:
-            present.add(line.split(",", 1)[1].split(":", 1)[0].strip())
+    changed = False
+    for i, line in enumerate(lines):
+        if "," not in line or ":" not in line:
+            continue
+        desc, rest = line.split(",", 1)
+        key, raw_value = rest.split(":", 1)
+        desc, key, raw_value = desc.strip(), key.strip(), raw_value.strip()
+        present.add(key)
+
+        if key in INI_TEXT_FIELDS:
+            if raw_value == "" or any(c in raw_value for c in ":, \t"):
+                lines[i] = "%s, %s : %s" % (desc, key, _ini_quote_text(raw_value))
+                changed = True
+        elif key in INI_LIST_FIELDS:
+            tokens = raw_value.split()
+            if len(tokens) != 1 or any(c in raw_value for c in ":,"):
+                lines[i] = "%s, %s : %s" % (desc, key, _ini_quote_list(tokens))
+                changed = True
 
     missing = [e for e in INI_DEFAULT_ENTRIES if e[1] not in present]
-    if not missing:
+    if not missing and not changed:
         return
 
-    if text and not text.endswith("\n"):
-        text += "\n"
-    for description, name, value in missing:
-        text += "%s, %s : %s\n" % (description, name, value)
+    lines.extend(
+        "%s, %s : %s" % (description, name, value) for description, name, value in missing
+    )
     with open(path, "w") as f:
-        f.write(text)
+        f.write("\n".join(lines) + "\n")
 
 # Detector attribute/layout PVs (PILATUS1). The attributes XML drives
 # NDAttributes; the layout XML drives the HDF1 file writer.
@@ -542,7 +651,7 @@ class ptyco_main_control(QObject):
         self.is_selfsaved = False
         self.is_ptychomode = True
         ensure_default_ini(inifilename)
-        self.parameters = py12inifunc.ini(inifilename)
+        self.parameters = _IniClass(inifilename)
         # New fields are added to the ini file by ensure_default_ini above.
         try:
             self.parameters.readini()
@@ -796,6 +905,7 @@ class ptyco_main_control(QObject):
         self.ui.actionDante.triggered.connect(lambda: self.select_detectors(5))
         self.ui.actionXSP3.triggered.connect(lambda: self.select_detectors(6))
         self.ui.actionReset_to_Fly_mode.triggered.connect(self.reset_det_flymode)
+        self._wire_xray_eye_menu()
         self.ui.actionChannels_to_record.triggered.connect(
             self.choose_softglue_channels
         )
@@ -1693,18 +1803,16 @@ class ptyco_main_control(QObject):
                     pass
 
     def _open_optics_gui(self):
-        if DEBUG_DEVICES:
-            QMessageBox.information(
-                self.ui, "Optics GUI", "Optics GUI is not available in debug mode."
-            )
-            return
         import subprocess
 
         script = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "optics_motors.py"
         )
+        cmd = [sys.executable, script]
+        if DEBUG_DEVICES:
+            cmd.append("--debug_mode")
         try:
-            subprocess.Popen([sys.executable, script])
+            subprocess.Popen(cmd)
         except Exception as e:
             QMessageBox.warning(
                 self.ui, "Optics GUI", "Could not launch optics GUI:\n%s" % e
@@ -1727,6 +1835,41 @@ class ptyco_main_control(QObject):
         button)."""
         if getattr(self, "macro_window", None) is not None and self.macro_window.isVisible():
             self.macro_window.add_scan_param_snapshot()
+
+    # ── X-ray eye (Detectors menu) ─────────────────────────────────────────
+    # State is shared with the optics GUI (a separate process) and the sample
+    # alignment window through the command PV's readback -- see gui/xray_eye.py.
+
+    def _wire_xray_eye_menu(self):
+        from xray_eye import XrayEye
+
+        if DEBUG_DEVICES:
+            from debug_stubs import FakePV as _PV
+        else:
+            _PV = epics.PV
+        self.xray_eye = XrayEye(_PV, debug=DEBUG_DEVICES)
+        self.ui.actionXrayEyeIn.toggled.connect(self._on_xray_eye_toggled)
+        # Read the shared state exactly when the menu is opened, rather than
+        # polling for something that changes a few times a shift.
+        self.ui.menuDetectors.aboutToShow.connect(self._refresh_xray_eye_menu)
+        self._refresh_xray_eye_menu()
+
+    def _refresh_xray_eye_menu(self):
+        state = self.xray_eye.is_in()
+        self.ui.actionXrayEyeStatus.setText(
+            "X-ray eye: %s" % {True: "IN", False: "OUT"}.get(state, "unknown"))
+        self.ui.actionXrayEyeIn.blockSignals(True)
+        self.ui.actionXrayEyeIn.setChecked(state is True)
+        self.ui.actionXrayEyeIn.blockSignals(False)
+
+    def _on_xray_eye_toggled(self, checked):
+        try:
+            self.xray_eye.set_in(checked)
+        except Exception as e:
+            QMessageBox.warning(
+                self.ui, "X-ray eye", "Could not command the X-ray eye:\n%s" % e
+            )
+        self._refresh_xray_eye_menu()
 
     def _open_sample_alignment_window(self):
         """Open (or raise) the non-modal guided sample alignment window."""
@@ -1846,14 +1989,24 @@ class ptyco_main_control(QObject):
         )
         # Sample alignment workflow mode. Lives in QSettings rather than the
         # scan .ini because it is a per-operator UI preference, not a scan
-        # parameter. Read by sample_alignment.expert_mode_enabled().
-        from sample_alignment import EXPERT_KEY
+        # parameter, and it is mirrored by the "Expert User" checkbox on the
+        # alignment window's first page -- both are views of the one setting.
+        from sample_alignment import EXPERT_KEY, confirm_beamline_staff
 
         dlg.checkBox_expertMode.setChecked(
             QSettings("ptychoSAXS", "ptychoSAXS").value(
                 EXPERT_KEY, False, type=bool
             )
         )
+
+        def _on_expert_toggled(checked):
+            # Same gate as the alignment window's own checkbox.
+            if checked and not confirm_beamline_staff(dlg):
+                dlg.checkBox_expertMode.blockSignals(True)
+                dlg.checkBox_expertMode.setChecked(False)
+                dlg.checkBox_expertMode.blockSignals(False)
+
+        dlg.checkBox_expertMode.toggled.connect(_on_expert_toggled)
 
         # Radio buttons — grouped by id matching set_softglue_in(val)
         btn_group = QButtonGroup(dlg)
@@ -1957,6 +2110,8 @@ class ptyco_main_control(QObject):
         QSettings("ptychoSAXS", "ptychoSAXS").setValue(
             EXPERT_KEY, dlg.checkBox_expertMode.isChecked()
         )
+        if getattr(self, "sample_alignment_window", None) is not None:
+            self.sample_alignment_window.refresh_expert_mode()
 
         # Softglue collection speed
         speed_id = btn_group.checkedId()

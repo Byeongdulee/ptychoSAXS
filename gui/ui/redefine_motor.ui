@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RedefineMotorDialog</class>
+ <widget class="QDialog" name="RedefineMotorDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>340</width>
+    <height>172</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Redefine motor</string>
+  </property>
+  <property name="font">
+   <font>
+    <pointsize>10</pointsize>
+   </font>
+  </property>
+  <widget class="QLabel" name="label_motorCap">
+   <property name="geometry">
+    <rect>
+     <x>14</x>
+     <y>14</y>
+     <width>110</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Motor:</string>
+   </property>
+  </widget>
+  <widget class="QComboBox" name="comboBox_motor">
+   <property name="geometry">
+    <rect>
+     <x>130</x>
+     <y>14</y>
+     <width>196</width>
+     <height>26</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_currentCap">
+   <property name="geometry">
+    <rect>
+     <x>14</x>
+     <y>50</y>
+     <width>110</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Current position:</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_currentPos">
+   <property name="geometry">
+    <rect>
+     <x>130</x>
+     <y>50</y>
+     <width>196</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>----</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_newCap">
+   <property name="geometry">
+    <rect>
+     <x>14</x>
+     <y>84</y>
+     <width>110</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Redefine as:</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="lineEdit_newPos">
+   <property name="geometry">
+    <rect>
+     <x>130</x>
+     <y>84</y>
+     <width>196</width>
+     <height>26</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="pushButton_redefine">
+   <property name="geometry">
+    <rect>
+     <x>130</x>
+     <y>126</y>
+     <width>94</width>
+     <height>28</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Redefine</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="pushButton_cancel">
+   <property name="geometry">
+    <rect>
+     <x>232</x>
+     <y>126</y>
+     <width>94</width>
+     <height>28</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Cancel</string>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

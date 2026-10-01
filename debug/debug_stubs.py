@@ -879,7 +879,6 @@ class FakePV:
         self._pvname = pvname
 
     def get(self):
-        print(f"[DEBUG] FakePV.get({self._pvname!r}) -> 0")
         return 0
 
     def put(self, val):
@@ -942,42 +941,45 @@ class DebugEpicsMotorController:
         return self._pos[name]
 
 
+# The names below are per-axis in the same order as each controller's real PV
+# list, so they line up index-for-index with gui/optics_motors.py's MOTORS
+# table -- debug output then names the motor the panel thinks it is driving.
 class DebugOpticsbox(DebugEpicsMotorController):
     """Debug stub for opticsbox — 5 motors matching the real PV list."""
 
     def __init__(self):
         super().__init__(
-            names=["Optics 1", "Optics 2", "Optics 3", "Optics 4", "Optics 5"],
+            names=["BS_ver", "BS_hor", "ZP_ver", "ZP_hor", "BSZP_Ztrans"],
             units=["mm", "mm", "mm", "mm", "mm"],
         )
 
 
 class DebugOSA(DebugEpicsMotorController):
-    """Debug stub for OSA — 3 motors (Z, X, Y)."""
+    """Debug stub for OSA — 3 motors (X, Z, Y)."""
 
     def __init__(self):
         super().__init__(
-            names=["OSA Z", "OSA X", "OSA Y"],
+            names=["OSA_X", "OSA_Z", "OSA_Y"],
             units=["mm", "mm", "mm"],
         )
 
 
 class DebugCamera(DebugEpicsMotorController):
-    """Debug stub for camera — 1 motor."""
+    """Debug stub for the SAXS detector translation — 1 motor."""
 
     def __init__(self):
         super().__init__(
-            names=["Camera"],
+            names=["SAXS_Z"],
             units=["mm"],
         )
 
 
 class DebugBeamstop(DebugEpicsMotorController):
-    """Debug stub for beamstop — 2 motors (X, Y)."""
+    """Debug stub for the SAXS beamstop — 2 motors (hor, ver)."""
 
     def __init__(self):
         super().__init__(
-            names=["BS X", "BS Y"],
+            names=["SAXSBS_hor", "SAXSBS_ver"],
             units=["mm", "mm"],
         )
 

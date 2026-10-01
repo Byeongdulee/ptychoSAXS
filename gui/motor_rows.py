@@ -1,16 +1,11 @@
 """Reusable "Motor name / Current / Move to / Tweak" row table.
 
-The ptychoSAXS .ui files position widgets absolutely rather than with Qt
-layouts, and ProportionalResizer (resize_utils.py) rescales a window by forcing
-QSizePolicy.Ignored and calling setGeometry() on every named child. A
-QGridLayout inside such a window would fight that, so these rows are built with
-explicit setGeometry() too, reproducing the main panel's exact column metrics
-(read off lb1 / lb_1 / ed_1 / pb_tweak1L / ed_1_tweak / pb_tweak1R in
-ptycoSAXS.ui, which are constant across all motor slots).
-
-Build every table BEFORE constructing the window's ProportionalResizer -- it
-snapshots geometry once, at construction, and widgets created afterwards are
-never scaled.
+Builds a QGridLayout inside a host QWidget declared in the .ui file, so the
+table reflows with the window instead of being pinned to fixed pixels. Each
+column keeps a fixed minimum width and no stretch, and a trailing empty
+column soaks up the rest of the container's width -- so the table reads as a
+compact, left-anchored block instead of spreading its fields across the
+whole page.
 
 Typical use:
 
@@ -25,26 +20,14 @@ Typical use:
     table.set_current("X", 1.234)
 """
 
-from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton
-
-# (slot, logical column, x, width, height, dy). dy is the offset from the row's
-# top, needed because the main panel's 28px tweak buttons sit slightly higher
-# than the 20/21px labels and line edits they sit between.
-_SLOTS = (
-    ("name", "name", 10, 41, 21, 0),
-    ("current", "current", 60, 71, 21, 0),
-    ("moveto", "moveto", 130, 81, 20, 0),
-    ("tweak_l", "tweak", 220, 31, 28, -5),
-    ("tweak_s", "tweak", 260, 61, 20, -1),
-    ("tweak_r", "tweak", 330, 31, 28, -5),
+from PyQt5.QtWidgets import (
+    QGridLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSizePolicy,
+    QStackedWidget,
 )
-
-# Right edge of the widest (all-columns) table, used to size the trailing slot.
-_TABLE_END_X = 361
-
-# Vertical distance between rows, matching the main panel (motor 1 at y=195,
-# motor 7 at y=405).
-ROW_PITCH = 35
 
 ALL_COLUMNS = ("name", "current", "moveto", "tweak")
 
@@ -53,6 +36,30 @@ _HEADER_TEXT = {
     "current": "Current",
     "moveto": "Move to",
     "tweak": "Tweak",
+}
+
+# Grid columns, in order. "tweak" expands into the three cells after it.
+_COLUMN_CELLS = {
+    "name": ("name",),
+    "current": ("current",),
+    "moveto": ("moveto",),
+    "tweak": ("tweak_l", "tweak_s", "tweak_r"),
+}
+
+# Keeps the << / >> buttons square-ish however wide the table gets.
+_TWEAK_BUTTON_WIDTH = 34
+
+# Minimum pixel width for each cell. None of these columns stretch (see
+# __init__) -- a trailing spacer column soaks up whatever width is left over,
+# so the table stays a compact block on the left instead of spreading its
+# fields across the whole page.
+_CELL_MIN_WIDTH = {
+    "name": 70,
+    "current": 90,
+    "moveto": 90,
+    "tweak_l": _TWEAK_BUTTON_WIDTH,
+    "tweak_s": 70,
+    "tweak_r": _TWEAK_BUTTON_WIDTH,
 }
 
 # Pale red, matching CRL_3dprint's rejected-move indication.
@@ -64,34 +71,12 @@ def _fmt_step(value):
     return "%g" % float(value)
 
 
-def column_layout(columns):
-    """Map each slot to its (x, width, height, dy) for the given columns.
-
-    Omitted columns close up the gap they would have left, so a table without
-    a "Move to" column puts its tweak group where "Move to" used to start
-    rather than leaving a hole.
-    """
-    layout = {}
-    shift = 0
-    for index, (slot, column, x, width, height, dy) in enumerate(_SLOTS):
-        next_x = _SLOTS[index + 1][2] if index + 1 < len(_SLOTS) else _TABLE_END_X
-        if column in columns:
-            layout[slot] = (x + shift, width, height, dy)
-        else:
-            shift -= next_x - x
-    return layout
-
-
-def table_size(columns, n_rows, header=True):
-    """(width, height) a container needs to hold this table, for .ui sizing.
-
-    Use this when adding a page: a full four-column table is 371 wide, one
-    without "Move to" is 281, and the height is 35 * (rows + 1) with a header.
-    """
-    layout = column_layout(columns)
-    right = max(x + width for x, width, _h, _dy in layout.values())
-    rows = n_rows + (1 if header else 0)
-    return right + 10, rows * ROW_PITCH
+def cell_order(columns):
+    """The grid cells, left to right, for the requested logical columns."""
+    cells = []
+    for column in columns:
+        cells.extend(_COLUMN_CELLS[column])
+    return cells
 
 
 class MotorRow(object):
@@ -105,9 +90,9 @@ class MotorRow(object):
     tweak    "edit" for a user-editable QLineEdit step, "label" for a fixed,
              read-only QLabel step.
     swappable
-             build both widgets at the same rect and show one at a time, so
-             the step can switch between fixed and editable at runtime (the
-             iterative page's phi step does this at step 4).
+             build both widgets into a small QStackedWidget so the step can
+             switch between fixed and editable at runtime (the iterative
+             page's phi step does this at step 4).
     """
 
     def __init__(self, key, label=None, step=0.1, tweak="edit", swappable=False):
@@ -133,95 +118,122 @@ class MotorRowTable(object):
         self._tweak_cb = None
         self._moveto_cb = None
 
-        layout = column_layout(self.columns)
+        self._cells = cell_order(self.columns)
+        self._grid = QGridLayout(container)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setHorizontalSpacing(6)
+        self._grid.setVerticalSpacing(4)
+        for column, cell in enumerate(self._cells):
+            self._grid.setColumnStretch(column, 0)
+            self._grid.setColumnMinimumWidth(column, _CELL_MIN_WIDTH[cell])
+        # Trailing spacer column: no widget is ever placed in it, but giving
+        # it the only nonzero stretch factor makes it claim all the leftover
+        # width, so the real columns stay at their natural size instead of
+        # spreading out to fill the container.
+        self._grid.setColumnStretch(len(self._cells), 1)
+
         if header:
-            self._build_header(layout)
-        # Without a header the first row still starts 5px down, because the
-        # tweak buttons sit at dy=-5 and would otherwise be clipped off the
-        # top of the container.
-        first_row_y = ROW_PITCH if header else 5
+            self._build_header()
+        first_row = 1 if header else 0
         for index, row in enumerate(self.rows):
-            self._build_row(row, layout, first_row_y + index * ROW_PITCH)
+            self._build_row(row, first_row + index)
+        # Soak up leftover vertical space so rows keep their natural height
+        # instead of stretching apart when the page is tall.
+        self._grid.setRowStretch(first_row + len(self.rows), 1)
 
     # -- construction ------------------------------------------------------
 
     def _name(self, slot, key):
         return "%s_%s_%s" % (self.prefix, slot, key)
 
-    def _build_header(self, layout):
+    def _column_of(self, cell):
+        return self._cells.index(cell)
+
+    def _build_header(self):
         for column in self.columns:
-            slot = "tweak_l" if column == "tweak" else column
-            if slot not in layout:
-                continue
-            x, width, height, _dy = layout[slot]
-            if column == "tweak":
-                # Span the whole <<  step  >> group.
-                right = layout["tweak_r"]
-                width = right[0] + right[1] - x
+            cells = _COLUMN_CELLS[column]
             label = QLabel(_HEADER_TEXT[column], self.container)
             label.setObjectName("%s_hdr_%s" % (self.prefix, column))
-            label.setGeometry(x, 0, width, height)
+            # The tweak header spans the whole "<<  step  >>" group.
+            self._grid.addWidget(label, 0, self._column_of(cells[0]),
+                                 1, len(cells))
             self._headers[column] = label
 
-    def _build_row(self, row, layout, y):
+    def _build_row(self, row, grid_row):
         made = {}
 
-        if "name" in layout:
-            x, width, height, dy = layout["name"]
+        if "name" in self.columns:
             widget = QLabel(row.label, self.container)
             widget.setObjectName(self._name("name", row.key))
-            widget.setGeometry(x, y + dy, width, height)
+            self._grid.addWidget(widget, grid_row, self._column_of("name"))
             made["name"] = widget
 
-        if "current" in layout:
-            x, width, height, dy = layout["current"]
+        if "current" in self.columns:
             widget = QLabel("", self.container)
             widget.setObjectName(self._name("current", row.key))
-            widget.setGeometry(x, y + dy, width, height)
+            self._grid.addWidget(widget, grid_row, self._column_of("current"))
             made["current"] = widget
 
-        if "moveto" in layout:
-            x, width, height, dy = layout["moveto"]
+        if "moveto" in self.columns:
             widget = QLineEdit(self.container)
             widget.setObjectName(self._name("moveto", row.key))
-            widget.setGeometry(x, y + dy, width, height)
             widget.setToolTip("Absolute position. Hit enter to move.")
             widget.returnPressed.connect(
                 lambda key=row.key: self._emit_moveto(key))
+            self._grid.addWidget(widget, grid_row, self._column_of("moveto"))
             made["moveto"] = widget
 
-        if "tweak_l" in layout:
+        if "tweak" in self.columns:
             for slot, text, sign in (("tweak_l", "<<", -1), ("tweak_r", ">>", 1)):
-                x, width, height, dy = layout[slot]
                 button = QPushButton(text, self.container)
                 button.setObjectName(self._name(slot, row.key))
-                button.setGeometry(x, y + dy, width, height)
+                button.setMaximumWidth(_TWEAK_BUTTON_WIDTH)
+                button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
                 button.clicked.connect(
                     lambda _checked=False, key=row.key, s=sign:
                     self._emit_tweak(key, s))
+                self._grid.addWidget(button, grid_row, self._column_of(slot))
                 made[slot] = button
 
-            x, width, height, dy = layout["tweak_s"]
-            text = _fmt_step(row.step)
-            # A swappable row gets both widgets at the same rect; the hidden
-            # one is still snapshotted by ProportionalResizer, so it scales
-            # correctly even if it is never shown.
-            if row.swappable or row.tweak == "edit":
-                editor = QLineEdit(text, self.container)
-                editor.setObjectName(self._name("tweakedit", row.key))
-                editor.setGeometry(x, y + dy, width, height)
-                made["tweakedit"] = editor
-            if row.swappable or row.tweak == "label":
-                fixed = QLabel(text, self.container)
-                fixed.setObjectName(self._name("tweaklbl", row.key))
-                fixed.setGeometry(x, y + dy, width, height)
-                fixed.setToolTip("Fixed step size for this step of the workflow.")
-                made["tweaklbl"] = fixed
-            if row.swappable:
-                made["tweakedit"].setVisible(row.tweak == "edit")
-                made["tweaklbl"].setVisible(row.tweak == "label")
+            self._build_step_cell(row, grid_row, made)
 
         self._widgets[row.key] = made
+
+    def _build_step_cell(self, row, grid_row, made):
+        """The step-size cell: a line edit, a fixed label, or both."""
+        text = _fmt_step(row.step)
+        column = self._column_of("tweak_s")
+
+        if row.swappable:
+            # Both widgets in a 2-page stack, so the cell keeps one consistent
+            # size and the grid does not reflow when the step becomes editable.
+            stack = QStackedWidget(self.container)
+            stack.setObjectName(self._name("tweakstack", row.key))
+            editor = QLineEdit(text)
+            editor.setObjectName(self._name("tweakedit", row.key))
+            fixed = QLabel(text)
+            fixed.setObjectName(self._name("tweaklbl", row.key))
+            fixed.setToolTip("Fixed step size for this step of the workflow.")
+            stack.addWidget(fixed)   # index 0
+            stack.addWidget(editor)  # index 1
+            stack.setCurrentIndex(1 if row.tweak == "edit" else 0)
+            self._grid.addWidget(stack, grid_row, column)
+            made["tweakstack"] = stack
+            made["tweakedit"] = editor
+            made["tweaklbl"] = fixed
+            return
+
+        if row.tweak == "edit":
+            editor = QLineEdit(text, self.container)
+            editor.setObjectName(self._name("tweakedit", row.key))
+            self._grid.addWidget(editor, grid_row, column)
+            made["tweakedit"] = editor
+        else:
+            fixed = QLabel(text, self.container)
+            fixed.setObjectName(self._name("tweaklbl", row.key))
+            fixed.setToolTip("Fixed step size for this step of the workflow.")
+            self._grid.addWidget(fixed, grid_row, column)
+            made["tweaklbl"] = fixed
 
     # -- signals -----------------------------------------------------------
 
@@ -272,14 +284,12 @@ class MotorRowTable(object):
 
     def step(self, key):
         """The active step size, reading whichever tweak widget is showing."""
+        spec = self._specs[key]
         editor = self.widget(key, "tweakedit")
         fixed = self.widget(key, "tweaklbl")
-        spec = self._specs[key]
         if spec.swappable:
-            # isHidden(), not isVisible(): the latter is also False simply
-            # because an ancestor has not been shown yet, which would pick the
-            # wrong widget for any table read before the window appears.
-            source = editor if editor is not None and not editor.isHidden() else fixed
+            stack = self.widget(key, "tweakstack")
+            source = editor if stack.currentIndex() == 1 else fixed
         else:
             source = editor if editor is not None else fixed
         if source is None:
@@ -296,12 +306,9 @@ class MotorRowTable(object):
 
     def set_tweak_editable(self, key, editable):
         """Swap a swappable row between its fixed label and its line edit."""
-        editor = self.widget(key, "tweakedit")
-        fixed = self.widget(key, "tweaklbl")
-        if editor is None or fixed is None:
-            return
-        editor.setVisible(bool(editable))
-        fixed.setVisible(not editable)
+        stack = self.widget(key, "tweakstack")
+        if stack is not None:
+            stack.setCurrentIndex(1 if editable else 0)
 
     def set_label(self, key, text):
         """Change a row's displayed name (trans1 -> transH) without changing

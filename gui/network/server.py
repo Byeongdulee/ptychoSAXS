@@ -9,10 +9,11 @@ from PyQt5 import QtCore
 import json
 #IP = "127.0.0.1"
 IP = "10.54.122.103"
+BIND_ADDR = "0.0.0.0"  # listen on all local interfaces, not a hardcoded host IP
 
 async def create_server(loop):
     return await loop.create_datagram_endpoint(
-        lambda: UDPserver(), local_addr=(IP, 20002)
+        lambda: UDPserver(), local_addr=(BIND_ADDR, 20002)
     )
 
 class UDPserver(QtCore.QObject):
