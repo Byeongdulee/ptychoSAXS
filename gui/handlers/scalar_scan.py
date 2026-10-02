@@ -71,7 +71,7 @@ PV_CONNECT_TIMEOUT_S = 2.0  # one-time wait for a brand-new PV's initial connect
 _GUI_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _INI_PATH = os.path.join(_GUI_DIR, "ini", "CRL_3dprint.ini")
 _INI_SECTION = "scalar_scan"
-_UI_PATH = os.path.join(_GUI_DIR, "scalar_scan.ui")
+_UI_PATH = os.path.join(_GUI_DIR, "ui", "scalar_scan.ui")
 
 
 # Defaults for this window's section of CRL_3dprint.ini, used by

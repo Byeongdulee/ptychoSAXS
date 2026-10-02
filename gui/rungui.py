@@ -49,6 +49,7 @@ DEBUG_DEVICES = DEBUG_MODE and DEBUG_LEVEL in (0, 1)  # non-motors are stubbed
 
 # Path setup must come before any hardware import (including debug stubs)
 _gui_dir = os.path.dirname(os.path.abspath(__file__))
+UI_DIR = os.path.join(_gui_dir, "ui")
 _repo_root = os.path.dirname(_gui_dir)
 if _repo_root not in sys.path:
     sys.path.append(_repo_root)
@@ -604,7 +605,7 @@ class ptyco_main_control(QObject):
 
     def __init__(self):
         super(ptyco_main_control, self).__init__()
-        guiName = "ptycoSAXS.ui"
+        guiName = os.path.join(UI_DIR, "ptycoSAXS.ui")
         self.pts = pts
         print("Connecting to PTS...")
         if not DEBUG_MOTORS:
@@ -1884,7 +1885,7 @@ class ptyco_main_control(QObject):
     def _open_extra_scans_window(self):
         """Open (or raise) the non-modal Extra Scans window."""
         if getattr(self, "extra_scans_window", None) is None:
-            dlg = uic.loadUi("extra_scans.ui")
+            dlg = uic.loadUi(os.path.join(UI_DIR, "extra_scans.ui"))
             dlg._resizer = ProportionalResizer(dlg)
             dlg.setMinimumSize(
                 int(dlg._resizer.orig_size.width() * 0.4),
@@ -1919,7 +1920,7 @@ class ptyco_main_control(QObject):
         import time as _time
         from PyQt5.QtWidgets import QButtonGroup, QFileDialog, QDialog
 
-        dlg = uic.loadUi("setup_configuration.ui")
+        dlg = uic.loadUi(os.path.join(UI_DIR, "setup_configuration.ui"))
 
         # Make the dialog proportionally resizable, same as the main window.
         dlg._resizer = ProportionalResizer(dlg)

@@ -39,6 +39,7 @@ from handlers.scalar_scan import INI_DEFAULTS as SCALAR_SCAN_INI_DEFAULTS
 from handlers.scalar_scan import ScalarScanWindow
 
 _GUI_DIR = os.path.dirname(os.path.abspath(__file__))
+_UI_DIR = os.path.join(_GUI_DIR, "ui")
 _REPO_ROOT = os.path.dirname(_GUI_DIR)
 for _p in (os.path.join(_REPO_ROOT, "debug"), os.path.join(_REPO_ROOT, "ptychosaxs"), _REPO_ROOT):
     if _p not in sys.path:
@@ -577,7 +578,7 @@ class CRL3DPrintControl(QObject):
 
         _ensure_default_ini(_CRL_INI)
 
-        self.ui = uic.loadUi(os.path.join(_GUI_DIR, "CRL_3dprint.ui"))
+        self.ui = uic.loadUi(os.path.join(_UI_DIR, "CRL_3dprint.ui"))
 
         if self.debug_mode:
             from debug_stubs import DebugSmaractCRLController

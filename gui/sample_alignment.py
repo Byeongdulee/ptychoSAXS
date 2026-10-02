@@ -43,7 +43,7 @@ from motor_rows import MotorRow, MotorRowTable
 from xray_eye import XrayEye
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
-_UI_PATH = os.path.join(_MODULE_DIR, "sample_alignment.ui")
+_UI_PATH = os.path.join(_MODULE_DIR, "ui", "sample_alignment.ui")
 
 # ---------------------------------------------------------------------------
 # Tunables -- deliberately code-only, not exposed in the GUI
