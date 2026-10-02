@@ -57,6 +57,9 @@
         </layout>
        </item>
        <item>
+        <widget class="QCheckBox" name="scalarscan_chk_freerunning"><property name="text"><string>Use freerunning scalars</string></property></widget>
+       </item>
+       <item>
         <layout class="QHBoxLayout" name="scalarscan_naccum_row">
          <item><widget class="QLabel" name="scalarscan_lbl_naccum"><property name="text"><string>N accumulate</string></property></widget></item>
          <item><widget class="QSpinBox" name="scalarscan_spin_naccum"/></item>
@@ -75,7 +78,10 @@
         </layout>
        </item>
        <item>
-        <widget class="QPushButton" name="scalarscan_btn_save"><property name="text"><string>Save buffer</string></property></widget>
+        <layout class="QHBoxLayout" name="scalarscan_save_stop_row">
+         <item><widget class="QPushButton" name="scalarscan_btn_save"><property name="text"><string>Save buffer</string></property></widget></item>
+         <item><widget class="QPushButton" name="scalarscan_btn_stop"><property name="enabled"><bool>false</bool></property><property name="styleSheet"><string notr="true">background-color: rgb(255, 150, 150);</string></property><property name="text"><string>Stop</string></property></widget></item>
+        </layout>
        </item>
        <item>
         <widget class="QLabel" name="scalarscan_lbl_status"><property name="text"><string>Idle</string></property></widget>

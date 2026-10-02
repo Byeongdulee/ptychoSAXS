@@ -49,8 +49,8 @@ QSlider::add-page:horizontal {
      <rect>
       <x>10</x>
       <y>5</y>
-      <width>170</width>
-      <height>366</height>
+      <width>168</width>
+      <height>365</height>
      </rect>
     </property>
     <property name="autoFillBackground">
@@ -64,7 +64,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>8</x>
        <y>0</y>
-       <width>161</width>
+       <width>151</width>
        <height>28</height>
       </rect>
      </property>
@@ -527,8 +527,8 @@ QSlider::add-page:horizontal {
      <rect>
       <x>190</x>
       <y>5</y>
-      <width>170</width>
-      <height>491</height>
+      <width>168</width>
+      <height>488</height>
      </rect>
     </property>
     <property name="autoFillBackground">
@@ -542,7 +542,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>8</x>
        <y>0</y>
-       <width>161</width>
+       <width>151</width>
        <height>28</height>
       </rect>
      </property>
@@ -1002,9 +1002,9 @@ QSlider::add-page:horizontal {
     <widget class="QListWidget" name="listWidget_zpList">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>390</y>
-       <width>151</width>
+       <x>4</x>
+       <y>391</y>
+       <width>160</width>
        <height>91</height>
       </rect>
      </property>
@@ -1012,8 +1012,8 @@ QSlider::add-page:horizontal {
     <widget class="QPushButton" name="pb_zp_addPos">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>361</y>
+       <x>8</x>
+       <y>362</y>
        <width>151</width>
        <height>26</height>
       </rect>
@@ -1028,8 +1028,8 @@ QSlider::add-page:horizontal {
      <rect>
       <x>370</x>
       <y>5</y>
-      <width>170</width>
-      <height>366</height>
+      <width>168</width>
+      <height>365</height>
      </rect>
     </property>
     <property name="autoFillBackground">
@@ -1506,8 +1506,8 @@ QSlider::add-page:horizontal {
      <rect>
       <x>550</x>
       <y>5</y>
-      <width>170</width>
-      <height>366</height>
+      <width>168</width>
+      <height>365</height>
      </rect>
     </property>
     <property name="autoFillBackground">
@@ -1521,7 +1521,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>8</x>
        <y>0</y>
-       <width>161</width>
+       <width>151</width>
        <height>28</height>
       </rect>
      </property>

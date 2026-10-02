@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>372</width>
-    <height>486</height>
+    <width>359</width>
+    <height>417</height>
    </rect>
   </property>
   <property name="maximumSize">
@@ -31,8 +31,8 @@
      <rect>
       <x>10</x>
       <y>5</y>
-      <width>170</width>
-      <height>366</height>
+      <width>168</width>
+      <height>365</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -41,9 +41,9 @@
     <widget class="QLabel" name="label_xy_title">
      <property name="geometry">
       <rect>
-       <x>8</x>
+       <x>7</x>
        <y>0</y>
-       <width>200</width>
+       <width>151</width>
        <height>18</height>
       </rect>
      </property>
@@ -61,7 +61,7 @@
     <widget class="QLabel" name="label_xy_hdr_moveto">
      <property name="geometry">
       <rect>
-       <x>8</x>
+       <x>7</x>
        <y>52</y>
        <width>66</width>
        <height>16</height>
@@ -79,7 +79,7 @@
     <widget class="QLabel" name="label_motor_X">
      <property name="geometry">
       <rect>
-       <x>8</x>
+       <x>7</x>
        <y>30</y>
        <width>66</width>
        <height>21</height>
@@ -97,7 +97,7 @@
     <widget class="QLabel" name="lbl_pos_X">
      <property name="geometry">
       <rect>
-       <x>76</x>
+       <x>75</x>
        <y>30</y>
        <width>85</width>
        <height>21</height>
@@ -115,7 +115,7 @@
     <widget class="QLineEdit" name="edit_moveto_X">
      <property name="geometry">
       <rect>
-       <x>76</x>
+       <x>75</x>
        <y>52</y>
        <width>85</width>
        <height>24</height>
@@ -133,7 +133,7 @@
     <widget class="QLabel" name="label_motor_Y">
      <property name="geometry">
       <rect>
-       <x>8</x>
+       <x>7</x>
        <y>80</y>
        <width>66</width>
        <height>21</height>
@@ -151,7 +151,7 @@
     <widget class="QLabel" name="lbl_pos_Y">
      <property name="geometry">
       <rect>
-       <x>76</x>
+       <x>75</x>
        <y>80</y>
        <width>85</width>
        <height>21</height>
@@ -169,7 +169,7 @@
     <widget class="QLineEdit" name="edit_moveto_Y">
      <property name="geometry">
       <rect>
-       <x>76</x>
+       <x>75</x>
        <y>102</y>
        <width>85</width>
        <height>24</height>
@@ -187,7 +187,7 @@
     <widget class="QFrame" name="frame_jogXY">
      <property name="geometry">
       <rect>
-       <x>10</x>
+       <x>9</x>
        <y>130</y>
        <width>148</width>
        <height>95</height>
@@ -359,7 +359,7 @@
     <widget class="QFrame" name="frame_xyPreset">
      <property name="geometry">
       <rect>
-       <x>4</x>
+       <x>3</x>
        <y>229</y>
        <width>160</width>
        <height>130</height>
@@ -632,7 +632,7 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="label_xy_hdr_moveto_2">
      <property name="geometry">
       <rect>
-       <x>8</x>
+       <x>7</x>
        <y>102</y>
        <width>66</width>
        <height>16</height>
@@ -651,9 +651,9 @@ QSlider::add-page:horizontal {
    <widget class="QWidget" name="col_tp" native="true">
     <property name="geometry">
      <rect>
-      <x>190</x>
+      <x>182</x>
       <y>5</y>
-      <width>170</width>
+      <width>168</width>
       <height>231</height>
      </rect>
     </property>
@@ -663,9 +663,9 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="label_tp_title">
      <property name="geometry">
       <rect>
-       <x>8</x>
+       <x>7</x>
        <y>0</y>
-       <width>200</width>
+       <width>151</width>
        <height>18</height>
       </rect>
      </property>
@@ -683,7 +683,7 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="label_tp_hdr_moveto">
      <property name="geometry">
       <rect>
-       <x>8</x>
+       <x>7</x>
        <y>52</y>
        <width>66</width>
        <height>16</height>
@@ -701,7 +701,7 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="label_motor_TILT">
      <property name="geometry">
       <rect>
-       <x>8</x>
+       <x>7</x>
        <y>30</y>
        <width>66</width>
        <height>21</height>
@@ -719,7 +719,7 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="lbl_pos_TILT">
      <property name="geometry">
       <rect>
-       <x>76</x>
+       <x>75</x>
        <y>30</y>
        <width>85</width>
        <height>20</height>
@@ -737,7 +737,7 @@ QSlider::add-page:horizontal {
     <widget class="QLineEdit" name="edit_moveto_TILT">
      <property name="geometry">
       <rect>
-       <x>76</x>
+       <x>75</x>
        <y>52</y>
        <width>85</width>
        <height>24</height>
@@ -755,7 +755,7 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="label_motor_PITCH">
      <property name="geometry">
       <rect>
-       <x>8</x>
+       <x>7</x>
        <y>80</y>
        <width>66</width>
        <height>21</height>
@@ -773,7 +773,7 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="lbl_pos_PITCH">
      <property name="geometry">
       <rect>
-       <x>76</x>
+       <x>75</x>
        <y>80</y>
        <width>85</width>
        <height>20</height>
@@ -791,7 +791,7 @@ QSlider::add-page:horizontal {
     <widget class="QLineEdit" name="edit_moveto_PITCH">
      <property name="geometry">
       <rect>
-       <x>76</x>
+       <x>75</x>
        <y>102</y>
        <width>85</width>
        <height>24</height>
@@ -809,7 +809,7 @@ QSlider::add-page:horizontal {
     <widget class="QFrame" name="frame_jogTiltPitch">
      <property name="geometry">
       <rect>
-       <x>10</x>
+       <x>9</x>
        <y>130</y>
        <width>148</width>
        <height>95</height>
@@ -993,7 +993,7 @@ QSlider::add-page:horizontal {
     <widget class="QLabel" name="label_tp_hdr_moveto_2">
      <property name="geometry">
       <rect>
-       <x>8</x>
+       <x>7</x>
        <y>102</y>
        <width>66</width>
        <height>16</height>
@@ -1012,7 +1012,7 @@ QSlider::add-page:horizontal {
    <widget class="QPushButton" name="pushButton_exit">
     <property name="geometry">
      <rect>
-      <x>310</x>
+      <x>300</x>
       <y>240</y>
       <width>51</width>
       <height>41</height>
@@ -1034,7 +1034,7 @@ color: rgb(255, 255, 255);</string>
    <widget class="QPushButton" name="pushButton_xrayEyeIn">
     <property name="geometry">
      <rect>
-      <x>190</x>
+      <x>182</x>
       <y>240</y>
       <width>111</width>
       <height>28</height>
@@ -1052,7 +1052,7 @@ color: rgb(255, 255, 255);</string>
    <widget class="QPushButton" name="pushButton_xrayEyeOut">
     <property name="geometry">
      <rect>
-      <x>190</x>
+      <x>182</x>
       <y>270</y>
       <width>111</width>
       <height>28</height>
@@ -1071,7 +1071,7 @@ color: rgb(255, 255, 255);</string>
     <property name="geometry">
      <rect>
       <x>190</x>
-      <y>300</y>
+      <y>340</y>
       <width>81</width>
       <height>28</height>
      </rect>
@@ -1088,8 +1088,8 @@ color: rgb(255, 255, 255);</string>
    <widget class="QSpinBox" name="spinBox_fontSize">
     <property name="geometry">
      <rect>
-      <x>190</x>
-      <y>330</y>
+      <x>260</x>
+      <y>340</y>
       <width>51</width>
       <height>28</height>
      </rect>
@@ -1112,9 +1112,9 @@ color: rgb(255, 255, 255);</string>
    <widget class="QPushButton" name="pushButton_scalarScan">
     <property name="geometry">
      <rect>
-      <x>260</x>
+      <x>182</x>
       <y>300</y>
-      <width>101</width>
+      <width>111</width>
       <height>34</height>
      </rect>
     </property>
@@ -1133,7 +1133,7 @@ color: rgb(255, 255, 255);</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>372</width>
+     <width>359</width>
      <height>21</height>
     </rect>
    </property>

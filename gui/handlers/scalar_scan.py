@@ -43,6 +43,10 @@ SCALAR_PVS = {
     "IfCRL": "12idc:3820:scaler1.S5",
 }
 SCALER_TP_PV = "12idc:3820:scaler1.TP"  # scaler preset (exposure) time
+# OneShot-mode-only controls - touched only when "Use freerunning scalars" is
+# unchecked (see ScalarScanWindow._start_scan / _ScanWorker._wait_for_count_done).
+SCALER_CONT_PV = "12idc:3820:scaler1.CONT"  # mode: 0 = OneShot, 1 = AutoCount (free-running)
+SCALER_CNT_PV = "12idc:3820:scaler1.CNT"  # count start (put 1) / done readback (reads back 0)
 
 # Stages this window can step-scan. Each one's unit comes from the IOC's
 # .EGU by way of the controller, not from a table here.
@@ -64,6 +68,8 @@ DEFAULT_EXPTIME_S = "0.001"
 POSITION_SETTLE_S = 0.1  # fixed mechanical-settle wait after each move, before the exposure
 ACCUMULATE_WAIT_S = 0.1  # wait between repeated measurements at the same position (N accumulate > 1)
 PV_CONNECT_TIMEOUT_S = 2.0  # one-time wait for a brand-new PV's initial connection, in _get_pv
+COUNT_DONE_TIMEOUT_MARGIN_S = 5.0  # added to exp_time as the ceiling for one OneShot count to finish
+COUNT_POLL_INTERVAL_S = 0.01  # polling granularity while waiting for .CNT to drop back to 0
 
 # This module lives in gui/handlers/, but CRL_3dprint.ini lives in gui/ini/ -
 # go up two directory levels (handlers/ -> gui/) to find it.
@@ -84,6 +90,7 @@ INI_DEFAULTS = {_INI_SECTION: dict(
     + [
         ("exp_time", DEFAULT_EXPTIME_S),
         ("n_accumulate", "1"),
+        ("use_freerunning", "1"),
         ("scalar", next(iter(SCALAR_PVS))),
         ("buflen", str(DEFAULT_BUFLEN)),
         ("last_save_path", ""),
@@ -187,9 +194,21 @@ class _ScanWorker(QRunnable):
     so there is no status flag to poll and no window in which a not-yet-
     started move looks finished. Blocking here is what we want: this is a
     worker thread, and stop() aborts the motor, which completes the
-    outstanding put and releases it."""
+    outstanding put and releases it.
 
-    def __init__(self, controller, axis, positions, pvs, exp_time, n_accumulate=1):
+    freerunning=True (the default - "Use freerunning scalars" checked) never
+    touches the scaler's counting controls: each reading is just a plain
+    pv.get() of whatever the scaler is already free-running at, so this
+    window cannot disturb another client's view of those same channels.
+    freerunning=False assumes the caller has already put the scaler into
+    OneShot mode (.CONT=0) and sent the exposure time to .TP before this
+    worker was started; each reading here triggers one OneShot count via
+    `cnt_pv` and blocks until the scaler reports it done, mirroring the
+    .CNT-polling pattern this codebase already uses for this scaler
+    (tools/struck.py, tools/mcs.py)."""
+
+    def __init__(self, controller, axis, positions, pvs, exp_time, n_accumulate=1,
+                 freerunning=True, cnt_pv=None):
         super().__init__()
         self.controller = controller
         self.axis = axis
@@ -197,12 +216,37 @@ class _ScanWorker(QRunnable):
         self.pvs = pvs  # {scalar_name: PV/FakePV}
         self.exp_time = exp_time
         self.n_accumulate = max(1, n_accumulate)
+        self.freerunning = freerunning
+        self.cnt_pv = cnt_pv  # required when freerunning is False
         self.signals = _WorkerSignals()
         self._stop = False
 
     def stop(self):
         self._stop = True
         self.controller.stop(self.axis)
+        if not self.freerunning and self.cnt_pv is not None:
+            self.cnt_pv.put(0)  # abort an in-flight OneShot count, same as the motor abort above
+
+    def _wait_for_count_done(self) -> bool:
+        """Block until the scaler's OneShot count finishes (.CNT reads back
+        0) or stop() is called. Returns False if aborted early."""
+        deadline = time.monotonic() + self.exp_time + COUNT_DONE_TIMEOUT_MARGIN_S
+        while True:
+            if self._stop:
+                return False
+            if not self.cnt_pv.connected:
+                raise RuntimeError("PV unreachable during scan: scaler CNT")
+            if not self.cnt_pv.get():
+                return True
+            if time.monotonic() > deadline:
+                raise RuntimeError("Timed out waiting for scaler count to finish")
+            time.sleep(COUNT_POLL_INTERVAL_S)
+
+    def _read_scalars_into(self, accum: dict):
+        for name, pv in self.pvs.items():
+            if not pv.connected:
+                raise RuntimeError(f"PV unreachable during scan: {name}")
+            accum[name] += pv.get()
 
     @pyqtSlot()
     def run(self):
@@ -222,13 +266,19 @@ class _ScanWorker(QRunnable):
 
                 accum = {name: 0.0 for name in self.pvs}
                 for k in range(self.n_accumulate):
-                    time.sleep(self.exp_time)  # exposure/integration time
-                    for name, pv in self.pvs.items():
-                        if not pv.connected:
-                            raise RuntimeError(f"PV unreachable during scan: {name}")
-                        accum[name] += pv.get()
-                    if k < self.n_accumulate - 1:
-                        time.sleep(ACCUMULATE_WAIT_S)  # wait between repeated measurements
+                    if self.freerunning:
+                        if k > 0:
+                            time.sleep(ACCUMULATE_WAIT_S)  # wait between repeated measurements
+                        self._read_scalars_into(accum)
+                    else:
+                        self.cnt_pv.put(1)  # start this position's OneShot count
+                        if not self._wait_for_count_done():
+                            break  # stop() was called mid-count
+                        self._read_scalars_into(accum)
+                        if k < self.n_accumulate - 1:
+                            time.sleep(ACCUMULATE_WAIT_S)
+                if self._stop:
+                    break
                 for name in self.pvs:
                     values_out[name].append(accum[name])
 
@@ -373,13 +423,14 @@ class ScalarScanWindow(QObject):
         self._poll_worker = None
         self._scan_axis = None
         self._scan_display_scalar = None
+        self._scan_was_oneshot = False  # True while the just-finished scan left the scaler in OneShot mode
         self._result_windows = []
         self._pv_connected = {name: True for name in SCALAR_PVS}
 
         self._build_ui(parent_ui)
         self._init_buffers(self.spin_buflen.value())
         self._wire_signals()
-        self._on_exptime_edited()  # push the loaded/default exposure time to the scaler's TP field
+        self._init_exptime_from_pv()  # reflect the scaler's current TP, rather than overwriting it on open
 
         apply_font_size_to_tree(self.win, self._current_font_size())
 
@@ -444,6 +495,20 @@ class ScalarScanWindow(QObject):
         self.edit_exptime.setText(_ini_get("exp_time", DEFAULT_EXPTIME_S))
         self.edit_exptime.editingFinished.connect(self._on_exptime_edited)
 
+        self.chk_freerun = self.win.scalarscan_chk_freerunning
+        self.chk_freerun.setToolTip(
+            "Checked (default): read the scaler's free-running counts as-is for "
+            "each scan point. This window never writes .CONT, .CNT, or .TP, so "
+            "it can't disturb anyone else watching or relying on those values.\n\n"
+            "Unchecked: take exclusive control of the scaler for the duration of "
+            "the scan - set .CONT=0 (OneShot), send the exposure time to .TP, "
+            "then trigger and wait on .CNT for each point. .CONT is restored to "
+            "1 (free-running) as soon as the scan ends."
+        )
+        saved_freerun = _ini_get("use_freerunning", "1") != "0"
+        self.chk_freerun.setChecked(saved_freerun)
+        self.edit_exptime.setEnabled(not saved_freerun)
+
         self.spin_naccum = self.win.scalarscan_spin_naccum
         self.spin_naccum.setMinimum(1)
         self.spin_naccum.setMaximum(10_000)
@@ -470,6 +535,7 @@ class ScalarScanWindow(QObject):
         self.spin_buflen.setValue(saved_buflen)
 
         self.btn_save = self.win.scalarscan_btn_save
+        self.btn_stop = self.win.scalarscan_btn_stop
         self.lbl_status = self.win.scalarscan_lbl_status
         self.lbl_pv_status = self.win.scalarscan_lbl_pv_status
 
@@ -491,6 +557,8 @@ class ScalarScanWindow(QObject):
         self.spin_buflen.valueChanged.connect(self._on_buflen_changed)
         self.combo_scalar.currentTextChanged.connect(self._on_scalar_changed)
         self.btn_save.clicked.connect(self._save_h5)
+        self.btn_stop.clicked.connect(self._stop_scan)
+        self.chk_freerun.toggled.connect(self._on_freerun_toggled)
 
     # -- live monitor -----------------------------------------------------
 
@@ -507,6 +575,27 @@ class ScalarScanWindow(QObject):
     def _on_scalar_changed(self, text: str):
         _ini_set("scalar", text)
         self._redraw_plots()
+
+    def _init_exptime_from_pv(self):
+        """Populate the exposure-time field from the scaler's current TP
+        value at window-open time, instead of pushing the .ini's saved value
+        to the (shared) scaler - a previously-set exposure belonging to
+        another client shouldn't be clobbered just by opening this window.
+        Leaves the field at its .ini-loaded value if TP isn't reachable."""
+        tp_pv = self._get_pv(SCALER_TP_PV)
+        if not tp_pv.connected:
+            print(f"[scalar_scan] PV unreachable: {SCALER_TP_PV} - exposure time field left at last-saved value")
+            return
+        value = tp_pv.get()
+        if value is None:
+            return
+        text = f"{value:g}"
+        self.edit_exptime.setText(text)
+        _ini_set("exp_time", text)
+
+    def _on_freerun_toggled(self, checked: bool):
+        _ini_set("use_freerunning", "1" if checked else "0")
+        self.edit_exptime.setEnabled(not checked)
 
     def _on_exptime_edited(self):
         text = self.edit_exptime.text()
@@ -573,7 +662,7 @@ class ScalarScanWindow(QObject):
         self.plot_bottom.setLabel("left", name)
 
         self.plot_top.clear()
-        self.plot_top.plot(ys, ss, pen=pg.mkPen("b"))
+        self.plot_top.plot(ys, ss, pen=pg.mkPen("r"))
         self.plot_top.setLabel("bottom", "Y")
         self.plot_top.setLabel("left", name)
 
@@ -598,13 +687,15 @@ class ScalarScanWindow(QObject):
     def _start_scan(self, axis: str):
         if self._scan_worker is not None:
             return
+        freerunning = self.chk_freerun.isChecked()
         try:
             frm = float(self._edit_from[axis].text())
             to = float(self._edit_to[axis].text())
             step = float(self._edit_step[axis].text())
-            exptime = float(self.edit_exptime.text())
+            exptime = 0.0 if freerunning else float(self.edit_exptime.text())
         except ValueError:
-            QMessageBox.warning(self.win, "Invalid input", "from/to/step/exp time must be numbers.")
+            fields = "from/to/step" if freerunning else "from/to/step/exp time"
+            QMessageBox.warning(self.win, "Invalid input", f"{fields} must be numbers.")
             return
         if step == 0:
             QMessageBox.warning(self.win, "Invalid input", "step must be nonzero.")
@@ -627,25 +718,39 @@ class ScalarScanWindow(QObject):
             QMessageBox.warning(self.win, "Motor unreachable", msg)
             return
 
-        tp_pv = self._get_pv(SCALER_TP_PV)
         pvs = {name: self._get_pv(pv_name) for name, pv_name in SCALAR_PVS.items()}
         unreachable = [name for name, pv in pvs.items() if not pv.connected]
-        if not tp_pv.connected:
-            unreachable.append("scaler TP")
+
+        # Freerunning mode reads pvs as-is and never opens/touches TP, CONT or
+        # CNT at all - nothing here for another client's view to be disturbed
+        # by. OneShot mode needs all three to drive the count itself.
+        tp_pv = cnt_pv = cont_pv = None
+        if not freerunning:
+            tp_pv = self._get_pv(SCALER_TP_PV)
+            cnt_pv = self._get_pv(SCALER_CNT_PV)
+            cont_pv = self._get_pv(SCALER_CONT_PV)
+            for label, pv in (("scaler TP", tp_pv), ("scaler CNT", cnt_pv), ("scaler CONT", cont_pv)):
+                if not pv.connected:
+                    unreachable.append(label)
+
         if unreachable:
             msg = f"Cannot start scan - PV(s) unreachable: {', '.join(unreachable)}"
             print(f"[scalar_scan] {msg}")
             QMessageBox.warning(self.win, "PV unreachable", msg)
             return
 
-        tp_pv.put(exptime)
+        if not freerunning:
+            cont_pv.put(0)  # OneShot mode, for the duration of this scan only
+            tp_pv.put(exptime)
         self._scan_display_scalar = self.combo_scalar.currentText()
 
         self._scan_axis = axis
+        self._scan_was_oneshot = not freerunning
         self._set_scan_controls_enabled(False)
         self.lbl_status.setText(f"Scanning {axis}: 0/{len(positions)}")
         worker = _ScanWorker(
-            self.controller, axis, positions, pvs, exptime, self.spin_naccum.value()
+            self.controller, axis, positions, pvs, exptime, self.spin_naccum.value(),
+            freerunning=freerunning, cnt_pv=cnt_pv,
         )
         worker.signals.finished.connect(self._on_scan_finished)
         worker.signals.error.connect(self._on_scan_error)
@@ -653,11 +758,37 @@ class ScalarScanWindow(QObject):
         self._scan_worker = worker
         QThreadPool.globalInstance().start(worker)
 
+    def _stop_scan(self):
+        """Abort the in-flight scan early. _ScanWorker.stop() aborts the
+        motor (completing the outstanding put-completion move) and, in
+        OneShot mode, also aborts any in-flight count - either way the
+        worker's loop sees self._stop and exits. Same path _on_close already
+        uses for a scan still running when the window is closed. The points
+        collected so far still reach _on_scan_finished and get a
+        ScanResultWindow, same as a scan that finished on its own; .CONT is
+        restored there too if this scan had put the scaler into OneShot."""
+        if self._scan_worker is not None:
+            self._scan_worker.stop()
+
     def _on_scan_progress(self, i: int, n: int):
         self.lbl_status.setText(f"Scanning {self._scan_axis}: {i}/{n}")
 
+    def _restore_freerunning_if_needed(self):
+        """Put the scaler back into AutoCount (.CONT=1) if this scan put it
+        into OneShot mode - called from both scan-end paths so a stopped or
+        errored scan never leaves the scaler stuck away from free-running."""
+        if not self._scan_was_oneshot:
+            return
+        self._scan_was_oneshot = False
+        cont_pv = self._get_pv(SCALER_CONT_PV)
+        if cont_pv.connected:
+            cont_pv.put(1)
+        else:
+            print(f"[scalar_scan] PV unreachable: {SCALER_CONT_PV} - could not restore free-running mode")
+
     def _on_scan_finished(self, axis, positions, values):
         self._scan_worker = None
+        self._restore_freerunning_if_needed()
         self._set_scan_controls_enabled(True)
         self.lbl_status.setText("Idle")
         self._result_windows.append(
@@ -675,6 +806,7 @@ class ScalarScanWindow(QObject):
 
     def _on_scan_error(self, msg: str):
         self._scan_worker = None
+        self._restore_freerunning_if_needed()
         self._set_scan_controls_enabled(True)
         self.lbl_status.setText("Idle")
         QMessageBox.critical(self.win, "Scan error", msg)
@@ -683,6 +815,8 @@ class ScalarScanWindow(QObject):
         for axis in SCAN_AXES:
             self._btn_scan[axis].setEnabled(enabled)
         self.btn_save.setEnabled(enabled)
+        self.btn_stop.setEnabled(not enabled)
+        self.chk_freerun.setEnabled(enabled)
 
     # -- save ---------------------------------------------------------------
 
