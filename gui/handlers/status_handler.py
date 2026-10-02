@@ -12,7 +12,6 @@ import pathlib
 from PyQt5.QtWidgets import QLabel, QLineEdit, QFileDialog, QWidget, QInputDialog
 from PyQt5.QtCore import Qt
 import pyqtgraph as pg
-import analysis.planeeqn as eqn
 
 # QDS unit constants (mirrored from rungui.py — never import rungui directly
 # since doing so re-executes the module and creates a second GUI instance)
@@ -517,6 +516,8 @@ class StatusHandler:
         )
 
     def fitdata(self, filename="", datacolumn=2, xd=[], yd=[], dtype="wobble"):
+        import analysis.planeeqn as eqn
+
         if self.w.parameters._qds_unit == QDS_UNIT_MM:
             eqn.POSITION_UNIT = eqn.POSITION_UNIT_MM
         if self.w.parameters._qds_unit == QDS_UNIT_UM:

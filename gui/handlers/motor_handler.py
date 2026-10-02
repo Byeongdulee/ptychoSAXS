@@ -142,21 +142,10 @@ class MotorHandler:
         self.w.signalmotor = axis
 
     def smaract_set_defaultspeed(self):
-        for i, connected in enumerate(self.w.pts.gonio.connected):
+        gonio = self.w.pts.gonio
+        for name, connected in zip(gonio.motornames, gonio.isconnected()):
             if connected:
-                self.w.pts.gonio.set_speed(i)
-
-    def smaract_calibrate(self):
-        for i, connected in enumerate(self.w.pts.gonio.connected):
-            if connected:
-                self.w.pts.gonio.calibrate(i)
-        print("MCS2 calibration done..")
-
-    def smaract_findreference(self):
-        for i, connected in enumerate(self.w.pts.gonio.connected):
-            if connected:
-                self.w.pts.gonio.findReference(i)
-        print("MCS2 finding references done..")
+                gonio.set_speed(name)
 
     def setphivel_default(self):
         self.w.pts.set_speed('phi', 36, 360)

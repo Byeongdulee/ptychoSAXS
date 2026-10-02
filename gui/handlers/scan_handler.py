@@ -4,6 +4,7 @@ Scan execution, detector management, data saving, and network command handling.
 Extracted from ptyco_main_control in rungui.py.
 """
 
+import sys
 import time
 import os
 import csv
@@ -18,9 +19,38 @@ from collections import deque
 from PyQt5.QtWidgets import QMessageBox, QInputDialog, QLabel, QLineEdit, QFileDialog, QPushButton, QCheckBox, QDialog, QVBoxLayout
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
 import pyqtgraph as pg
-from tools.detectors import DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
-from tools.dg645 import DG645_Error
-from tools.softglue import SOFTGLUE_Setup_Error
+
+# tools.detectors / tools.dg645 / tools.softglue each import `epics` at module
+# level just to expose these three plain Exception subclasses. `epics` drags
+# in `pkg_resources`, `pyvisa`, and `pandas` -- multiple seconds of import
+# time -- so skip the real modules in debug-devices mode (mirrors the same
+# DEBUG_DEVICES gating rungui.py already applies to these imports) and use
+# equivalent local stand-ins instead.
+_DEBUG_MODE = "--debug" in sys.argv or os.environ.get("PTYCHOSAXS_DEBUG") == "1"
+_DEBUG_LEVEL = 0
+if _DEBUG_MODE:
+    _idx = sys.argv.index("--debug") if "--debug" in sys.argv else -1
+    if _idx >= 0 and _idx + 1 < len(sys.argv) and sys.argv[_idx + 1].isdigit():
+        _DEBUG_LEVEL = int(sys.argv[_idx + 1])
+    _DEBUG_LEVEL = int(os.environ.get("PTYCHOSAXS_DEBUG_LEVEL", _DEBUG_LEVEL))
+_DEBUG_DEVICES = _DEBUG_MODE and _DEBUG_LEVEL in (0, 1)
+
+if _DEBUG_DEVICES:
+    class DET_MIN_READOUT_Error(Exception):
+        pass
+
+    class DET_OVER_READOUT_SPEED_Error(Exception):
+        pass
+
+    class DG645_Error(Exception):
+        pass
+
+    class SOFTGLUE_Setup_Error(Exception):
+        pass
+else:
+    from tools.detectors import DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
+    from tools.dg645 import DG645_Error
+    from tools.softglue import SOFTGLUE_Setup_Error
 
 
 
@@ -87,6 +117,9 @@ class ScanHandler:
     # 1-indexed motor numbers whose positions are saved/restored by the
     # Save Current / Go To Saved buttons.  Adjust this list as needed.
     SAVED_POSITION_MOTORS = [1, 2, 3, 7, 8, 9]
+    # Ceiling on one coordinated two-axis scan move, matching the per-move
+    # timeout pts.mv applies on the sequential path.
+    COORDINATED_MOVE_TIMEOUT_S = 10
     # Maximum allowed fly velocity per axis (same units as get_speed/set_speed
     # use for that axis: mm/s for hexapod axes, deg/s for phi). Enforced by
     # _check_velocity_limits before a helix fly scan starts moving anything —
@@ -1017,6 +1050,51 @@ class ScanHandler:
             print(msg)
             # if update_status:
             #     update_status(msg)
+
+    def _scan_mv_xy(self, xaxis, xp, yaxis, yp, coordinated=False, update_status=None):
+        """Move a scan's two grid axes to one point.
+
+        Moving them one after the other walks the stage through a corner
+        position on the way to every point and pays two settle times. Axis
+        pairs that share a controller able to start both at once take that
+        path instead; everything else falls back to two sequential moves.
+
+        Like _scan_mv, any failure here is logged and the scan carries on —
+        one bad point should not lose a whole run.
+        """
+        if coordinated:
+            try:
+                ok = self.w.pts.gonio.mv_many(
+                    [(xaxis, xp), (yaxis, yp)], timeout=self.COORDINATED_MOVE_TIMEOUT_S
+                )
+            except Exception as e:
+                print(
+                    f"Coordinated move of {xaxis}/{yaxis} to ({xp}, {yp}) failed "
+                    f"({e}) — continuing scan. {time.ctime()}"
+                )
+                return
+            if not ok:
+                print(
+                    f"Stage motion timeout moving {xaxis}/{yaxis} to "
+                    f"({xp}, {yp}) — continuing scan. {time.ctime()}"
+                )
+                return
+            # pts.mv emits these as it moves; a coordinated move bypasses it,
+            # so the position readouts would otherwise freeze for the scan.
+            self._emit_axis_positions(xaxis, yaxis)
+            return
+        self._scan_mv(xaxis, xp, update_status=update_status)
+        self._scan_mv(yaxis, yp, update_status=update_status)
+
+    def _emit_axis_positions(self, *axes):
+        """Push each axis's settled position out on the motion signals the
+        GUI's position labels listen to."""
+        signals = getattr(self.w.pts, "signals", None)
+        if signals is None:
+            return
+        for axis in axes:
+            signals.AxisNameSignal.emit(axis)
+            signals.AxisPosSignal.emit(self.w.pts.get_pos(axis))
 
     def _motor_from_sender(self) -> int:
         """Extract a 0-based motor index from the name of the button that triggered
@@ -2320,7 +2398,8 @@ class ScanHandler:
             if zp_success:
                 metadata.update(zp_success)
 
-        # Query SmarAct goniometer translation stages (not EPICS PVs; read via self.w.pts)
+        # Query the goniometer translation stages through self.w.pts, so these
+        # read back from the same place every other motion call does.
         for nexus_path, axis in (
             ('/entry/sample/trans1', 'trans1'),
             ('/entry/sample/trans2', 'trans2'),
@@ -2507,14 +2586,28 @@ class ScanHandler:
         except Exception as e:
             print(f"Warning: Failed to write hexapod_positions to master file {master_path}: {e}")
 
-    def _append_piezo_positions_to_master_file(self, master_path: str, piezo_pos: np.ndarray) -> None:
+    def _piezo_axis_units(self, axes) -> str:
+        """Engineering unit of each scanned piezo axis, as the controller
+        reports it. A scan may pair a translation with a tilt, so these are
+        not always the same unit."""
+        gonio = self.w.pts.gonio
+        units = []
+        for axis in axes:
+            try:
+                units.append(gonio.motorunits[gonio.motornames.index(axis)])
+            except Exception:
+                units.append("")
+        return units[0] if len(set(units)) == 1 else ",".join(units)
+
+    def _append_piezo_positions_to_master_file(
+        self, master_path: str, piezo_pos: np.ndarray, axes
+    ) -> None:
         """Write the piezo-stage position array to an already-created master file.
 
         Unlike hexapod_positions (predicted from the programmed trajectory),
-        piezo_pos holds positions actually read back from the SmarAct MCS2
-        controllers (trans1/trans2) after each point's move settled, since
-        step-scan moves are closed-loop but not guaranteed pulse-exact like the
-        hexapod's fly trajectory.
+        piezo_pos holds positions actually read back from the stages after each
+        point's move settled, since step-scan moves are closed-loop but not
+        guaranteed pulse-exact like the hexapod's fly trajectory.
 
         Reopens the master file (created earlier in _pre_scan) in append mode
         and adds /entry/sample/piezo_positions alongside the software-nominal
@@ -2522,30 +2615,35 @@ class ScanHandler:
         """
         import h5py
 
+        axes_label = ", ".join(axes)
         try:
             with h5py.File(master_path, 'r+') as f:
                 sample = f['/entry/sample']
                 if 'piezo_positions' in sample:
                     del sample['piezo_positions']
                 sample.create_dataset('piezo_positions', data=piezo_pos)
-                sample['piezo_positions'].attrs['units'] = b'mm'
-                sample['piezo_positions'].attrs['description'] = (
-                    b'Nx2 array of (trans1, trans2) positions read back from the '
-                    b'SmarAct MCS2 piezo stage controllers after each scan point'
+                sample['piezo_positions'].attrs['units'] = (
+                    self._piezo_axis_units(axes).encode('utf-8')
                 )
+                sample['piezo_positions'].attrs['axes'] = axes_label.encode('utf-8')
+                sample['piezo_positions'].attrs['description'] = (
+                    f'Nx2 array of ({axes_label}) positions read back from the '
+                    f'piezo stages after each scan point'
+                ).encode('utf-8')
         except Exception as e:
             print(f"Warning: Failed to write piezo_positions to master file {master_path}: {e}")
 
-    def _write_piezo_positions_to_master(self, piezo_pos_actual: list) -> None:
-        """Convert accumulated per-point (trans1, trans2) readbacks to an array
-        and write them to /entry/sample/piezo_positions in the scan's master
-        file(s). No-op if the scan was stopped before any point completed.
+    def _write_piezo_positions_to_master(self, piezo_pos_actual: list, axes) -> None:
+        """Convert accumulated per-point readbacks for the two scanned piezo
+        axes to an array and write them to /entry/sample/piezo_positions in the
+        scan's master file(s). No-op if the scan was stopped before any point
+        completed.
         """
         if not piezo_pos_actual:
             return
         piezo_pos = np.array(piezo_pos_actual)
         for master_path in getattr(self, "_current_scan_master_paths", {}).values():
-            self._append_piezo_positions_to_master_file(master_path, piezo_pos)
+            self._append_piezo_positions_to_master_file(master_path, piezo_pos, axes)
 
     def _populate_instrument_group(self, entry, shared_meta: dict, detector_meta: dict,
                                    detector_config: dict) -> None:
@@ -4814,8 +4912,11 @@ class ScanHandler:
             for i, (xp, yp) in enumerate(pos):
                 if self.isStopScanIssued:
                     break
-                self._scan_mv(xaxis, xp, update_status=update_status)
-                self._scan_mv(yaxis, yp, update_status=update_status)
+                self._scan_mv_xy(
+                    xaxis, xp, yaxis, yp,
+                    coordinated=is_piezo_scan,
+                    update_status=update_status,
+                )
                 time.sleep(min(expt, 0.05))
                 xy_readback = [self.w.pts.get_pos(xaxis), self.w.pts.get_pos(yaxis)]
                 mpos_data.append(xy_readback)
@@ -4825,7 +4926,7 @@ class ScanHandler:
                     update_progress(int(100 * (i + 1) / Nline))
             self.w.mpos = mpos_data
             if is_piezo_scan:
-                self._write_piezo_positions_to_master(piezo_pos_actual)
+                self._write_piezo_positions_to_master(piezo_pos_actual, (xaxis, yaxis))
             return
 
         if self.w.parameters._pulses_per_step == 1:
@@ -4886,10 +4987,13 @@ class ScanHandler:
                         print(self.w.messages["recent error message"])
                         pos_ok = self.w.pts.hexapod.handle_error()
             else:
-                # Non-hexapod axis pair (e.g. trans1/trans2 gonio stages): no
-                # coordinated-move API exists, so move sequentially instead.
-                self._scan_mv(xaxis, xp, update_status=update_status)
-                self._scan_mv(yaxis, yp, update_status=update_status)
+                # Gonio pairs start both axes together; any other pair has no
+                # coordinated-move API and moves sequentially instead.
+                self._scan_mv_xy(
+                    xaxis, xp, yaxis, yp,
+                    coordinated=is_piezo_scan,
+                    update_status=update_status,
+                )
 
             if is_piezo_scan:
                 # Read back the actual settled position from the SmarAct
@@ -4945,7 +5049,7 @@ class ScanHandler:
             )
 
         if is_piezo_scan:
-            self._write_piezo_positions_to_master(piezo_pos_actual)
+            self._write_piezo_positions_to_master(piezo_pos_actual, (xaxis, yaxis))
 
         return 1
 

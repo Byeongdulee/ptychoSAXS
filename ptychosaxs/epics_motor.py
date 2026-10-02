@@ -13,6 +13,7 @@ instead of making a Channel Access round trip. That makes them cheap enough
 to call from a GUI timer, and safe to call from any thread.
 """
 
+import threading
 import time
 
 try:
@@ -122,6 +123,7 @@ class EpicsMotorController:
 
     def is_axis_connected(self, axis) -> bool:
         """True when every PV backing this axis has a live CA connection."""
+        axis = self._resolve(axis)
         pvs = [pv for (name, _field), pv in self._pvs.items() if name == axis]
         return bool(pvs) and all(pv.connected for pv in pvs)
 
@@ -147,6 +149,39 @@ class EpicsMotorController:
             pv.put(target, wait=True, timeout=MOVE_TIMEOUT_S)
         else:
             pv.put(target)
+
+    def mv_many(self, targets, wait: bool = True, timeout: float = MOVE_TIMEOUT_S) -> bool:
+        """Start every (axis, target) move at once, then wait for all of them.
+
+        Moving several axes with separate blocking mv() calls serialises them
+        and walks the stage through an intermediate position on the way. Here
+        every put is issued non-blocking with its own completion callback, so
+        the axes travel together and the wait ends when the last one finishes.
+
+        Each call gets fresh events rather than reading a per-PV completion
+        flag: that flag survives between calls, so a completion left over from
+        an earlier move - or a put dropped on a disconnected PV, which never
+        clears it - would otherwise read as "already finished" and let a scan
+        measure while the stage is still travelling.
+
+        Returns True when every move completed, False if any put was refused
+        or the wait timed out - callers during a scan prefer to log and carry
+        on rather than lose the run.
+        """
+        done_events = []
+        for axis, target in targets:
+            pv = self._pv(axis, "drive")
+            done = threading.Event()
+            if pv.put(target, callback=lambda done=done, **kwargs: done.set()) is None:
+                return False  # not connected: the put never went out
+            done_events.append(done)
+        if not wait:
+            return True
+        deadline = time.monotonic() + timeout
+        for done in done_events:
+            if not done.wait(max(0.0, deadline - time.monotonic())):
+                return False
+        return True
 
     def mvr(self, axis, delta: float) -> None:
         """Move by a relative amount."""
@@ -187,18 +222,26 @@ class EpicsMotorController:
     def get_unit(self, axis) -> str:
         """The IOC's engineering unit, falling back to the configured default."""
         unit = self._read(axis, "unit")
-        return str(unit) if unit else self._default_units[axis]
+        return str(unit) if unit else self._default_units[self._resolve(axis)]
 
     # -- internals ----------------------------------------------------------------
 
+    def _resolve(self, axis) -> str:
+        """Accept either a logical name or a slot index, as the per-axis
+        callers in this codebase do interchangeably."""
+        if isinstance(axis, int):
+            return self.names[axis]
+        return axis
+
     def _pv_name(self, axis, field) -> str:
-        return self._prefixes[axis] + self.FIELDS[field]
+        return self._prefixes[self._resolve(axis)] + self.FIELDS[field]
 
     def _pv(self, axis, field):
+        name = self._resolve(axis)
         try:
-            return self._pvs[(axis, field)]
+            return self._pvs[(name, field)]
         except KeyError:
-            raise RuntimeError(f"connect() has not been called (no PV for {axis}.{field})")
+            raise RuntimeError(f"connect() has not been called (no PV for {name}.{field})")
 
     def _read(self, axis, field):
         """Monitor-cached read: None rather than a stale value when the IOC

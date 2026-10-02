@@ -161,49 +161,6 @@ class PhiStub:
             self._pos = target
 
 
-class GonioStub:
-    """Simulates the SmarAct MCS2 goniometer (module-level functions style)."""
-
-    motornames = ["trans1", "trans2", "tilt1", "tilt2"]
-    motorunits = ["mm", "mm", "deg", "deg"]
-    channel_names = motornames
-
-    def __init__(self, *args, **kwargs):
-        self._pos = {n: 0.0 for n in self.motornames}
-        print("[DEBUG] GonioStub initialised.")
-
-    def mv(self, axis, target: float, wait: bool = True) -> None:
-        name = axis if isinstance(axis, str) else self.motornames[axis]
-        self._pos[name] = target
-        print(f"[DEBUG] GonioStub: mv({name!r}, {target})")
-
-    def mvr(self, axis, target: float, wait: bool = True) -> None:
-        name = axis if isinstance(axis, str) else self.motornames[axis]
-        self._pos[name] += target
-
-    def get_pos(self, axis) -> float:
-        name = axis if isinstance(axis, str) else self.motornames[axis]
-        return self._pos[name]
-
-    def set_pos(self, axis, pos: float = 0) -> None:
-        name = axis if isinstance(axis, str) else self.motornames[axis]
-        self._pos[name] = pos
-
-    def ismoving(self, axis=None) -> bool:
-        return False
-
-    def isconnected(self, ax=-1):
-        if ax >= 0:
-            return True
-        return [True] * len(self.motornames)
-
-    def get_speed(self, axis):
-        return (1.0, 10.0)
-
-    def set_speed(self, axis, vel: float = 5, acc: float = 10) -> None:
-        print(f"[DEBUG] GonioStub: set_speed({axis!r}, vel={vel}, acc={acc})")
-
-
 class PilatusStub:
     """Simulates the Pilatus 2D X-ray detector. Frames complete instantly."""
 
@@ -762,14 +719,15 @@ class _GonioInfo:
         name = axis if isinstance(axis, str) else self.motornames[axis]
         return self._pos.get(name, 0.0)
 
-    def set_speed(self, ch, vel=5, acc=10) -> None:
+    def set_speed(self, ch, vel=5, acc=None) -> None:
         pass
 
-    def calibrate(self, ch) -> None:
-        print(f"[DEBUG L1] GonioInfo: calibrate({ch})")
-
-    def findReference(self, ch) -> None:
-        print(f"[DEBUG L1] GonioInfo: findReference({ch})")
+    def mv_many(self, targets, wait=True, timeout=None) -> bool:
+        for axis, target in targets:
+            name = axis if isinstance(axis, str) else self.motornames[axis]
+            self._pos[name] = float(target)
+        print(f"[DEBUG L1] GonioInfo: mv_many({list(targets)})")
+        return True
 
     def ismoving(self, axis) -> bool:
         return False
@@ -1054,6 +1012,7 @@ _MOTOR_TWEAK_FORWARD = ".TWF"
 _MOTOR_TWEAK_REVERSE = ".TWR"
 _MOTOR_VELOCITY = ".VELO"
 _MOTOR_SET_VELOCITY = "_vCh.A"
+_MOTOR_SET_MODE = ".SET"
 
 # Starting value for any field not written yet. A record whose suffix is
 # absent here reads back 0.
@@ -1065,6 +1024,7 @@ _MOTOR_DEFAULTS = {
     _MOTOR_TWEAK_STEP: 0.001,
     ".SPMG": 3,
     _MOTOR_SET_VELOCITY: 1.0,
+    _MOTOR_SET_MODE: 0,  # Use mode: a .VAL write moves rather than redefines
 }
 
 # Engineering unit per record prefix, so .EGU reads back something sensible
@@ -1072,6 +1032,8 @@ _MOTOR_DEFAULTS = {
 _MOTOR_UNITS = {
     "12ideMCS2:m3": "deg",
     "12ideMCS2:m4": "deg",
+    "12ideMCS1:m3": "deg",
+    "12ideMCS1:m4": "deg",
 }
 
 # Every field suffix FakeMotorPV recognises, longest first so a suffix that
@@ -1106,6 +1068,7 @@ class FakeMotorPV:
     def __init__(self, pvname, *args, **kwargs):
         self.pvname = pvname
         self._prefix, self._field = self._split(pvname)
+        self.put_complete = True
         self._store.setdefault(pvname, self._initial())
 
     @classmethod
@@ -1142,14 +1105,23 @@ class FakeMotorPV:
     def value(self):
         return self.get()
 
-    def put(self, val, wait=False, timeout=None):
+    def put(self, val, wait=False, timeout=None, use_complete=False, callback=None,
+            callback_data=None):
         """Writes land verbatim; the fields that command motion additionally
         move the simulated stage. Moves complete instantly, so .DMOV never
-        leaves its done state and put-completion returns straight away."""
+        leaves its done state and put-completion returns straight away.
+
+        Returns 1 like a successful epics.PV.put, and None when the record is
+        disconnected - callers distinguish a dropped put by that None.
+        """
+        if not self.connected:
+            return None
         self._store[self.pvname] = val
         moved = None
 
         if self._field == _MOTOR_DRIVE:
+            # In set mode the record redefines the current position instead of
+            # moving; the simulated outcome is the same readback either way.
             moved = float(val)
         elif self._field == _MOTOR_RELATIVE:
             moved = self._position() + float(val)
@@ -1167,6 +1139,10 @@ class FakeMotorPV:
             self._store[self._peer(_MOTOR_DRIVE)] = moved
 
         print(f"[DEBUG] FakeMotorPV.put({self.pvname!r}, {val})")
+        self.put_complete = True
+        if callback is not None:
+            callback(pvname=self.pvname, data=callback_data)
+        return 1
 
     def _position(self) -> float:
         return float(self._store[self._peer(_MOTOR_READBACK)])

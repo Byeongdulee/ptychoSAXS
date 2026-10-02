@@ -62,7 +62,6 @@ if DEBUG_MODE:
     from debug_stubs import (
         HexapodStub,
         PhiStub,
-        GonioStub,
         PilatusStub,
         ShutterStub,
         DG645Stub,
@@ -263,8 +262,6 @@ else:
     # method, not a class -- nothing to subclass, and its readini/writeini
     # are already no-ops.
     _IniClass = py12inifunc.ini
-
-import analysis.planeeqn as eqn
 
 # ==========================================================================
 # Hardware imports — split by motor vs. device debug flags
@@ -826,8 +823,6 @@ class ptyco_main_control(QObject):
         self.ui.actionSelect_units.triggered.connect(self.select_qds_units)
         self.ui.actionSelect_QDS_for_X.triggered.connect(self.select_qds_x)
         self.ui.actionSelect_QDS_for_Y.triggered.connect(self.select_qds_y)
-        self.ui.actionCalibrate.triggered.connect(self.smaract_calibrate)
-        self.ui.actionFindReference.triggered.connect(self.smaract_findreference)
         self.ui.actionSet_gonio_default_vel_acc.triggered.connect(
             self.smaract_set_defaultspeed
         )
@@ -1236,21 +1231,10 @@ class ptyco_main_control(QObject):
         self.pts.hexapod.handle_error()
 
     def smaract_set_defaultspeed(self):
-        for i, connected in enumerate(self.pts.gonio.connected):
+        gonio = self.pts.gonio
+        for name, connected in zip(gonio.motornames, gonio.isconnected()):
             if connected:
-                self.pts.gonio.set_speed(i)
-
-    def smaract_calibrate(self):
-        for i, connected in enumerate(self.pts.gonio.connected):
-            if connected:
-                self.pts.gonio.calibrate(i)
-        print("MCS2 calibration done..")
-
-    def smaract_findreference(self):
-        for i, connected in enumerate(self.pts.gonio.connected):
-            if connected:
-                self.pts.gonio.findReference(i)
-        print("MCS2 finding references done..")
+                gonio.set_speed(name)
 
     def setphivel_default(self):
         #        print(self.pts.phi.vel, " This was vel value")

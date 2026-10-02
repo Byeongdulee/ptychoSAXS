@@ -119,7 +119,10 @@ class phi(Axis):
 class motors(object):
     def __init__(self):
         
-        from ptychosaxs import smaract_gonio as gonio
+        from ptychosaxs.epics_gonio import GonioAxisController
+
+        gonio = GonioAxisController()
+        gonio.connect()
 
         self.control = {}
         self.control["hexapod"]= hexapod()

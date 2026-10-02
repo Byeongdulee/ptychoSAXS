@@ -3875,9 +3875,6 @@ Scans</string>
     <property name="title">
      <string>SmarAct</string>
     </property>
-    <addaction name="actionCalibrate"/>
-    <addaction name="actionFindReference"/>
-    <addaction name="separator"/>
     <addaction name="actionSet_gonio_default_vel_acc"/>
    </widget>
    <widget class="QMenu" name="menuScan">
@@ -4067,19 +4064,9 @@ Scans</string>
     <string>Select QDS for Y</string>
    </property>
   </action>
-  <action name="actionCalibrate">
-   <property name="text">
-    <string>Calibrate</string>
-   </property>
-  </action>
-  <action name="actionFindReference">
-   <property name="text">
-    <string>Find reference</string>
-   </property>
-  </action>
   <action name="actionSet_gonio_default_vel_acc">
    <property name="text">
-    <string>Set the default vel/acc</string>
+    <string>Set the default velocity</string>
    </property>
   </action>
   <action name="actionScanStop">
