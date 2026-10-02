@@ -297,6 +297,9 @@ class PresetBlock:
         self._w(QPushButton, "pb_%s_in" % p).clicked.connect(self.on_in)
         self._w(QPushButton, "pb_%s_out" % p).clicked.connect(self.on_out)
         slider = self._w(QSlider, "slider_%s_moveSet" % p)
+        # Unstyled, it paints the enclosing column's grey instead of the
+        # registry's pale yellow -- same fix as the status pill below.
+        slider.setStyleSheet("background-color: transparent;")
         slider.installEventFilter(_SliderToggle(slider))
         if self.has_list:
             self._list.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -345,7 +348,12 @@ class PresetBlock:
 
     def on_in(self):
         if self._move_set_mode() == 0:
-            for motor, value in zip(self.motors, self._stored("in")):
+            if self.has_list:
+                name = self._selected_name()
+                values = self.positions.get(name, []) if name else []
+            else:
+                values = self._stored("in")
+            for motor, value in zip(self.motors, values):
                 if value is not None:
                     self.panel.move_abs(motor, value)
         elif self.has_list:
@@ -484,8 +492,9 @@ class PresetBlock:
     # -- status ------------------------------------------------------------
 
     def update_status(self, readbacks):
-        if not self.enabled:
-            return
+        # Tracks the live readbacks regardless of whether this block is
+        # enabled -- disabling only blocks the In/Out/move-set controls,
+        # not the status pill reporting where the motors actually are.
         label = self._w(QLabel, "lbl_%s_status" % self.prefix)
         live = [readbacks[m] for m in self.motors]
 
@@ -503,7 +512,9 @@ class PresetBlock:
             label.setStyleSheet(self.NEUTRAL_STYLE)
             return
 
-        if matches(self._stored("in")):
+        in_match = (any(matches(saved) for saved in self.positions.values())
+                    if self.has_list else matches(self._stored("in")))
+        if in_match:
             label.setText("In")
             label.setStyleSheet("background-color: #00cc00; color: white;")
         elif matches(self._stored("out")):
@@ -681,6 +692,7 @@ class motor_control(QMainWindow):
     def _connect_move_to(self, widget_name, motor):
         edit = self.ui.findChild(QLineEdit, widget_name)
         edit.setToolTip("Move to: %s.VAL" % PV_BASES[motor])
+        edit.setStyleSheet("background-color: white;")
         edit.returnPressed.connect(
             lambda e=edit, m=motor: self._move_to_typed(e, m))
 
@@ -707,9 +719,14 @@ class motor_control(QMainWindow):
                 lambda _c=False, box=step_box, f=factor: self._scale_step(box, f))
 
     def _step(self, widget_name):
-        """The dpad/tweak step in mm, 0 when the box does not hold a number."""
+        """The dpad/tweak step in mm, 0 when the box does not hold a number.
+
+        The typed number is in the current display unit, same as the move-to
+        boxes -- so a tweak box showing "10" means 10 um once um display is
+        selected, not 10 mm.
+        """
         try:
-            return float(self.ui.findChild(QLineEdit, widget_name).text())
+            return self._parse_pos(self.ui.findChild(QLineEdit, widget_name).text())
         except ValueError:
             return 0.0
 
@@ -737,12 +754,46 @@ class motor_control(QMainWindow):
     # -- display units -------------------------------------------------
 
     def _toggle_units(self):
+        old_units_um = self._units_um
         self._units_um = not self._units_um
         QSettings("ptychoSAXS", "ptychoSAXS").setValue(
             self.UNITS_SETTINGS_KEY, self._units_um)
         self._update_units_display()
         for block in self.blocks.values():
             block.refresh_display()
+        self._rescale_free_text_widgets(old_units_um)
+
+    def _rescale_free_text_widgets(self, old_units_um):
+        """Re-display the move-to and tweak boxes in the new unit.
+
+        These are free-typed QLineEdits, not readback labels, so toggling
+        units has to reinterpret whatever the user already typed (in the
+        old unit) and rewrite it in the new one -- otherwise a "10" typed
+        as mm silently became "10" um underneath the user.
+        """
+        names = []
+        for prefix in AXIS_BLOCKS:
+            for axis in ("ver", "hor"):
+                names.append("ed_mv_%s_%s" % (prefix, axis))
+            names.append("ed_%s_step" % prefix)
+        for prefix in SINGLE_ROWS:
+            names.append("ed_mv_%s" % prefix)
+            names.append("ed_%s_step" % prefix)
+        for name in names:
+            edit = self.ui.findChild(QLineEdit, name)
+            if edit is not None:
+                self._rescale_lineedit(edit, old_units_um)
+
+    def _rescale_lineedit(self, edit, old_units_um):
+        text = edit.text().strip()
+        if not text:
+            return
+        try:
+            value = float(text)
+        except ValueError:
+            return
+        mm = value * self.MM_PER_UM if old_units_um else value
+        edit.setText(self._fmt_pos(mm))
 
     def _update_units_display(self):
         if self._units_um:
@@ -793,7 +844,12 @@ class motor_control(QMainWindow):
         self.ui.pushButton_xrayEyeOut.clicked.connect(self.put_xrayeye_out)
         self.ui.pushButton_xrayEyeOut.setToolTip("Writes 0 to %s" % EYE_CMD_PV)
         self.ui.pushButton_stopAll.clicked.connect(self.stop_all)
-        self.ui.pushButton_exit.clicked.connect(QApplication.instance().quit)
+        # close(), not QApplication.quit() -- quit() exits the event loop
+        # directly without running closeEvent, so the Exit button would skip
+        # the geometry save in _restore_window's save_geometry_and_close.
+        # Closing the last visible window still quits the app (Qt's default
+        # quitOnLastWindowClosed).
+        self.ui.pushButton_exit.clicked.connect(self.ui.close)
         self.ui.pushButton_allIn.clicked.connect(self.all_in)
         self.ui.pushButton_allOut.clicked.connect(self.all_out)
 

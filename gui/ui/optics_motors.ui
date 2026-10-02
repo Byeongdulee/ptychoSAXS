@@ -70,6 +70,7 @@ QSlider::add-page:horizontal {
      </property>
      <property name="font">
       <font>
+       <pointsize>8</pointsize>
        <weight>75</weight>
        <bold>true</bold>
       </font>
@@ -85,7 +86,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>26</y>
+       <y>80</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -98,7 +99,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>26</y>
+       <y>80</y>
        <width>85</width>
        <height>20</height>
       </rect>
@@ -111,7 +112,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>48</y>
+       <y>102</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -124,7 +125,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>48</y>
+       <y>102</y>
        <width>85</width>
        <height>24</height>
       </rect>
@@ -137,7 +138,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>78</y>
+       <y>30</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -150,7 +151,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>78</y>
+       <y>30</y>
        <width>85</width>
        <height>20</height>
       </rect>
@@ -163,7 +164,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>100</y>
+       <y>52</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -176,7 +177,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>100</y>
+       <y>52</y>
        <width>85</width>
        <height>24</height>
       </rect>
@@ -195,7 +196,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="styleSheet">
-      <string notr="true">QFrame#frame_bs_dpad { background-color: rgb(190, 190, 190); border: 1px solid #888; }</string>
+      <string notr="true">QFrame#frame_bs_dpad { background-color: rgb(210, 210, 210); border: 1px solid #888; }</string>
      </property>
      <property name="frameShape">
       <enum>QFrame::Box</enum>
@@ -547,6 +548,7 @@ QSlider::add-page:horizontal {
      </property>
      <property name="font">
       <font>
+       <pointsize>8</pointsize>
        <weight>75</weight>
        <bold>true</bold>
       </font>
@@ -562,7 +564,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>26</y>
+       <y>82</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -575,7 +577,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>26</y>
+       <y>82</y>
        <width>85</width>
        <height>20</height>
       </rect>
@@ -588,7 +590,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>48</y>
+       <y>104</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -601,7 +603,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>48</y>
+       <y>104</y>
        <width>85</width>
        <height>24</height>
       </rect>
@@ -614,7 +616,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>78</y>
+       <y>30</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -627,7 +629,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>78</y>
+       <y>30</y>
        <width>85</width>
        <height>20</height>
       </rect>
@@ -640,7 +642,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>100</y>
+       <y>52</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -653,7 +655,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>100</y>
+       <y>52</y>
        <width>85</width>
        <height>24</height>
       </rect>
@@ -672,7 +674,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="styleSheet">
-      <string notr="true">QFrame#frame_zp_dpad { background-color: rgb(190, 190, 190); border: 1px solid #888; }</string>
+      <string notr="true">QFrame#frame_zp_dpad { background-color: rgb(210, 210, 210); border: 1px solid #888; }</string>
      </property>
      <property name="frameShape">
       <enum>QFrame::Box</enum>
@@ -1047,6 +1049,7 @@ QSlider::add-page:horizontal {
      </property>
      <property name="font">
       <font>
+       <pointsize>8</pointsize>
        <weight>75</weight>
        <bold>true</bold>
       </font>
@@ -1062,7 +1065,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>26</y>
+       <y>82</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -1075,7 +1078,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>26</y>
+       <y>82</y>
        <width>85</width>
        <height>20</height>
       </rect>
@@ -1088,7 +1091,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>48</y>
+       <y>104</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -1101,7 +1104,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>48</y>
+       <y>104</y>
        <width>85</width>
        <height>24</height>
       </rect>
@@ -1114,7 +1117,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>78</y>
+       <y>30</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -1127,7 +1130,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>78</y>
+       <y>30</y>
        <width>85</width>
        <height>20</height>
       </rect>
@@ -1140,7 +1143,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>100</y>
+       <y>52</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -1153,7 +1156,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>100</y>
+       <y>52</y>
        <width>85</width>
        <height>24</height>
       </rect>
@@ -1172,7 +1175,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="styleSheet">
-      <string notr="true">QFrame#frame_osa_dpad { background-color: rgb(190, 190, 190); border: 1px solid #888; }</string>
+      <string notr="true">QFrame#frame_osa_dpad { background-color: rgb(210, 210, 210); border: 1px solid #888; }</string>
      </property>
      <property name="frameShape">
       <enum>QFrame::Box</enum>
@@ -1524,6 +1527,7 @@ QSlider::add-page:horizontal {
      </property>
      <property name="font">
       <font>
+       <pointsize>8</pointsize>
        <weight>75</weight>
        <bold>true</bold>
       </font>
@@ -1539,7 +1543,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>26</y>
+       <y>82</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -1552,7 +1556,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>26</y>
+       <y>82</y>
        <width>85</width>
        <height>20</height>
       </rect>
@@ -1565,7 +1569,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>48</y>
+       <y>104</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -1578,7 +1582,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>48</y>
+       <y>104</y>
        <width>85</width>
        <height>24</height>
       </rect>
@@ -1591,7 +1595,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>78</y>
+       <y>30</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -1604,7 +1608,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>78</y>
+       <y>30</y>
        <width>85</width>
        <height>20</height>
       </rect>
@@ -1617,7 +1621,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>100</y>
+       <y>52</y>
        <width>66</width>
        <height>20</height>
       </rect>
@@ -1630,7 +1634,7 @@ QSlider::add-page:horizontal {
      <property name="geometry">
       <rect>
        <x>76</x>
-       <y>100</y>
+       <y>52</y>
        <width>85</width>
        <height>24</height>
       </rect>
@@ -1649,7 +1653,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="styleSheet">
-      <string notr="true">QFrame#frame_saxsbs_dpad { background-color: rgb(190, 190, 190); border: 1px solid #888; }</string>
+      <string notr="true">QFrame#frame_saxsbs_dpad { background-color: rgb(210, 210, 210); border: 1px solid #888; }</string>
      </property>
      <property name="frameShape">
       <enum>QFrame::Box</enum>
@@ -1991,6 +1995,7 @@ QSlider::add-page:horizontal {
     </property>
     <property name="font">
      <font>
+      <pointsize>8</pointsize>
       <weight>50</weight>
       <bold>false</bold>
      </font>
@@ -2030,6 +2035,7 @@ QSlider::add-page:horizontal {
     </property>
     <property name="font">
      <font>
+      <pointsize>8</pointsize>
       <weight>50</weight>
       <bold>false</bold>
      </font>
@@ -2049,6 +2055,7 @@ QSlider::add-page:horizontal {
     </property>
     <property name="font">
      <font>
+      <pointsize>8</pointsize>
       <weight>50</weight>
       <bold>false</bold>
      </font>
@@ -2068,6 +2075,7 @@ QSlider::add-page:horizontal {
     </property>
     <property name="font">
      <font>
+      <pointsize>8</pointsize>
       <weight>75</weight>
       <bold>true</bold>
      </font>
@@ -2155,6 +2163,7 @@ QSlider::add-page:horizontal {
     </property>
     <property name="font">
      <font>
+      <pointsize>8</pointsize>
       <weight>75</weight>
       <bold>true</bold>
      </font>
@@ -2234,7 +2243,7 @@ QSlider::add-page:horizontal {
    <widget class="QFrame" name="frame_ztrans_reg">
     <property name="geometry">
      <rect>
-      <x>374</x>
+      <x>370</x>
       <y>490</y>
       <width>221</width>
       <height>71</height>
@@ -2388,9 +2397,9 @@ QSlider::add-page:horizontal {
    <widget class="QListWidget" name="listWidget_ztransList">
     <property name="geometry">
      <rect>
-      <x>600</x>
+      <x>595</x>
       <y>490</y>
-      <width>121</width>
+      <width>126</width>
       <height>46</height>
      </rect>
     </property>
@@ -2398,9 +2407,9 @@ QSlider::add-page:horizontal {
    <widget class="QPushButton" name="pb_ztrans_addPos">
     <property name="geometry">
      <rect>
-      <x>600</x>
+      <x>595</x>
       <y>536</y>
-      <width>121</width>
+      <width>126</width>
       <height>26</height>
      </rect>
     </property>
@@ -2439,7 +2448,7 @@ QSlider::add-page:horizontal {
      <rect>
       <x>10</x>
       <y>508</y>
-      <width>101</width>
+      <width>91</width>
       <height>51</height>
      </rect>
     </property>
@@ -2501,7 +2510,7 @@ QSlider::add-page:horizontal {
    <widget class="QFrame" name="frame_allInOut">
     <property name="geometry">
      <rect>
-      <x>120</x>
+      <x>110</x>
       <y>510</y>
       <width>251</width>
       <height>46</height>
@@ -2649,6 +2658,7 @@ QSlider::add-page:horizontal {
     </property>
     <property name="font">
      <font>
+      <pointsize>8</pointsize>
       <weight>75</weight>
       <bold>true</bold>
      </font>

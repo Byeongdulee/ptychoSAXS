@@ -26,28 +26,28 @@
          <item row="1" column="2"><widget class="QLineEdit" name="scalarscan_edit_to_X"/></item>
          <item row="1" column="3"><widget class="QLineEdit" name="scalarscan_edit_step_X"/></item>
          <item row="1" column="4"><widget class="QLabel" name="scalarscan_lbl_npos_X"><property name="text"><string>0</string></property></widget></item>
-         <item row="1" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_X"><property name="text"><string>Scan</string></property></widget></item>
+         <item row="1" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_X"><property name="styleSheet"><string notr="true">background-color: rgb(255, 180, 255);</string></property><property name="text"><string>Scan</string></property></widget></item>
 
          <item row="2" column="0"><widget class="QLabel" name="scalarscan_lbl_axis_Y"><property name="text"><string>Y (mm)</string></property></widget></item>
          <item row="2" column="1"><widget class="QLineEdit" name="scalarscan_edit_from_Y"/></item>
          <item row="2" column="2"><widget class="QLineEdit" name="scalarscan_edit_to_Y"/></item>
          <item row="2" column="3"><widget class="QLineEdit" name="scalarscan_edit_step_Y"/></item>
          <item row="2" column="4"><widget class="QLabel" name="scalarscan_lbl_npos_Y"><property name="text"><string>0</string></property></widget></item>
-         <item row="2" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_Y"><property name="text"><string>Scan</string></property></widget></item>
+         <item row="2" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_Y"><property name="styleSheet"><string notr="true">background-color: rgb(255, 180, 255);</string></property><property name="text"><string>Scan</string></property></widget></item>
 
          <item row="3" column="0"><widget class="QLabel" name="scalarscan_lbl_axis_TILT"><property name="text"><string>TILT (deg)</string></property></widget></item>
          <item row="3" column="1"><widget class="QLineEdit" name="scalarscan_edit_from_TILT"/></item>
          <item row="3" column="2"><widget class="QLineEdit" name="scalarscan_edit_to_TILT"/></item>
          <item row="3" column="3"><widget class="QLineEdit" name="scalarscan_edit_step_TILT"/></item>
          <item row="3" column="4"><widget class="QLabel" name="scalarscan_lbl_npos_TILT"><property name="text"><string>0</string></property></widget></item>
-         <item row="3" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_TILT"><property name="text"><string>Scan</string></property></widget></item>
+         <item row="3" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_TILT"><property name="styleSheet"><string notr="true">background-color: rgb(255, 180, 255);</string></property><property name="text"><string>Scan</string></property></widget></item>
 
          <item row="4" column="0"><widget class="QLabel" name="scalarscan_lbl_axis_PITCH"><property name="text"><string>PITCH (deg)</string></property></widget></item>
          <item row="4" column="1"><widget class="QLineEdit" name="scalarscan_edit_from_PITCH"/></item>
          <item row="4" column="2"><widget class="QLineEdit" name="scalarscan_edit_to_PITCH"/></item>
          <item row="4" column="3"><widget class="QLineEdit" name="scalarscan_edit_step_PITCH"/></item>
          <item row="4" column="4"><widget class="QLabel" name="scalarscan_lbl_npos_PITCH"><property name="text"><string>0</string></property></widget></item>
-         <item row="4" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_PITCH"><property name="text"><string>Scan</string></property></widget></item>
+         <item row="4" column="5"><widget class="QPushButton" name="scalarscan_btn_scan_PITCH"><property name="styleSheet"><string notr="true">background-color: rgb(255, 180, 255);</string></property><property name="text"><string>Scan</string></property></widget></item>
         </layout>
        </item>
        <item>

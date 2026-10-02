@@ -16,7 +16,7 @@ import sys
 from threading import Lock
 
 from PyQt5 import uic
-from PyQt5.QtCore import QByteArray, QEvent, QObject, QTimer
+from PyQt5.QtCore import QEvent, QObject, QSettings, QTimer
 from PyQt5.QtWidgets import (
     QAction,
     QApplication,
@@ -114,7 +114,7 @@ EDIT_ACTIONS = {
 JOG_BUTTON_LABELS = ["up", "down", "left", "right"]
 
 # Jog-pad step widgets, and the .ini key each is persisted under (in the
-# "tweak_steps" section, alongside each motor's own edit_tweak_{name}).
+# "tweak_steps" section).
 PAD_STEP_INI_KEYS = {"ed_xy_tweak": "xy_pad", "ed_tp_tweak": "tp_pad"}
 
 
@@ -133,11 +133,8 @@ def _default_jog_section(jog_map):
 # is the only definition of a fresh one.
 INI_DEFAULTS = {
     "xy_preset": {"in_0": "0.0", "in_1": "0.0", "out_0": "0.0", "out_1": "0.0"},
-    "ui": {"font_size": str(DEFAULT_FONT_SIZE), "window_geometry": ""},
-    "tweak_steps": dict(
-        [(slot["name"], "0.001" if slot["unit"] == "mm" else "0.010") for slot in MOTOR_SLOTS]
-        + [("xy_pad", "0.001"), ("tp_pad", "0.010")]
-    ),
+    "ui": {"font_size": str(DEFAULT_FONT_SIZE)},
+    "tweak_steps": {"xy_pad": "0.001", "tp_pad": "0.010"},
     "jog_remap_xy": _default_jog_section(XY_JOG_MAP),
     "jog_remap_tp": _default_jog_section(TILTPITCH_JOG_MAP),
     **SCALAR_SCAN_INI_DEFAULTS,
@@ -201,13 +198,21 @@ class XYPresetBlock:
         self._enabled = False
         self._setup()
 
+    # Clearing a label back to "no colour" still has to say transparent, or
+    # the enclosing column's grey shows instead of the registry's pale yellow.
+    NEUTRAL_STYLE = "background-color: transparent;"
+    DISABLED_TEXT_COLOR = "#606060"
+
     def _setup(self):
         self._ui.pushButton_xyEnable.clicked.connect(self._toggle)
         self._ui.pushButton_xyIn.clicked.connect(self._on_in)
         self._ui.pushButton_xyOut.clicked.connect(self._on_out)
-        self._ui.pushButton_xyExport.clicked.connect(self._export)
-        self._ui.pushButton_xyImport.clicked.connect(self._import)
         self._install_slider_toggle(self._ui.horizontalSlider_xyMoveSet)
+        # The slider's own background paints the enclosing column's grey
+        # instead of the registry's pale yellow; append (not replace) so the
+        # groove/handle styling from the .ui file is kept.
+        slider = self._ui.horizontalSlider_xyMoveSet
+        slider.setStyleSheet(slider.styleSheet() + "\nQSlider { background: transparent; }")
         self._apply_enabled(False)
         self._load_ini()
 
@@ -225,11 +230,12 @@ class XYPresetBlock:
         slider.installEventFilter(_ToggleFilter(slider))
 
     def _apply_enabled(self, enabled):
+        # label_xyStatus (the in/out indicator) is deliberately left enabled
+        # so it keeps working even while the rest of the panel is disabled.
         for w in (
             self._ui.pushButton_xyIn,
             self._ui.pushButton_xyOut,
             self._ui.horizontalSlider_xyMoveSet,
-            self._ui.label_xyStatus,
         ):
             w.setEnabled(enabled)
         if enabled:
@@ -238,6 +244,16 @@ class XYPresetBlock:
         else:
             self._ui.pushButton_xyEnable.setText("No")
             self._ui.pushButton_xyEnable.setStyleSheet("background-color: #ffcccc;")
+
+        # Grey the registry's labels out, status pill excepted -- it keeps
+        # its own In/Out colouring. The explicit transparent background
+        # overrides the grey the enclosing column's stylesheet cascades onto
+        # every child, so the registry's pale yellow shows through instead.
+        colour = "black" if enabled else self.DISABLED_TEXT_COLOR
+        for lbl in self._ui.frame_xyPreset.findChildren(QLabel):
+            if lbl is not self._ui.label_xyStatus:
+                lbl.setStyleSheet("color: %s; %s" % (colour, self.NEUTRAL_STYLE))
+
         self._enabled = enabled
 
     def _toggle(self):
@@ -296,9 +312,6 @@ class XYPresetBlock:
             cfg.write(f)
 
     def update_status(self):
-        if not self._enabled:
-            return
-
         def rd(w):
             try:
                 return float(w.text())
@@ -593,6 +606,8 @@ class CRL3DPrintControl(QObject):
         self._wire_menu_actions(EDIT_ACTIONS)
 
         self.xy_preset = XYPresetBlock(self)
+        self.ui.actionExportPositions.triggered.connect(self.xy_preset._export)
+        self.ui.actionImportPositions.triggered.connect(self.xy_preset._import)
         self._scalar_scan_window = None
 
         self.timer = QTimer()
@@ -634,14 +649,6 @@ class CRL3DPrintControl(QObject):
             if ed_moveto:
                 ed_moveto.returnPressed.connect(lambda n=name: self._move_to(n))
 
-            btn_minus = self.ui.findChild(QPushButton, f"btn_tweak_{name}_minus")
-            if btn_minus:
-                btn_minus.clicked.connect(lambda checked=False, n=name: self._tweak(n, -1))
-
-            btn_plus = self.ui.findChild(QPushButton, f"btn_tweak_{name}_plus")
-            if btn_plus:
-                btn_plus.clicked.connect(lambda checked=False, n=name: self._tweak(n, +1))
-
     def _move_to(self, name):
         ed = self.ui.findChild(QLineEdit, f"edit_moveto_{name}")
         try:
@@ -649,14 +656,6 @@ class CRL3DPrintControl(QObject):
         except ValueError:
             return
         self._dispatch_move(name, val, relative=False)
-
-    def _tweak(self, name, sign):
-        ed = self.ui.findChild(QLineEdit, f"edit_tweak_{name}")
-        try:
-            step = float(ed.text()) if ed else 0.0
-        except ValueError:
-            step = 0.0
-        self._dispatch_move(name, sign * step, relative=True)
 
     # -- soft limits ------------------------------------------------------------
 
@@ -741,9 +740,9 @@ class CRL3DPrintControl(QObject):
     # -- tweak/pad step persistence --------------------------------------------
 
     def _wire_tweak_steps(self):
-        """Load persisted tweak/jog step sizes from the .ini (falling back to
+        """Load persisted jog-pad step sizes from the .ini (falling back to
         the .ui's own default text), and save back to the .ini whenever the
-        user edits a tweak or pad step field."""
+        user edits a pad step field."""
         cfg = configparser.ConfigParser()
         cfg.read(_CRL_INI)
         sec = cfg["tweak_steps"] if cfg.has_section("tweak_steps") else {}
@@ -753,10 +752,6 @@ class CRL3DPrintControl(QObject):
                 return
             ed.setText(sec.get(key, ed.text()))
             ed.editingFinished.connect(lambda e=ed, k=key: self._save_ini_value("tweak_steps", k, e.text()))
-
-        for slot in self.MOTOR_SLOTS:
-            name = slot["name"]
-            _wire(self.ui.findChild(QLineEdit, f"edit_tweak_{name}"), name)
 
         for widget_name, key in PAD_STEP_INI_KEYS.items():
             _wire(self.ui.findChild(QLineEdit, widget_name), key)
@@ -860,16 +855,15 @@ class CRL3DPrintControl(QObject):
             cfg.write(f)
 
     def _restore_window_geometry(self):
-        cfg = configparser.ConfigParser()
-        cfg.read(_CRL_INI)
-        hexstr = cfg.get("ui", "window_geometry", fallback="").strip()
-        if hexstr:
-            self.ui.restoreGeometry(QByteArray.fromHex(hexstr.encode()))
+        geometry = QSettings("ptychoSAXS", "ptychoSAXS").value("CRL3DPrintWindow/geometry")
+        if geometry is not None:
+            self.ui.restoreGeometry(geometry)
 
     def _on_close_event(self, event):
         if self._scalar_scan_window is not None:
             self._scalar_scan_window.win.close()
-        self._save_ini_value("ui", "window_geometry", bytes(self.ui.saveGeometry().toHex()).decode())
+        QSettings("ptychoSAXS", "ptychoSAXS").setValue(
+            "CRL3DPrintWindow/geometry", self.ui.saveGeometry())
         event.accept()
 
     # -- scalar scan window -------------------------------------------------
