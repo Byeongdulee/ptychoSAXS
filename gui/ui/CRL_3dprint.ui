@@ -1149,7 +1149,6 @@ color: rgb(255, 255, 255);</string>
      <string>Tools</string>
     </property>
     <addaction name="actionChangeVelocities"/>
-    <addaction name="actionCalibrateReference"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
     <property name="title">
@@ -1176,11 +1175,6 @@ color: rgb(255, 255, 255);</string>
   <action name="actionChangeVelocities">
    <property name="text">
     <string>Change Velocities</string>
-   </property>
-  </action>
-  <action name="actionCalibrateReference">
-   <property name="text">
-    <string>Calibrate &amp;&amp; Reference</string>
    </property>
   </action>
   <action name="actionRemapXYJog">

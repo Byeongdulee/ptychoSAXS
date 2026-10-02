@@ -14,6 +14,7 @@ import configparser
 import os
 import time
 from collections import deque
+from threading import Lock
 
 import h5py
 import numpy as np
@@ -43,9 +44,9 @@ SCALAR_PVS = {
 }
 SCALER_TP_PV = "12idc:3820:scaler1.TP"  # scaler preset (exposure) time
 
-# Stages this window can step-scan, and each one's native unit.
+# Stages this window can step-scan. Each one's unit comes from the IOC's
+# .EGU by way of the controller, not from a table here.
 SCAN_AXES = ("X", "Y", "TILT", "PITCH")
-AXIS_UNITS = {"X": "mm", "Y": "mm", "TILT": "deg", "PITCH": "deg"}
 
 # Preamplifier sensitivity (unit, value) PV pairs per scalar - read once at
 # save time (not polled at 5 Hz like SCALAR_PVS) and stored alongside each
@@ -60,8 +61,6 @@ PREAMP_PVS = {
 POLL_INTERVAL_MS = 500  # 2 Hz
 DEFAULT_BUFLEN = 200
 DEFAULT_EXPTIME_S = "0.001"
-MOVE_PRIME_DELAY_S = 0.02  # let the controller's moving-status flag catch up before polling it
-MOVE_POLL_INTERVAL_S = 0.01
 POSITION_SETTLE_S = 0.1  # fixed mechanical-settle wait after each move, before the exposure
 ACCUMULATE_WAIT_S = 0.1  # wait between repeated measurements at the same position (N accumulate > 1)
 PV_CONNECT_TIMEOUT_S = 2.0  # one-time wait for a brand-new PV's initial connection, in _get_pv
@@ -130,19 +129,34 @@ def _write_preamp_attrs(scalars_group, pv_class):
         ds.attrs["preamp_value"] = "" if value is None else str(value)
 
 
+_pv_cache_lock = Lock()
+
+
 def _get_or_create_pv(cache, pv_class, name):
     """Shared by ScalarScanWindow._get_pv (GUI-thread call sites: scan
     validation, exposure-time edits) and _PollWorker (background thread, for
     the live-monitor poll). A brand-new PV connects asynchronously, so its
     first-ever reference gets one bounded wait_for_connection() - after that,
     the cached object's .connected just reflects pyepics' own connection
-    callback, no further blocking."""
+    callback, no further blocking.
+
+    The miss path is serialised because those two callers race: editing the
+    exposure time while a poll is in flight could otherwise open two channels
+    for one PV and leave the loser in the cache."""
     pv = cache.get(name)
-    if pv is None:
-        pv = pv_class()(name)
-        pv.wait_for_connection(timeout=PV_CONNECT_TIMEOUT_S)
-        cache[name] = pv
+    if pv is not None:
+        return pv
+    with _pv_cache_lock:
+        pv = cache.get(name)
+        if pv is None:
+            pv = pv_class()(name)
+            pv.wait_for_connection(timeout=PV_CONNECT_TIMEOUT_S)
+            cache[name] = pv
     return pv
+
+
+def _or_nan(value):
+    return float("nan") if value is None else float(value)
 
 
 def _make_positions(frm: float, to: float, step: float) -> np.ndarray:
@@ -168,17 +182,16 @@ class _ScanWorker(QRunnable):
     apart) and sums them per scalar into the single value logged for that
     position. Runs off the GUI thread via QThreadPool.
 
-    Uses mv(..., wait=False) plus our own is_moving() poll loop rather than
-    mv(..., wait=True): the jog/move-to buttons in CRL_3dprint.py only ever
-    call mv() with wait=False, so that is the one exercised, known-working
-    code path against the real SmarAct controller. A short priming delay is
-    inserted before the first is_moving() check to give the controller's
-    status flag time to flip to "moving" before we start polling it."""
+    Each move uses Channel Access put-completion (mv with wait=True), which
+    the motor record acknowledges only once the stage has finished moving -
+    so there is no status flag to poll and no window in which a not-yet-
+    started move looks finished. Blocking here is what we want: this is a
+    worker thread, and stop() aborts the motor, which completes the
+    outstanding put and releases it."""
 
-    def __init__(self, controller, lock, axis, positions, pvs, exp_time, n_accumulate=1):
+    def __init__(self, controller, axis, positions, pvs, exp_time, n_accumulate=1):
         super().__init__()
         self.controller = controller
-        self.lock = lock
         self.axis = axis
         self.positions = positions
         self.pvs = pvs  # {scalar_name: PV/FakePV}
@@ -189,17 +202,7 @@ class _ScanWorker(QRunnable):
 
     def stop(self):
         self._stop = True
-
-    def _move_and_wait(self, target: float):
-        with self.lock:
-            self.controller.mv(self.axis, target, wait=False)
-        time.sleep(MOVE_PRIME_DELAY_S)
-        while True:
-            with self.lock:
-                moving = self.controller.is_moving(self.axis)
-            if not moving or self._stop:
-                break
-            time.sleep(MOVE_POLL_INTERVAL_S)
+        self.controller.stop(self.axis)
 
     @pyqtSlot()
     def run(self):
@@ -210,7 +213,11 @@ class _ScanWorker(QRunnable):
             for i, value in enumerate(self.positions):
                 if self._stop:
                     break
-                self._move_and_wait(float(value))
+                if not self.controller.is_axis_connected(self.axis):
+                    raise RuntimeError(f"Motor unreachable during scan: {self.axis}")
+                self.controller.mv(self.axis, float(value), wait=True)
+                if self._stop:
+                    break
                 time.sleep(POSITION_SETTLE_S)  # mechanical settle, once per position
 
                 accum = {name: 0.0 for name in self.pvs}
@@ -255,10 +262,9 @@ class _PollWorker(QRunnable):
     costs a single non-blocking pv.connected check instead of another
     blocking get()."""
 
-    def __init__(self, controller, lock, pv_cache, pv_class, pv_names):
+    def __init__(self, controller, pv_cache, pv_class, pv_names):
         super().__init__()
         self.controller = controller
-        self.lock = lock
         self.pv_cache = pv_cache
         self.pv_class = pv_class
         self.pv_names = pv_names  # {scalar_name: pv_name}
@@ -267,9 +273,10 @@ class _PollWorker(QRunnable):
     @pyqtSlot()
     def run(self):
         try:
-            with self.lock:
-                x = self.controller.get_pos("X")
-                y = self.controller.get_pos("Y")
+            # nan rather than a stale value for an axis the IOC is not
+            # answering for, so the trace gaps the way a dead scalar's does.
+            x = _or_nan(self.controller.get_pos("X"))
+            y = _or_nan(self.controller.get_pos("Y"))
             results = {}
             for name, pv_name in self.pv_names.items():
                 pv = _get_or_create_pv(self.pv_cache, self.pv_class, pv_name)
@@ -294,9 +301,10 @@ class ScanResultWindow(QObject):
     by the caller (ScalarScanWindow._result_windows) so it isn't
     garbage-collected while still on screen."""
 
-    def __init__(self, parent, axis, positions, values, display_scalar, font_size, pv_class):
+    def __init__(self, parent, axis, unit, positions, values, display_scalar, font_size, pv_class):
         super().__init__(parent)
         self.axis = axis
+        self.unit = unit
         self.positions = positions  # [float] - this scan's own positions, length N
         self.values = values  # {scalar_name: [float]} - this scan's own readings, each length N
         self._pv_class = pv_class
@@ -306,7 +314,7 @@ class ScanResultWindow(QObject):
         layout = QVBoxLayout(self.win)
         plot = pg.PlotWidget()
         plot.plot(positions, values[display_scalar], pen=pg.mkPen("g"), symbol="o")
-        plot.setLabel("bottom", axis, units=AXIS_UNITS[axis])
+        plot.setLabel("bottom", axis, units=unit)
         plot.setLabel("left", display_scalar)
         layout.addWidget(plot)
 
@@ -333,7 +341,7 @@ class ScanResultWindow(QObject):
             sample = entry.create_group("sample")
             sample.attrs["NX_class"] = b"NXsample"
             sample.create_dataset("positions", data=np.array(self.positions, dtype=float))
-            sample["positions"].attrs["units"] = AXIS_UNITS[self.axis].encode("utf-8")
+            sample["positions"].attrs["units"] = self.unit.encode("utf-8")
             sample["positions"].attrs["axis"] = self.axis.encode("utf-8")
 
             scalars = entry.create_group("scalars")
@@ -354,12 +362,11 @@ class ScalarScanWindow(QObject):
     (self.win), matching CRL3DPrintControl's own shape, so no stray blank
     window appears."""
 
-    def __init__(self, parent_ui, controller, pv_class, lock, soft_limits):
+    def __init__(self, parent_ui, controller, pv_class, soft_limits):
         super().__init__(parent_ui)
         self._parent_ui = parent_ui
         self.controller = controller
         self._pv_class = pv_class
-        self.lock = lock
         self.soft_limits = soft_limits
         self._pv_cache = {}
         self._scan_worker = None
@@ -517,10 +524,14 @@ class ScalarScanWindow(QObject):
     def _get_pv(self, name: str):
         return _get_or_create_pv(self._pv_cache, self._pv_class, name)
 
+    def _unit(self, axis: str) -> str:
+        """The axis's engineering unit as the IOC reports it."""
+        return self.controller.get_unit(axis)
+
     def _poll_live(self):
         if self._scan_worker is not None or self._poll_worker is not None:
             return
-        worker = _PollWorker(self.controller, self.lock, self._pv_cache, self._pv_class, SCALAR_PVS)
+        worker = _PollWorker(self.controller, self._pv_cache, self._pv_class, SCALAR_PVS)
         worker.signals.finished.connect(self._on_poll_result)
         worker.signals.error.connect(self._on_poll_error)
         self._poll_worker = worker
@@ -606,8 +617,14 @@ class ScalarScanWindow(QObject):
             QMessageBox.warning(
                 self.win,
                 "Out of range",
-                f"{axis} scan range must stay within [{lo}, {hi}] mm.",
+                f"{axis} scan range must stay within [{lo}, {hi}] {self._unit(axis)}.",
             )
+            return
+
+        if not self.controller.is_axis_connected(axis):
+            msg = f"Cannot start scan - motor unreachable: {axis}"
+            print(f"[scalar_scan] {msg}")
+            QMessageBox.warning(self.win, "Motor unreachable", msg)
             return
 
         tp_pv = self._get_pv(SCALER_TP_PV)
@@ -628,7 +645,7 @@ class ScalarScanWindow(QObject):
         self._set_scan_controls_enabled(False)
         self.lbl_status.setText(f"Scanning {axis}: 0/{len(positions)}")
         worker = _ScanWorker(
-            self.controller, self.lock, axis, positions, pvs, exptime, self.spin_naccum.value()
+            self.controller, axis, positions, pvs, exptime, self.spin_naccum.value()
         )
         worker.signals.finished.connect(self._on_scan_finished)
         worker.signals.error.connect(self._on_scan_error)
@@ -647,6 +664,7 @@ class ScalarScanWindow(QObject):
             ScanResultWindow(
                 self.win,
                 axis,
+                self._unit(axis),
                 positions,
                 values,
                 self._scan_display_scalar,

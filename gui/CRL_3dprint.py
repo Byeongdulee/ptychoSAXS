@@ -1,9 +1,9 @@
 """
 CRL_3dprint.py — motor control GUI for the CRL 3D-printing rig.
 
-Controls 4 SmarAct MCS2 stages (X, Y linear in mm; TILT, PITCH rotary in
-deg) on one network controller. Run with --debug_mode to use simulated
-motors with no hardware/network connection required:
+Controls 4 EPICS motor records (X, Y linear in mm; TILT, PITCH rotary in
+deg) on the 12ideMCS2 IOC. Run with --debug_mode to use simulated motors
+with no hardware, IOC or network connection required:
 
     python CRL_3dprint.py --debug_mode
 """
@@ -13,7 +13,6 @@ import configparser
 import json
 import os
 import sys
-from threading import Lock
 
 from PyQt5 import uic
 from PyQt5.QtCore import QEvent, QObject, QSettings, QTimer
@@ -50,19 +49,14 @@ try:
 except ImportError:
     PV = None  # replaced by FakePV in debug mode
 
-try:
-    from smaract_crl3dprint import MOTOR_SLOTS as _RAW_MOTOR_SLOTS
-    from smaract_crl3dprint import CRLAxisController
-
-    _HARDWARE_AVAILABLE = True
-except ImportError:
-    _HARDWARE_AVAILABLE = False
-    _RAW_MOTOR_SLOTS = [("X", 0, "mm"), ("Y", 1, "mm"), ("TILT", 2, "deg"), ("PITCH", 3, "deg")]
+from epics_crl3dprint import MOTOR_SLOTS as _RAW_MOTOR_SLOTS
+from epics_crl3dprint import CRLAxisController
 
 _CRL_INI = os.path.join(INI_DIR, "CRL_3dprint.ini")
 
-# Single source of truth for the 4 motors, in {"name", "unit"} form for readability.
-MOTOR_SLOTS = [{"name": name, "unit": unit} for name, _channel, unit in _RAW_MOTOR_SLOTS]
+# Single source of truth for the 4 motors, in {"name", "unit"} form for
+# readability. Each unit is a fallback, replaced at startup by the IOC's .EGU.
+MOTOR_SLOTS = [{"name": name, "unit": unit} for name, _prefix, unit in _RAW_MOTOR_SLOTS]
 
 XY_JOG_MAP = {
     "pb_xy_left": ("X", -1),
@@ -102,7 +96,6 @@ VELOCITY_SOFT_LIMITS = {
 
 TOOLS_ACTIONS = {
     "actionChangeVelocities": "_open_velocities_dialog",
-    "actionCalibrateReference": "_open_calibrate_dialog",
 }
 
 EDIT_ACTIONS = {
@@ -117,6 +110,14 @@ JOG_BUTTON_LABELS = ["up", "down", "left", "right"]
 # Jog-pad step widgets, and the .ini key each is persisted under (in the
 # "tweak_steps" section).
 PAD_STEP_INI_KEYS = {"ed_xy_tweak": "xy_pad", "ed_tp_tweak": "tp_pad"}
+
+# Which motors each pad's single step field governs, so editing it can push
+# the value to those records' .TWV and other EPICS clients stay in step.
+PAD_AXES = {"ed_xy_tweak": ("X", "Y"), "ed_tp_tweak": ("TILT", "PITCH")}
+
+# Shown in place of a position when the IOC is not answering for that axis,
+# so a dead link is never mistaken for a stage that has stopped moving.
+NO_READBACK_TEXT = "----"
 
 
 def _default_jog_section(jog_map):
@@ -159,6 +160,10 @@ def _load_jog_map(section, default_map):
         return result
     for btn_name, (default_axis, default_sign) in default_map.items():
         axis = cfg.get(section, f"{btn_name}_axis", fallback=default_axis)
+        if axis not in SOFT_LIMITS:
+            # An unknown name would reach the controller as a missing axis and
+            # fail far from here, so fall back rather than trust the file.
+            axis = default_axis
         try:
             sign = int(cfg.get(section, f"{btn_name}_sign", fallback=str(default_sign)))
         except ValueError:
@@ -272,21 +277,26 @@ class XYPresetBlock:
     def _in_out_common(self, lbl_x, lbl_y):
         p = self._parent
         if self._slider_mode() == 0:
-            # Move mode: send the stored value to hardware.
+            # Move mode: send the stored value to hardware. Routed through
+            # the parent's move dispatcher so a preset - which can come from
+            # a hand-edited .ini or an imported JSON file - gets the same
+            # soft-limit check as a typed-in move.
             for axis, lbl in (("X", lbl_x), ("Y", lbl_y)):
                 if lbl.text():
                     try:
                         target = float(lbl.text())
                     except ValueError:
                         continue
-                    with p.lock:
-                        p.controller.mv(axis, target, wait=False)
+                    p._dispatch_move(axis, target, relative=False)
         else:
-            # Save mode: capture the current position into the label.
+            # Save mode: capture the current position. Read it from the
+            # controller rather than the on-screen label, which reads
+            # NO_READBACK_TEXT while an axis is unreachable and would
+            # otherwise overwrite a good preset with an unparseable one.
             for axis, lbl in (("X", lbl_x), ("Y", lbl_y)):
-                cur = self._ui.findChild(QLabel, f"lbl_pos_{axis}")
-                if cur:
-                    lbl.setText(cur.text())
+                cur = p.controller.get_pos(axis)
+                if cur is not None:
+                    lbl.setText(p.MOTOR_PREC % cur)
             self._save_ini()
 
     def _load_ini(self):
@@ -393,7 +403,6 @@ class VelocitiesDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Change Velocities")
         self._edits = {}
-        self._acc = {}
         self._values = {}
 
         layout = QVBoxLayout(self)
@@ -401,13 +410,13 @@ class VelocitiesDialog(QDialog):
         layout.addLayout(grid)
         for row, slot in enumerate(motor_slots):
             name, unit = slot["name"], slot["unit"]
-            vel, acc = controller.get_speed(name)
-            self._acc[name] = acc
+            vel = controller.get_speed(name)
             lo, hi = VELOCITY_SOFT_LIMITS[name]
 
             grid.addWidget(QLabel(name), row, 0)
-            grid.addWidget(QLabel(f"Current: {vel:g} {unit}/s"), row, 1)
-            edit = QLineEdit(f"{vel:g}")
+            current = "unavailable" if vel is None else f"{vel:g} {unit}/s"
+            grid.addWidget(QLabel(f"Current: {current}"), row, 1)
+            edit = QLineEdit("" if vel is None else f"{vel:g}")
             grid.addWidget(edit, row, 2)
             grid.addWidget(QLabel(f"Range: {lo:g} to {hi:g} {unit}/s"), row, 3)
             self._edits[name] = edit
@@ -445,71 +454,6 @@ class VelocitiesDialog(QDialog):
         """name -> new velocity, for every motor (accept() only succeeds
         once all of them validate, so this always covers every motor)."""
         return dict(self._values)
-
-    def acc_for(self, name):
-        return self._acc[name]
-
-
-class CalibrateReferenceDialog(QDialog):
-    """Per-motor Calibrate / Reference controls, wired straight to the
-    controller - unlike VelocitiesDialog, these calls happen live as each
-    button is pressed rather than being staged for an OK click."""
-
-    def __init__(self, parent, motor_slots, controller):
-        super().__init__(parent)
-        self.controller = controller
-        self.setWindowTitle("Calibrate & Reference")
-
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Calibration only needed when cabling is changed"))
-
-        grid = QGridLayout()
-        layout.addLayout(grid)
-        self._lights = {}
-        self._buttons = []
-        for row, slot in enumerate(motor_slots):
-            name = slot["name"]
-            grid.addWidget(QLabel(name), row, 0)
-
-            btn_cal = QPushButton("Calibrate")
-            btn_cal.clicked.connect(lambda checked=False, n=name: self._run(n, self.controller.calibrate))
-            grid.addWidget(btn_cal, row, 1)
-            self._buttons.append(btn_cal)
-
-            btn_ref = QPushButton("Reference")
-            btn_ref.clicked.connect(lambda checked=False, n=name: self._run(n, self.controller.find_reference))
-            grid.addWidget(btn_ref, row, 2)
-            self._buttons.append(btn_ref)
-
-            light = QLabel()
-            light.setFixedSize(16, 16)
-            grid.addWidget(light, row, 3)
-            self._lights[name] = light
-            self._set_light(name, False)
-
-        exit_btn = QPushButton("Exit")
-        exit_btn.clicked.connect(self.accept)
-        layout.addWidget(exit_btn)
-
-    def _set_light(self, name, busy: bool):
-        color = "#00cc00" if busy else "#999999"
-        self._lights[name].setStyleSheet(f"background-color: {color}; border-radius: 8px;")
-
-    def _run(self, name, func):
-        """Disables every Calibrate/Reference button for the duration of a
-        (blocking) calibrate/find_reference call, and lights up this row
-        while it runs - re-enabling/graying out again once func returns,
-        even if it raises."""
-        for btn in self._buttons:
-            btn.setEnabled(False)
-        self._set_light(name, True)
-        QApplication.processEvents()
-        try:
-            func(name)
-        finally:
-            self._set_light(name, False)
-            for btn in self._buttons:
-                btn.setEnabled(True)
 
 
 class RemapJogDialog(QDialog):
@@ -574,21 +518,14 @@ class CRL3DPrintControl(QObject):
     def __init__(self, debug_mode=False):
         super().__init__()
         self.debug_mode = debug_mode
-        self.lock = Lock()
 
         _ensure_default_ini(_CRL_INI)
 
         self.ui = uic.loadUi(os.path.join(_UI_DIR, "CRL_3dprint.ui"))
 
-        if self.debug_mode:
-            from debug_stubs import DebugSmaractCRLController
-
-            self.controller = DebugSmaractCRLController(motor_slots=_RAW_MOTOR_SLOTS)
-        elif _HARDWARE_AVAILABLE:
-            self.controller = CRLAxisController()
-        else:
-            raise RuntimeError("smaract.ctl SDK not available. Run with --debug_mode to use stubs.")
+        self.controller = CRLAxisController(pv_class=self._motor_pv_class())
         self.controller.connect()
+        self._refresh_units()
 
         self._xy_jog_map = _load_jog_map("jog_remap_xy", XY_JOG_MAP)
         self._tp_jog_map = _load_jog_map("jog_remap_tp", TILTPITCH_JOG_MAP)
@@ -611,6 +548,7 @@ class CRL3DPrintControl(QObject):
         self.ui.actionImportPositions.triggered.connect(self.xy_preset._import)
         self._scalar_scan_window = None
 
+        self.update_positions()
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_positions)
         self.timer.start(200)
@@ -639,13 +577,25 @@ class CRL3DPrintControl(QObject):
 
     # -- per-motor widget wiring ---------------------------------------------
 
+    def _motor_pv_class(self):
+        """The PV factory the motor controller builds its records from. In
+        debug mode this is a purely in-memory fake, so no Channel Access
+        traffic is generated and pyepics need not be installed."""
+        if self.debug_mode:
+            from debug_stubs import FakeMotorPV
+
+            return FakeMotorPV
+        return PV
+
+    def _refresh_units(self):
+        """Take each motor's engineering unit from the IOC, leaving the
+        configured fallback in place for an axis that isn't answering."""
+        for slot in self.MOTOR_SLOTS:
+            slot["unit"] = self.controller.get_unit(slot["name"])
+
     def _wire_motor_widgets(self):
         for slot in self.MOTOR_SLOTS:
             name = slot["name"]
-            lbl_pos = self.ui.findChild(QLabel, f"lbl_pos_{name}")
-            if lbl_pos:
-                lbl_pos.setText(self.MOTOR_PREC % self.controller.get_pos(name))
-
             ed_moveto = self.ui.findChild(QLineEdit, f"edit_moveto_{name}")
             if ed_moveto:
                 ed_moveto.returnPressed.connect(lambda n=name: self._move_to(n))
@@ -670,10 +620,17 @@ class CRL3DPrintControl(QObject):
     def _dispatch_move(self, name, value, relative: bool):
         """Single choke point for every move path (move-to, tweak, jog):
         checks the intended absolute target against SOFT_LIMITS and only
-        forwards the move to the controller if it's in range."""
+        forwards the move to the controller if it's in range.
+
+        A relative move needs the current position to resolve its target, so
+        it is refused outright when the IOC isn't answering for that axis -
+        stepping blind from an unknown position could land anywhere."""
         if relative:
-            with self.lock:
-                target = self.controller.get_pos(name) + value
+            current = self.controller.get_pos(name)
+            if current is None:
+                self._flag_invalid(name, True)
+                return
+            target = current + value
         else:
             target = value
 
@@ -683,11 +640,10 @@ class CRL3DPrintControl(QObject):
             return
         self._flag_invalid(name, False)
 
-        with self.lock:
-            if relative:
-                self.controller.mvr(name, value, wait=False)
-            else:
-                self.controller.mv(name, value, wait=False)
+        if relative:
+            self.controller.tweak(name, abs(value), forward=value >= 0)
+        else:
+            self.controller.mv(name, value)
 
     # -- jog pads (X/Y and Tilt/Pitch share the same wiring shape) -----------
 
@@ -734,9 +690,7 @@ class CRL3DPrintControl(QObject):
         except ValueError:
             return
         ed.setText(f"{val * factor:g}")
-        key = PAD_STEP_INI_KEYS.get(tweak_widget_name)
-        if key:
-            self._save_ini_value("tweak_steps", key, ed.text())
+        self._on_pad_step_edited(tweak_widget_name)
 
     # -- tweak/pad step persistence --------------------------------------------
 
@@ -748,14 +702,36 @@ class CRL3DPrintControl(QObject):
         cfg.read(_CRL_INI)
         sec = cfg["tweak_steps"] if cfg.has_section("tweak_steps") else {}
 
-        def _wire(ed, key):
+        def _wire(ed, widget_name, key):
             if not ed:
                 return
             ed.setText(sec.get(key, ed.text()))
-            ed.editingFinished.connect(lambda e=ed, k=key: self._save_ini_value("tweak_steps", k, e.text()))
+            ed.editingFinished.connect(lambda w=widget_name: self._on_pad_step_edited(w))
+            self._push_pad_step(widget_name)
 
         for widget_name, key in PAD_STEP_INI_KEYS.items():
-            _wire(self.ui.findChild(QLineEdit, widget_name), key)
+            _wire(self.ui.findChild(QLineEdit, widget_name), widget_name, key)
+
+    def _on_pad_step_edited(self, widget_name):
+        ed = self.ui.findChild(QLineEdit, widget_name)
+        if not ed:
+            return
+        self._save_ini_value("tweak_steps", PAD_STEP_INI_KEYS[widget_name], ed.text())
+        self._push_pad_step(widget_name)
+
+    def _push_pad_step(self, widget_name):
+        """Publish a pad's step size to the .TWV of each motor it drives, so
+        other EPICS clients show the same tweak value this GUI is using."""
+        ed = self.ui.findChild(QLineEdit, widget_name)
+        if not ed:
+            return
+        try:
+            step = float(ed.text())
+        except ValueError:
+            return
+        for axis in PAD_AXES[widget_name]:
+            if self.controller.is_axis_connected(axis):
+                self.controller.set_tweak_step(axis, step)
 
     # -- X-ray eye ------------------------------------------------------------
 
@@ -818,17 +794,13 @@ class CRL3DPrintControl(QObject):
             if action:
                 action.triggered.connect(getattr(self, method_name))
 
-    # -- Tools menu: velocities (session-only) & calibrate/reference --------
+    # -- Tools menu: velocities (session-only) ------------------------------
 
     def _open_velocities_dialog(self):
         dlg = VelocitiesDialog(self.ui, self.MOTOR_SLOTS, self.controller)
         if dlg.exec_() == QDialog.Accepted:
             for name, new_vel in dlg.new_velocities().items():
-                self.controller.set_speed(name, vel=new_vel, acc=dlg.acc_for(name))
-
-    def _open_calibrate_dialog(self):
-        dlg = CalibrateReferenceDialog(self.ui, self.MOTOR_SLOTS, self.controller)
-        dlg.exec_()
+                self.controller.set_speed(name, new_vel)
 
     # -- Edit menu: remap which axis/direction each jog button drives -------
 
@@ -872,7 +844,7 @@ class CRL3DPrintControl(QObject):
     def _open_scalar_scan(self):
         if self._scalar_scan_window is None:
             self._scalar_scan_window = ScalarScanWindow(
-                self.ui, self.controller, self._pv_class, self.lock, SOFT_LIMITS
+                self.ui, self.controller, self._pv_class, SOFT_LIMITS
             )
         else:
             self._scalar_scan_window.win.show()
@@ -881,14 +853,38 @@ class CRL3DPrintControl(QObject):
 
     # -- periodic update --------------------------------------------------------
 
+    def _set_axis_enabled(self, name, enabled: bool):
+        """Grey out everything that would command this motor, so a control
+        that cannot reach its IOC can't be pressed."""
+        ed = self.ui.findChild(QLineEdit, f"edit_moveto_{name}")
+        if ed:
+            ed.setEnabled(enabled)
+        for jog_map_attr, group_box in (
+            ("_xy_jog_map", self.ui.frame_jogXY),
+            ("_tp_jog_map", self.ui.frame_jogTiltPitch),
+        ):
+            for btn_name, (axis, _sign) in getattr(self, jog_map_attr).items():
+                if axis != name:
+                    continue
+                btn = group_box.findChild(QPushButton, btn_name)
+                if btn:
+                    btn.setEnabled(enabled)
+
     def update_positions(self):
+        """Repaint from pyepics' monitor cache - each read is local, so this
+        runs on the GUI thread without any Channel Access round trip."""
+        dead = self.controller.disconnected_axes()
         for slot in self.MOTOR_SLOTS:
             name = slot["name"]
-            with self.lock:
-                val = self.controller.get_pos(name)
+            val = self.controller.get_pos(name)
             lbl = self.ui.findChild(QLabel, f"lbl_pos_{name}")
             if lbl:
-                lbl.setText(self.MOTOR_PREC % val)
+                lbl.setText(NO_READBACK_TEXT if val is None else self.MOTOR_PREC % val)
+            self._set_axis_enabled(name, name not in dead)
+
+        self.ui.statusbar.showMessage(
+            "EPICS disconnected: " + ", ".join(dead) if dead else "EPICS connected"
+        )
         self.xy_preset.update_status()
 
 
@@ -897,7 +893,7 @@ def main():
     parser.add_argument(
         "--debug_mode",
         action="store_true",
-        help="Run without connecting to the SmarAct MCS2 controller or EPICS PVs",
+        help="Run with simulated motors, without connecting to any EPICS IOC or PV",
     )
     args, _ = parser.parse_known_args()  # parse_known_args so Qt args pass through
 

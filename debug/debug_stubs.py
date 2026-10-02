@@ -1044,68 +1044,135 @@ class DebugSlit:
 # CRL_3dprint stubs - used by gui/CRL_3dprint.py --debug_mode
 # ===========================================================================
 
-class DebugSmaractCRLController:
+# Field suffixes FakeMotorPV gives motion meaning to. Anything else is stored
+# and returned verbatim.
+_MOTOR_DRIVE = ".VAL"
+_MOTOR_READBACK = ".RBV"
+_MOTOR_RELATIVE = ".RLV"
+_MOTOR_TWEAK_STEP = ".TWV"
+_MOTOR_TWEAK_FORWARD = ".TWF"
+_MOTOR_TWEAK_REVERSE = ".TWR"
+_MOTOR_VELOCITY = ".VELO"
+_MOTOR_SET_VELOCITY = "_vCh.A"
+
+# Starting value for any field not written yet. A record whose suffix is
+# absent here reads back 0.
+_MOTOR_DEFAULTS = {
+    _MOTOR_READBACK: 0.0,
+    _MOTOR_DRIVE: 0.0,
+    ".DMOV": 1,  # never busy - simulated moves complete instantly
+    _MOTOR_VELOCITY: 1.0,
+    _MOTOR_TWEAK_STEP: 0.001,
+    ".SPMG": 3,
+    _MOTOR_SET_VELOCITY: 1.0,
+}
+
+# Engineering unit per record prefix, so .EGU reads back something sensible
+# without an IOC. Prefixes not listed here report "mm".
+_MOTOR_UNITS = {
+    "12ideMCS2:m3": "deg",
+    "12ideMCS2:m4": "deg",
+}
+
+# Every field suffix FakeMotorPV recognises, longest first so a suffix that
+# ends with a shorter one still matches as itself. Ties break on the name so
+# the order does not depend on set iteration.
+_MOTOR_FIELDS = tuple(
+    sorted(
+        set(_MOTOR_DEFAULTS)
+        | {".EGU", _MOTOR_TWEAK_FORWARD, _MOTOR_TWEAK_REVERSE, _MOTOR_RELATIVE},
+        key=lambda suffix: (-len(suffix), suffix),
+    )
+)
+
+
+class FakeMotorPV:
+    """Offline stand-in for epics.PV over a simulated EPICS motor record.
+
+    Instances share one in-memory store keyed by full PV name, so a write to
+    '<prefix>.VAL' is visible to a reader of '<prefix>.RBV'. Nothing here
+    imports pyepics, opens a socket or broadcasts a CA search - debug mode is
+    completely offline.
+
+    Used by injecting it as EpicsMotorController's pv_class, so the real
+    controller's move/tweak/limit logic is what runs in debug mode and under
+    test, rather than a parallel stub that can drift from it.
     """
-    Debug stub for ptychosaxs.smaract_crl3dprint.CRLAxisController.
-    Holds an in-memory position dict keyed by logical motor name
-    ('X', 'Y', 'TILT', 'PITCH' by default). Never opens a network
-    connection. Mirrors the real class's public method signatures exactly
-    so gui/CRL_3dprint.py can use either interchangeably.
-    """
 
-    def __init__(self, motor_slots=None):
-        # motor_slots: [(name, channel, unit), ...] - same shape as
-        # smaract_crl3dprint.MOTOR_SLOTS. The caller passes the real
-        # MOTOR_SLOTS constant even in debug mode so names stay consistent
-        # with non-debug wiring.
-        self.motor_slots = motor_slots or [
-            ("X", 0, "mm"), ("Y", 1, "mm"), ("TILT", 2, "deg"), ("PITCH", 3, "deg"),
-        ]
-        self._pos = {name: 0.0 for name, _ch, _unit in self.motor_slots}
-        self._connected = False
-        print(f"[DEBUG] DebugSmaractCRLController initialised: {[n for n, _, _ in self.motor_slots]}")
+    _store = {}
 
-    def connect(self) -> None:
-        print("[DEBUG] DebugSmaractCRLController.connect() (no-op)")
-        self._connected = True
+    connected = True
 
-    def disconnect(self) -> None:
-        print("[DEBUG] DebugSmaractCRLController.disconnect() (no-op)")
-        self._connected = False
+    def __init__(self, pvname, *args, **kwargs):
+        self.pvname = pvname
+        self._prefix, self._field = self._split(pvname)
+        self._store.setdefault(pvname, self._initial())
 
-    def is_connected(self) -> bool:
-        return self._connected
+    @classmethod
+    def reset(cls):
+        """Drop all simulated records - lets a test start from a clean slate."""
+        cls._store = {}
 
-    def get_pos(self, axis) -> float:
-        return self._pos[axis]
+    @staticmethod
+    def _split(pvname):
+        """Separate a record prefix from its field suffix by matching the
+        suffixes we know, longest first - '_vCh.A' is one suffix rather than
+        a '_vCh' record with an 'A' field, and a prefix containing '_' or '.'
+        stays intact."""
+        for suffix in _MOTOR_FIELDS:
+            if pvname.endswith(suffix):
+                return pvname[: -len(suffix)], suffix
+        return pvname, ""
 
-    def mv(self, axis, target: float, wait: bool = True) -> None:
-        self._pos[axis] = float(target)
-        print(f"[DEBUG] DebugSmaractCRLController.mv({axis!r}, {target})")
+    def _initial(self):
+        if self._field == ".EGU":
+            return _MOTOR_UNITS.get(self._prefix, "mm")
+        return _MOTOR_DEFAULTS.get(self._field, 0)
 
-    def mvr(self, axis, delta: float, wait: bool = True) -> None:
-        self._pos[axis] += float(delta)
-        print(f"[DEBUG] DebugSmaractCRLController.mvr({axis!r}, {delta}) -> {self._pos[axis]:.6f}")
+    def _peer(self, field):
+        name = self._prefix + field
+        if name not in self._store:
+            FakeMotorPV(name)
+        return name
 
-    def stop(self, axis) -> None:
-        print(f"[DEBUG] DebugSmaractCRLController.stop({axis!r})")
+    def get(self, *args, **kwargs):
+        return self._store[self.pvname]
 
-    def set_pos(self, axis, position: float = 0.0) -> float:
-        self._pos[axis] = float(position)
-        return self._pos[axis]
+    @property
+    def value(self):
+        return self.get()
 
-    def is_moving(self, axis) -> bool:
-        return False
+    def put(self, val, wait=False, timeout=None):
+        """Writes land verbatim; the fields that command motion additionally
+        move the simulated stage. Moves complete instantly, so .DMOV never
+        leaves its done state and put-completion returns straight away."""
+        self._store[self.pvname] = val
+        moved = None
 
-    def set_speed(self, axis, vel: float = 1, acc: float = 10) -> None:
-        print(f"[DEBUG] DebugSmaractCRLController.set_speed({axis!r}, vel={vel}, acc={acc})")
+        if self._field == _MOTOR_DRIVE:
+            moved = float(val)
+        elif self._field == _MOTOR_RELATIVE:
+            moved = self._position() + float(val)
+        elif self._field in (_MOTOR_TWEAK_FORWARD, _MOTOR_TWEAK_REVERSE):
+            step = float(self._store[self._peer(_MOTOR_TWEAK_STEP)])
+            sign = 1.0 if self._field == _MOTOR_TWEAK_FORWARD else -1.0
+            moved = self._position() + sign * step
+        elif self._field == _MOTOR_SET_VELOCITY:
+            # The IOC forwards the requested velocity to the record's own
+            # .VELO, which is where it is read back from.
+            self._store[self._peer(_MOTOR_VELOCITY)] = float(val)
 
-    def get_speed(self, axis) -> tuple:
-        return (1.0, 10.0)
+        if moved is not None:
+            self._store[self._peer(_MOTOR_READBACK)] = moved
+            self._store[self._peer(_MOTOR_DRIVE)] = moved
 
-    def calibrate(self, axis) -> None:
-        print(f"[DEBUG] DebugSmaractCRLController.calibrate({axis!r})")
+        print(f"[DEBUG] FakeMotorPV.put({self.pvname!r}, {val})")
 
-    def find_reference(self, axis) -> None:
-        self._pos[axis] = 0.0
-        print(f"[DEBUG] DebugSmaractCRLController.find_reference({axis!r}) -> 0.0")
+    def _position(self) -> float:
+        return float(self._store[self._peer(_MOTOR_READBACK)])
+
+    def wait_for_connection(self, timeout=None):
+        return True
+
+    def disconnect(self):
+        pass
