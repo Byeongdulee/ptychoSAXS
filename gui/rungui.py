@@ -605,11 +605,17 @@ class ptyco_main_control(QObject):
         guiName = os.path.join(UI_DIR, "ptycoSAXS.ui")
         self.pts = pts
         print("Connecting to PTS...")
+        self.hexapod_available = True
         if not DEBUG_MOTORS:
-            if not self.pts.hexapod.is_servo_on("X"):
-                print("Hexapod servo is off. Trying to turn it on...")
-                self.handle_hexapod_error()
-                print("Hexapod servo is now on.")
+            try:
+                if not self.pts.hexapod.is_servo_on("X"):
+                    print("Hexapod servo is off. Trying to turn it on...")
+                    self.handle_hexapod_error()
+                    print("Hexapod servo is now on.")
+            except Exception as exc:
+                print(f"[WARNING] Hexapod not available ({exc}). "
+                      "Hexapod motors and scans will be disabled.")
+                self.hexapod_available = False
         # self.beamstatus = beamstatus()
         self.ui = uic.loadUi(guiName)
 
@@ -707,16 +713,22 @@ class ptyco_main_control(QObject):
         # phi is optional: when it isn't connected we still keep its entry (so
         # the motors after it don't shift slots) but mark it disconnected so we
         # never query its position. Every other motor must connect or we raise.
+        try:
+            hexapod_axes = list(self.pts.hexapod.axes)
+        except Exception:
+            hexapod_axes = ["X", "Y", "Z", "U", "V", "W"]
+
         self.motornames = []
         self.motorunits = []
         self.motorconnected = []
         phi_not_connected = False
+        hexapod_axis_not_connected = False
         #        print(motornames, " line 241")
         for i, name in enumerate(motornames):
             try:
                 connected = self.pts.isconnected(name)
             except Exception as exc:
-                if name == "phi":
+                if name == "phi" or name in hexapod_axes:
                     connected = False
                 else:
                     raise RuntimeError(
@@ -732,14 +744,33 @@ class ptyco_main_control(QObject):
                 self.motorunits.append(motorunits[i])
                 self.motorconnected.append(False)
                 phi_not_connected = True
+            elif name in hexapod_axes:
+                # Hexapod didn't connect: disable this axis instead of
+                # crashing the whole GUI.
+                self.motornames.append(name)
+                self.motorunits.append(motorunits[i])
+                self.motorconnected.append(False)
+                hexapod_axis_not_connected = True
             else:
                 raise RuntimeError(f"Motor '{name}' failed to connect.")
+
+        if hexapod_axis_not_connected:
+            self.hexapod_available = False
 
         if phi_not_connected:
             QMessageBox.warning(
                 self.ui,
                 "Warning",
                 "Warning: tomography phi stage not connected",
+                QMessageBox.Ok,
+            )
+        if hexapod_axis_not_connected:
+            QMessageBox.warning(
+                self.ui,
+                "Warning",
+                "Warning: hexapod not connected. Hexapod motors and "
+                "2D/3D/helix scans are disabled; only 1D scans on "
+                "non-hexapod motors (phi, gonio) are available.",
                 QMessageBox.Ok,
             )
         #        print(motornames, " line 252")
@@ -885,6 +916,29 @@ class ptyco_main_control(QObject):
             lambda: self.fly3d(xm, ym, phim, snake=True)
         )
         self.ui.pb_helix_scan.clicked.connect(lambda: self.scan_handler.helix_fly_choose_axis(phim))
+
+        if not self.hexapod_available:
+            # Quick-testing mode: hexapod isn't connected, so disable every
+            # scan that relies on it (2D/3D/helix all use hexapod X/Z) and
+            # leave only 1D scans on non-hexapod motors (phi, gonio) usable.
+            for _pb_name in (
+                "pb_lup_step2d",
+                "pb_SAXSscan_fly2d",
+                "pb_lup_step3d",
+                "pb_SAXSscan_fly3d",
+                "pb_helix_scan",
+            ):
+                self.ui.findChild(QPushButton, _pb_name).setEnabled(False)
+            for _action_name in (
+                "actionflyX_and_stepY",
+                "actionsnake",
+                "actionstepscan",
+                "actionnormal_2D",
+                "actionsnake_2D",
+                "actionstep_2D",
+            ):
+                getattr(self.ui, _action_name).setEnabled(False)
+
         self.ui.actionSelect_time_intervals.triggered.connect(self.select_timeintervals)
         self.ui.actionTrigout.triggered.connect(lambda: self.set_softglue_in(1))
         self.ui.actionDetout.triggered.connect(lambda: self.set_softglue_in(2))

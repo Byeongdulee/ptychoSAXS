@@ -66,6 +66,23 @@ QDS_UNIT_MM = 2
 QDS_UNIT_DEFAULT = 1
 STRUCK_CHANNELS = [2, 3, 4, 5]
 
+# Scaler channels counted at each 1-D step-scan position and saved next to the
+# Struck MCS csv. Unrelated to STRUCK_CHANNELS above: those come out of the MCS
+# waveform in one shot at scandone(), these are counted one position at a time
+# the way gui/handlers/scalar_scan.py's OneShot mode does - but on 12idc:scaler1
+# rather than that window's 12idc:3820:scaler1.
+SCAN_SCALAR_PVS = {
+    "IC": "12idc:scaler1.S2",
+    "BS2": "12idc:scaler1.S3",
+    "BS": "12idc:scaler1.S4",
+    "IfCRL": "12idc:scaler1.S5",
+}
+SCALER_CONT_PV = "12idc:scaler1.CONT"  # mode: 0 = OneShot, 1 = AutoCount (free-running)
+SCALER_TP_PV = "12idc:scaler1.TP"  # scaler preset (count) time
+SCALER_CNT_PV = "12idc:scaler1.CNT"  # count start (put 1) / done readback (reads back 0)
+COUNT_DONE_TIMEOUT_MARGIN_S = 5.0  # added to the count time as the ceiling for one OneShot count
+COUNT_POLL_INTERVAL_S = 0.01  # polling granularity while waiting for .CNT to drop back to 0
+
 
 def rstrip_from_char(string, char):
     """Removes characters from the right of the string starting from the first occurrence of 'char'."""
@@ -2068,7 +2085,7 @@ class ScanHandler:
                             fnum = det.FileNumber_RBV
                             fn = bytes(det.FullFileName_RBV).decode().strip("\x00")
 
-            # save Struck as a separate txt file.
+            # save Struck as a separate csv file.
             if self.w.isStruckCountNeeded:
                 # data = self.w.detector[2].read_mcs(STRUCK_CHANNELS)
                 foldername, filename = self.w.get_softglue_filename()
@@ -2079,7 +2096,33 @@ class ScanHandler:
                         foldername, "Struck", self.scannumberstring
                     )
                     os.makedirs(foldername, exist_ok=True)
-                    np.savetxt(os.path.join(foldername, filename + ".txt"), self.w.rpos)
+                    # read_mcs returns one waveform per channel; transpose so the
+                    # csv has one row per scan position and one column per channel.
+                    counts = np.column_stack(
+                        [np.atleast_1d(ch) for ch in self.w.rpos]
+                    )
+                    np.savetxt(
+                        os.path.join(foldername, filename + ".csv"),
+                        counts,
+                        delimiter=",",
+                        fmt="%g",
+                        header=",".join(f"ch{n}" for n in STRUCK_CHANNELS),
+                        comments="",
+                    )
+
+                    # Per-position scaler counts collected by stepscan0. Empty
+                    # for scan types that don't collect them.
+                    scalar_rows = getattr(self.w, "scan_scalars", [])
+                    if len(scalar_rows) > 0:
+                        np.savetxt(
+                            os.path.join(foldername, filename + "_scalers.csv"),
+                            np.asarray(scalar_rows, dtype=float),
+                            delimiter=",",
+                            fmt="%g",
+                            header=",".join(SCAN_SCALAR_PVS.keys()),
+                            comments="",
+                        )
+                    self.w.scan_scalars = []
 
             # update logfile if logfilename is set.
             if len(self.w.parameters.logfilename) > 0:
@@ -4589,6 +4632,7 @@ class ScanHandler:
         self.w.signalmotorunit = self.w.motorunits[motornumber]
         self.w.rpos = []
         self.w.mpos = []
+        self.w.scan_scalars = []
         pos = self.w.pts.get_pos(axis)
         pos0 = pos
         self.w.isfly = False
@@ -4694,47 +4738,137 @@ class ScanHandler:
                     print(self.w.messages["recent error message"])
                     return
 
+        # Count the scalars one position at a time, the way scalar_scan.py's
+        # OneShot mode does. Only when Struck is on, so every other scan leaves
+        # the scaler free-running and undisturbed for its other clients.
+        scaler_oneshot = self.w.isStruckCountNeeded and self._scaler_oneshot_begin(expt)
+
         t0 = time.time()
-        for i, value in enumerate(pos):
-            if self.isStopScanIssued:
-                break
+        try:
+            for i, value in enumerate(pos):
+                if self.isStopScanIssued:
+                    break
 
-            # Move motor to this scan position and wait for motor to settle.
-            self._scan_mv(axis, value, update_status=update_status)
+                # Move motor to this scan position and wait for motor to settle.
+                self._scan_mv(axis, value, update_status=update_status)
 
-            # Configurable idle time between exposures (avoids vibration artefacts).
-            time.sleep(self.w.parameters._step_acq_time)
+                # Configurable idle time between exposures (avoids vibration artefacts).
+                time.sleep(self.w.parameters._step_acq_time)
 
-            # Re-confirm detector is armed before each trigger.
-            # The detector can fall out of armed state after a timeout or IOC error.
-            timeout_occurred, TIMEOUT = self.is_arming_detecotors_timedout()
-            if timeout_occurred:
-                self.w.messages["recent error message"] = (
-                    f"Detector arm timeout ({TIMEOUT}s) at point {i + 1}. {time.ctime()}"
-                )
-                print(self.w.messages["recent error message"])
-                return DETECTOR_NOT_STARTED_ERROR
+                # One OneShot count at this position for the scaler csv, taken
+                # after the settle above so the scalers and the detector frame
+                # both see the same stopped stage, and before the trigger.
+                if scaler_oneshot:
+                    self.w.scan_scalars.append(self._scaler_oneshot_count(expt))
 
-            # Fire the DG645 trigger.  This causes _pulses_per_step exposures.
-            if isDET_selected:
-                self.w.dg645_12ID.trigger()
+                # Re-confirm detector is armed before each trigger.
+                # The detector can fall out of armed state after a timeout or IOC error.
+                timeout_occurred, TIMEOUT = self.is_arming_detecotors_timedout()
+                if timeout_occurred:
+                    self.w.messages["recent error message"] = (
+                        f"Detector arm timeout ({TIMEOUT}s) at point {i + 1}. {time.ctime()}"
+                    )
+                    print(self.w.messages["recent error message"])
+                    return DETECTOR_NOT_STARTED_ERROR
 
-            # Block until the detector has collected the expected cumulative frame count.
-            # is_waiting_detectors_timedout checks ArrayCounter_RBV >= (i+1)*pulses_per_step.
-            timeout_occurred, TIMEOUT = self.is_waiting_detectors_timedout(expt, i)
-            if timeout_occurred:
-                self.w.messages["recent error message"] = (
-                    f"Detector frame timeout ({TIMEOUT}s) at point {i + 1}. {time.ctime()}"
-                )
-                print(self.w.messages["recent error message"])
-                return DETECTOR_NOT_STARTED_ERROR
+                # Fire the DG645 trigger.  This causes _pulses_per_step exposures.
+                if isDET_selected:
+                    self.w.dg645_12ID.trigger()
 
-            # Record the commanded position for the scan log.
-            self.w.mpos.append(value)
-            self._emit_progress(t0, i, len(pos), update_progress, update_status)
+                # Block until the detector has collected the expected cumulative frame count.
+                # is_waiting_detectors_timedout checks ArrayCounter_RBV >= (i+1)*pulses_per_step.
+                timeout_occurred, TIMEOUT = self.is_waiting_detectors_timedout(expt, i)
+                if timeout_occurred:
+                    self.w.messages["recent error message"] = (
+                        f"Detector frame timeout ({TIMEOUT}s) at point {i + 1}. {time.ctime()}"
+                    )
+                    print(self.w.messages["recent error message"])
+                    return DETECTOR_NOT_STARTED_ERROR
+
+                # Record the commanded position for the scan log.
+                self.w.mpos.append(value)
+                self._emit_progress(t0, i, len(pos), update_progress, update_status)
+        finally:
+            if scaler_oneshot:
+                self._scaler_oneshot_restore()
 
         # Return motor to its home position (where it was before the scan started).
         self._scan_mv(axis, pos0, update_status=update_status)
+
+    def _scaler_oneshot_begin(self, exp_time):
+        """Put the scaler into OneShot mode with `exp_time` as its preset,
+        mirroring ScalarScanWindow._start_scan.
+
+        Returns True if the scaler is ours for the rest of the scan, in which
+        case _scaler_oneshot_restore must run on every exit path.
+        """
+        try:
+            import epics
+        except ImportError:
+            print("Warning: pyepics not available, scaler counts not collected")
+            return False
+        try:
+            epics.caput(SCALER_CONT_PV, 0)  # OneShot, for the duration of this scan only
+            epics.caput(SCALER_TP_PV, exp_time)
+        except Exception as e:
+            print(f"Warning: could not put scaler into OneShot mode: {e}")
+            return False
+        return True
+
+    def _scaler_oneshot_restore(self):
+        """Put the scaler back into AutoCount - the counterpart to
+        _scaler_oneshot_begin, so a stopped or errored scan never leaves the
+        scaler stuck out of free-running for other clients."""
+        try:
+            import epics
+
+            epics.caput(SCALER_CONT_PV, 1)
+        except Exception as e:
+            print(f"Warning: could not restore scaler to free-running: {e}")
+
+    def _scaler_oneshot_count(self, exp_time):
+        """Trigger one OneShot count, block until the scaler reports it done,
+        then read the channels once.
+
+        Mirrors _ScanWorker._wait_for_count_done / _read_scalars_into in
+        scalar_scan.py. Returns one row of floats in SCAN_SCALAR_PVS order,
+        using nan for anything that could not be read so the csv keeps one row
+        per scan position even when the scaler misbehaves.
+        """
+        nan_row = [float("nan")] * len(SCAN_SCALAR_PVS)
+        timeout = exp_time + COUNT_DONE_TIMEOUT_MARGIN_S
+        try:
+            import epics
+
+            # Put-completion: the scaler record acknowledges .CNT only once the
+            # count has finished, so this blocks for the whole exposure. A plain
+            # non-blocking put would return before the IOC had even started
+            # counting, and since the record zeroes .S1-.SN at count start, the
+            # read below would then return 0 for every channel.
+            epics.caput(SCALER_CNT_PV, 1, wait=True, timeout=timeout)
+
+            # Backstop in case this IOC does not honour put-completion on .CNT.
+            # use_monitor=False forces a fresh CA get rather than a possibly
+            # stale monitor-cached value.
+            deadline = time.monotonic() + timeout
+            while epics.caget(SCALER_CNT_PV, use_monitor=False):
+                if time.monotonic() > deadline:
+                    print("Warning: timed out waiting for scaler count to finish")
+                    return nan_row
+                time.sleep(COUNT_POLL_INTERVAL_S)
+        except Exception as e:
+            print(f"Warning: scaler count failed: {e}")
+            return nan_row
+
+        row = []
+        for name, pv_name in SCAN_SCALAR_PVS.items():
+            try:
+                value = epics.caget(pv_name, use_monitor=False)
+            except Exception as e:
+                print(f"Warning: could not read {name} ({pv_name}): {e}")
+                value = None
+            row.append(float("nan") if value is None else float(value))
+        return row
 
     def get_detectors_armed(self):
         TIMEOUT = 10
