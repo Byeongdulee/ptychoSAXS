@@ -47,6 +47,97 @@ if DEBUG_MODE:
 DEBUG_MOTORS = DEBUG_MODE and DEBUG_LEVEL in (0, 2)  # motors are stubbed
 DEBUG_DEVICES = DEBUG_MODE and DEBUG_LEVEL in (0, 1)  # non-motors are stubbed
 
+# ==========================================================================
+# PER-CONTROLLER DEBUG FLAGS — EDIT THESE TO RUN WITHOUT HARDWARE
+# ==========================================================================
+# True  -> that controller's library is never imported and never connected
+#          to. A simulated stand-in takes its place, so its motors still read
+#          back and still tweak, but nothing reaches the hardware.
+# False -> the real hardware is imported and connected to as usual.
+#
+# Which axes / devices belong to which flag:
+#
+#   DEBUG_HEXAPOD  PI hexapod, pihexapod.gcs over TCP (10.54.122.145)
+#                    axes: X, Y, Z, U, V, W
+#   DEBUG_ACS      ACS controller, acspy over ethernet (10.54.122.157)
+#                    axes: phi
+#   DEBUG_GONIO    Goniometer over EPICS, IOC 12ideMCS1 (ptychosaxs.epics_gonio)
+#                    axes: trans1, trans2, tilt1, tilt2
+#   DEBUG_QDS      QDS interferometer over USB, softglueZynq fallback
+#                    no axes — position sensor behind the QDS readouts
+#   DEBUG_EPICS    Every other EPICS device: scan-number PV, softglue, DG645,
+#                    struck scaler, shutter, detectors
+#                    no axes — devices only
+#
+# Any one of the three motor flags being True disables every scan button.
+DEBUG_HEXAPOD = False
+DEBUG_ACS = False
+DEBUG_GONIO = False
+DEBUG_QDS = False
+DEBUG_EPICS = False
+
+_DEBUG_FLAG_NAMES = (
+    "DEBUG_HEXAPOD", "DEBUG_ACS", "DEBUG_GONIO", "DEBUG_QDS", "DEBUG_EPICS",
+)
+
+# `--debug` still works: its levels force whole groups of the flags above.
+if DEBUG_MOTORS:
+    DEBUG_HEXAPOD = DEBUG_ACS = DEBUG_GONIO = DEBUG_QDS = True
+if DEBUG_DEVICES:
+    DEBUG_EPICS = True
+
+# DEBUG_DEVICES stays the one switch the device imports and the handlers read,
+# so DEBUG_EPICS folds into it instead of duplicating every check downstream.
+DEBUG_DEVICES = DEBUG_DEVICES or DEBUG_EPICS
+
+# Scans move motors, so any simulated motor controller disables all of them.
+DEBUG_ANY_MOTOR = DEBUG_HEXAPOD or DEBUG_ACS or DEBUG_GONIO
+
+# The motor and interferometer libraries are imported by
+# ptychosaxs.motions_ver2 / ptychosaxs.interferometers, which read the flags
+# back out of the environment. This must happen before those imports below.
+os.environ["PTYCHOSAXS_DEBUG_HEXAPOD"] = "1" if DEBUG_HEXAPOD else "0"
+os.environ["PTYCHOSAXS_DEBUG_ACS"] = "1" if DEBUG_ACS else "0"
+os.environ["PTYCHOSAXS_DEBUG_GONIO"] = "1" if DEBUG_GONIO else "0"
+os.environ["PTYCHOSAXS_DEBUG_QDS"] = "1" if DEBUG_QDS else "0"
+
+
+def _debug_flag_lines():
+    """Line range of the editable flag block above, for the caution banner.
+
+    Read back out of the source so the printed numbers cannot drift as this
+    file is edited. Only the unindented `NAME = ...` assignments match, not
+    the `--debug` overrides that reassign the same names indented.
+    """
+    try:
+        with open(__file__, encoding="utf-8") as fh:
+            nums = [
+                i for i, line in enumerate(fh, 1)
+                if line.split("=")[0].rstrip() in _DEBUG_FLAG_NAMES
+            ]
+    except OSError:
+        nums = []
+    return f"{min(nums)}-{max(nums)}" if nums else "the DEBUG_* block near the top"
+
+
+_debug_on = [
+    name for name, is_on in (
+        ("hexapod", DEBUG_HEXAPOD),
+        ("ACS/phi", DEBUG_ACS),
+        ("gonio", DEBUG_GONIO),
+        ("QDS", DEBUG_QDS),
+        ("EPICS devices", DEBUG_EPICS),
+    ) if is_on
+]
+if _debug_on:
+    print(
+        "Caution: Debug Mode set for at least one motor "
+        f"({', '.join(_debug_on)}). "
+        f"To disable, see rungui.py:{_debug_flag_lines()}"
+    )
+    if DEBUG_ANY_MOTOR:
+        print("         Scanning is disabled while any motor is simulated.")
+
 # Path setup must come before any hardware import (including debug stubs)
 _gui_dir = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(_gui_dir, "ui")
@@ -605,17 +696,11 @@ class ptyco_main_control(QObject):
         guiName = os.path.join(UI_DIR, "ptycoSAXS.ui")
         self.pts = pts
         print("Connecting to PTS...")
-        self.hexapod_available = True
-        if not DEBUG_MOTORS:
-            try:
-                if not self.pts.hexapod.is_servo_on("X"):
-                    print("Hexapod servo is off. Trying to turn it on...")
-                    self.handle_hexapod_error()
-                    print("Hexapod servo is now on.")
-            except Exception as exc:
-                print(f"[WARNING] Hexapod not available ({exc}). "
-                      "Hexapod motors and scans will be disabled.")
-                self.hexapod_available = False
+        if not DEBUG_MOTORS and not DEBUG_HEXAPOD:
+            if not self.pts.hexapod.is_servo_on("X"):
+                print("Hexapod servo is off. Trying to turn it on...")
+                self.handle_hexapod_error()
+                print("Hexapod servo is now on.")
         # self.beamstatus = beamstatus()
         self.ui = uic.loadUi(guiName)
 
@@ -713,22 +798,16 @@ class ptyco_main_control(QObject):
         # phi is optional: when it isn't connected we still keep its entry (so
         # the motors after it don't shift slots) but mark it disconnected so we
         # never query its position. Every other motor must connect or we raise.
-        try:
-            hexapod_axes = list(self.pts.hexapod.axes)
-        except Exception:
-            hexapod_axes = ["X", "Y", "Z", "U", "V", "W"]
-
         self.motornames = []
         self.motorunits = []
         self.motorconnected = []
         phi_not_connected = False
-        hexapod_axis_not_connected = False
         #        print(motornames, " line 241")
         for i, name in enumerate(motornames):
             try:
                 connected = self.pts.isconnected(name)
             except Exception as exc:
-                if name == "phi" or name in hexapod_axes:
+                if name == "phi":
                     connected = False
                 else:
                     raise RuntimeError(
@@ -744,33 +823,14 @@ class ptyco_main_control(QObject):
                 self.motorunits.append(motorunits[i])
                 self.motorconnected.append(False)
                 phi_not_connected = True
-            elif name in hexapod_axes:
-                # Hexapod didn't connect: disable this axis instead of
-                # crashing the whole GUI.
-                self.motornames.append(name)
-                self.motorunits.append(motorunits[i])
-                self.motorconnected.append(False)
-                hexapod_axis_not_connected = True
             else:
                 raise RuntimeError(f"Motor '{name}' failed to connect.")
-
-        if hexapod_axis_not_connected:
-            self.hexapod_available = False
 
         if phi_not_connected:
             QMessageBox.warning(
                 self.ui,
                 "Warning",
                 "Warning: tomography phi stage not connected",
-                QMessageBox.Ok,
-            )
-        if hexapod_axis_not_connected:
-            QMessageBox.warning(
-                self.ui,
-                "Warning",
-                "Warning: hexapod not connected. Hexapod motors and "
-                "2D/3D/helix scans are disabled; only 1D scans on "
-                "non-hexapod motors (phi, gonio) are available.",
                 QMessageBox.Ok,
             )
         #        print(motornames, " line 252")
@@ -917,27 +977,8 @@ class ptyco_main_control(QObject):
         )
         self.ui.pb_helix_scan.clicked.connect(lambda: self.scan_handler.helix_fly_choose_axis(phim))
 
-        if not self.hexapod_available:
-            # Quick-testing mode: hexapod isn't connected, so disable every
-            # scan that relies on it (2D/3D/helix all use hexapod X/Z) and
-            # leave only 1D scans on non-hexapod motors (phi, gonio) usable.
-            for _pb_name in (
-                "pb_lup_step2d",
-                "pb_SAXSscan_fly2d",
-                "pb_lup_step3d",
-                "pb_SAXSscan_fly3d",
-                "pb_helix_scan",
-            ):
-                self.ui.findChild(QPushButton, _pb_name).setEnabled(False)
-            for _action_name in (
-                "actionflyX_and_stepY",
-                "actionsnake",
-                "actionstepscan",
-                "actionnormal_2D",
-                "actionsnake_2D",
-                "actionstep_2D",
-            ):
-                getattr(self.ui, _action_name).setEnabled(False)
+        if DEBUG_ANY_MOTOR:
+            self._disable_all_scan_controls()
 
         self.ui.actionSelect_time_intervals.triggered.connect(self.select_timeintervals)
         self.ui.actionTrigout.triggered.connect(lambda: self.set_softglue_in(1))
@@ -1170,6 +1211,43 @@ class ptyco_main_control(QObject):
             self.ui.findChild(QLineEdit, "ed_lup_%i_N" % n).setEnabled(enable)
         if n == 1:
             self.ui.findChild(QLineEdit, "ed_lup_1_t").setEnabled(enable)
+
+    def _disable_all_scan_controls(self) -> None:
+        """Grey out every control that starts a scan.
+
+        Called when any motor controller is simulated (see the DEBUG_* flags
+        at the top of this file). A scan run against a simulated stage would
+        write fabricated positions into a real data file, so none may start.
+        Acquisition that moves no motor (takeshot, time series) stays live,
+        as do the stop and reset controls.
+        """
+        scan_buttons = [
+            "pb_lup_step2d",
+            "pb_SAXSscan_fly2d",
+            "pb_lup_step3d",
+            "pb_SAXSscan_fly3d",
+            "pb_helix_scan",
+            "pb_extra_scans",
+        ]
+        # Per-motor 1D scan launchers exist only for these slots.
+        for n in (1, 2, 3, 7, 8, 9):
+            scan_buttons += ["pb_lup_%i" % n, "pb_SAXSscan_%i" % n]
+        for name in scan_buttons:
+            widget = self.ui.findChild(QPushButton, name)
+            if widget is not None:
+                widget.setEnabled(False)
+
+        for name in (
+            "actionflyX_and_stepY",
+            "actionsnake",
+            "actionstepscan",
+            "actionnormal_2D",
+            "actionsnake_2D",
+            "actionstep_2D",
+        ):
+            action = getattr(self.ui, name, None)
+            if action is not None:
+                action.setEnabled(False)
 
     # ── Motor context menu ─────────────────────────────────────────────────
 

@@ -205,7 +205,7 @@
      <widget class="QPushButton" name="pb_xy_up">
       <property name="geometry">
        <rect>
-        <x>46</x>
+        <x>47</x>
         <y>5</y>
         <width>54</width>
         <height>24</height>
@@ -827,7 +827,7 @@ QSlider::add-page:horizontal {
      <widget class="QPushButton" name="pb_tp_up">
       <property name="geometry">
        <rect>
-        <x>46</x>
+        <x>47</x>
         <y>5</y>
         <width>54</width>
         <height>24</height>

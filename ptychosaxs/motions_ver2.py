@@ -1,24 +1,70 @@
 
-from PyQt5.QtCore import QObject, pyqtSignal
-try:
-    from pihexapod.gcs import Hexapod, plot_record, IP, WaveGenID
-    PIHEXAPOD_AVAILABLE = True
-except Exception as _pihexapod_exc:
-    print(f"[WARNING] pihexapod not available ({_pihexapod_exc}). "
-          "Hexapod motors will be disabled.")
-    PIHEXAPOD_AVAILABLE = False
-    Hexapod = object
-    plot_record = None
-    IP = None
-    WaveGenID = None
-acsIP = "10.54.122.157"
-from acspy.control import Controller, Axis
-from acspy import acsc
-acscontroller = Controller("ethernet", 1)
-acscontroller.connect(acsIP)
+import os
 import sys
 import time
 import numpy as np
+from PyQt5.QtCore import QObject, pyqtSignal
+
+# ==========================================================================
+# Per-controller debug flags
+# ==========================================================================
+# These mirror the editable DEBUG_* booleans at the top of gui/rungui.py,
+# which exports them into the environment before importing this module. When
+# a flag is on, that controller's hardware library is never imported and a
+# simulated stand-in is used instead, so nothing is connected to.
+#
+#   PTYCHOSAXS_DEBUG_HEXAPOD   pihexapod.gcs   axes: X, Y, Z, U, V, W
+#   PTYCHOSAXS_DEBUG_ACS       acspy           axes: phi
+#   PTYCHOSAXS_DEBUG_GONIO     epics_gonio     axes: trans1, trans2, tilt1, tilt2
+DEBUG_HEXAPOD = os.environ.get("PTYCHOSAXS_DEBUG_HEXAPOD") == "1"
+DEBUG_ACS = os.environ.get("PTYCHOSAXS_DEBUG_ACS") == "1"
+DEBUG_GONIO = os.environ.get("PTYCHOSAXS_DEBUG_GONIO") == "1"
+
+HEXAPOD_AXES = ["X", "Y", "Z", "U", "V", "W"]
+HEXAPOD_UNITS = ["mm", "mm", "mm", "deg", "deg", "deg"]
+# Must track MOTOR_SLOTS in epics_gonio.py.
+GONIO_AXES = ["trans1", "trans2", "tilt1", "tilt2"]
+GONIO_UNITS = ["mm", "mm", "deg", "deg"]
+
+acsIP = "10.54.122.157"
+
+if not DEBUG_HEXAPOD:
+    from pihexapod.gcs import Hexapod, plot_record, IP, WaveGenID
+
+if not DEBUG_ACS:
+    from acspy.control import Controller, Axis
+    from acspy import acsc
+
+    acscontroller = Controller("ethernet", 1)
+    acscontroller.connect(acsIP)
+
+
+class _SimulatedController:
+    """Stand-in for a controller whose library is in debug mode.
+
+    Positions are kept in-process so the motor panel still reads back and the
+    tweak buttons still move something, but no hardware is touched. Scans are
+    disabled GUI-side whenever any controller is simulated, so only the
+    position/move surface the motor panel uses is implemented here.
+    """
+
+    def __init__(self, names, units):
+        self.motornames = list(names)
+        self.motorunits = list(units)
+        self.connected = [True] * len(names)
+        self._pos = {name: 0.0 for name in names}
+
+    def ismoving(self, axis=None):
+        return False
+
+    def set_pos(self, axis, pos=0):
+        self._pos[axis] = float(pos)
+
+    def connect(self):
+        pass
+
+    def disconnect(self):
+        pass
 
 class motorSignals(QObject):
     AxisNameSignal = pyqtSignal(str)
@@ -40,114 +86,222 @@ def generate_raster_scan_positions(size):
                 y_positions.append(i)
     return np.array(x_positions), np.array(y_positions)
 
-class hexapod(Hexapod):
+class _HexapodDebug(_SimulatedController):
+    """Simulated PI hexapod. get_pos() returns the whole axis dict, as the
+    real one does."""
 
     def __init__(self):
-        self.axes = ["X", "Y", "Z", "U", "V", "W"]
-        self.motornames = self.axes
-        self.motorunits = ["mm","mm","mm","deg","deg","deg"]
-        self.WaveGenID = WaveGenID
-        if not PIHEXAPOD_AVAILABLE:
-            # pihexapod isn't installed/importable: don't even try to connect.
-            self.connected = [False, False, False, False, False, False]
-            return
-        try:
-            super().__init__(IP)
-            self.connected = [True, True, True, True, True, True]
-        except Exception as exc:
-            print(f"[WARNING] Hexapod connection failed ({exc}). "
-                  "Hexapod motors will be disabled.")
-            self.connected = [False, False, False, False, False, False]
+        super().__init__(HEXAPOD_AXES, HEXAPOD_UNITS)
+        self.axes = self.motornames
+        self.WaveGenID = {}
 
     def is_servo_on(self, axis):
-        if not PIHEXAPOD_AVAILABLE or not any(self.connected):
-            return False
-        return super().is_servo_on(axis)
+        return True
 
-    def mvx(self, target, relative=False):
-        if relative:
-            pos = self.get_pos()
-            target += pos['X']
-        self.mv('X', target)
+    def isconnected(self, axis="X"):
+        return True
 
-    def mvrx(self, target):
-        self.mvx(target, relative=True)
+    def get_pos(self):
+        return dict(self._pos)
 
-    def ismoving(self, axis):
-        ismoving = not self.isattarget(axis)
-        return ismoving
+    def mv(self, axis, target, wait=True):
+        self._pos[axis] = float(target)
+        return True
 
     def mvr(self, axis, target):
-        pos = self.get_pos()
-        prevpos = pos[axis]
-        abstarget = prevpos+target
-        return self.mv(axis, abstarget)
-    
+        return self.mv(axis, self._pos[axis] + float(target))
+
+    def isattarget(self, axis=None):
+        return True
+
+    def handle_error(self):
+        return True
+
+    def get_speed(self, axis=None):
+        return 1.0
+
+    def set_speed(self, vel=1):
+        pass
+
     def set_pos(self, axis, pos=0):
-        pass        
+        pass
 
-class phi(Axis):
+
+class _PhiDebug(_SimulatedController):
+    """Simulated ACS phi axis. Scalar get_pos() and target-only mv(), as the
+    real one has."""
+
     def __init__(self):
-        super().__init__(acscontroller, 0)
-        self.motornames = ["phi"]
-        self.motorunits = ["deg"]
+        super().__init__(["phi"], ["deg"])
         self.axisno = 0
-        self.controller = acscontroller
-    
-    def commutate(self):
-        acsc.commutate(acscontroller.hc, self.axisno, wait=acsc.SYNCHRONOUS)
 
-    def mv(self, target, relative=False):
-        try:
-            if self.enabled == False:
-                self.enable()
-            if relative:
-                c = "relative"
-            else:
-                c = "absolute"        
-            self.ptp(target=target, coordinates=c)
-        except acsc.AcscError as Err:
-            if '3261:' in Err:
-                print("phi was not commutated, and is being commutated. Please wait.")
-                self.commutate()
-
-    def mvr(self, val, **kwargs):
-        self.mv(val, relative=True, **kwargs)
-
-    def ismoving(self, axis):
-        ismoving = not self.in_position
-        return ismoving
+    def isconnected(self, axis="phi"):
+        return True
 
     def get_pos(self, axis=0):
-        return round(float(self.fpos), 3)
-    
-    def get_speed(self, axis):
-        return self.vel, self.acc
-    
-    def set_speed(self, axis, vel=1, acc=1):
-        self.vel = vel
-        self.acc = acc
-    
-    def set_pos(self, axis, pos=0):
-        acsc.setRPosition(self.controller.hc, self.axisno, pos)
-        
-    def disconnect(self):
-        self.controller.disconnect()
+        return round(self._pos["phi"], 3)
 
-    def connect(self):
-        self.controller.connect(acsIP)
-        #self.control["phi"] = Axis(acscontroller, 0)
-    
-    def isconnected(self, axis = 'X'):
-        return acsc.getMotorEnabled(acscontroller.hc, 0)
+    def mv(self, target, relative=False):
+        base = self._pos["phi"] if relative else 0.0
+        self._pos["phi"] = base + float(target)
+
+    def mvr(self, val, **kwargs):
+        self.mv(val, relative=True)
+
+    def commutate(self):
+        pass
+
+    def get_speed(self, axis=None):
+        return 1.0, 1.0
+
+    def set_speed(self, axis, vel=1, acc=1):
+        pass
+
+    def set_pos(self, axis, pos=0):
+        self._pos["phi"] = float(pos)
+
+
+class _GonioDebug(_SimulatedController):
+    """Simulated EPICS goniometer. Per-axis get_pos() and list-returning
+    isconnected(), as the real one has."""
+
+    def __init__(self):
+        super().__init__(GONIO_AXES, GONIO_UNITS)
+        self.channel_names = self.motornames
+        self.units = self.motorunits
+
+    def isconnected(self, ax=-1):
+        if isinstance(ax, int) and ax > -1:
+            return True
+        return [True] * len(self.motornames)
+
+    def _name(self, axis):
+        return axis if isinstance(axis, str) else self.motornames[axis]
+
+    def get_pos(self, axis):
+        return self._pos.get(self._name(axis), 0.0)
+
+    def mv(self, axis, target, wait=True):
+        self._pos[self._name(axis)] = float(target)
+        return True
+
+    def mv_many(self, targets, wait=True, timeout=None):
+        for axis, target in targets:
+            self._pos[self._name(axis)] = float(target)
+        return True
+
+    def get_speed(self, axis):
+        return (1.0, None)
+
+    def set_speed(self, axis, vel=1, acc=None):
+        pass
+
+
+if DEBUG_HEXAPOD:
+    hexapod = _HexapodDebug
+else:
+
+    class hexapod(Hexapod):
+
+        def __init__(self):
+            super().__init__(IP)
+            self.motornames = self.axes
+            self.motorunits = list(HEXAPOD_UNITS)
+            self.connected = [True, True, True, True, True, True]
+            self.WaveGenID = WaveGenID
+
+        def mvx(self, target, relative=False):
+            if relative:
+                pos = self.get_pos()
+                target += pos['X']
+            self.mv('X', target)
+
+        def mvrx(self, target):
+            self.mvx(target, relative=True)
+
+        def ismoving(self, axis):
+            ismoving = not self.isattarget(axis)
+            return ismoving
+
+        def mvr(self, axis, target):
+            pos = self.get_pos()
+            prevpos = pos[axis]
+            abstarget = prevpos+target
+            return self.mv(axis, abstarget)
+
+        def set_pos(self, axis, pos=0):
+            pass
+
+
+if DEBUG_ACS:
+    phi = _PhiDebug
+else:
+
+    class phi(Axis):
+        def __init__(self):
+            super().__init__(acscontroller, 0)
+            self.motornames = ["phi"]
+            self.motorunits = ["deg"]
+            self.axisno = 0
+            self.controller = acscontroller
+
+        def commutate(self):
+            acsc.commutate(acscontroller.hc, self.axisno, wait=acsc.SYNCHRONOUS)
+
+        def mv(self, target, relative=False):
+            try:
+                if self.enabled == False:
+                    self.enable()
+                if relative:
+                    c = "relative"
+                else:
+                    c = "absolute"
+                self.ptp(target=target, coordinates=c)
+            except acsc.AcscError as Err:
+                if '3261:' in Err:
+                    print("phi was not commutated, and is being commutated. Please wait.")
+                    self.commutate()
+
+        def mvr(self, val, **kwargs):
+            self.mv(val, relative=True, **kwargs)
+
+        def ismoving(self, axis):
+            ismoving = not self.in_position
+            return ismoving
+
+        def get_pos(self, axis=0):
+            return round(float(self.fpos), 3)
+
+        def get_speed(self, axis):
+            return self.vel, self.acc
+
+        def set_speed(self, axis, vel=1, acc=1):
+            self.vel = vel
+            self.acc = acc
+
+        def set_pos(self, axis, pos=0):
+            acsc.setRPosition(self.controller.hc, self.axisno, pos)
+
+        def disconnect(self):
+            self.controller.disconnect()
+
+        def connect(self):
+            self.controller.connect(acsIP)
+            #self.control["phi"] = Axis(acscontroller, 0)
+
+        def isconnected(self, axis = 'X'):
+            return acsc.getMotorEnabled(acscontroller.hc, 0)
 
 class motors(object):
     def __init__(self):
-        
-        from ptychosaxs.epics_gonio import GonioAxisController
 
-        gonio = GonioAxisController()
-        gonio.connect()
+        if DEBUG_GONIO:
+            gonio = _GonioDebug()
+        else:
+            from ptychosaxs.epics_gonio import GonioAxisController
+
+            gonio = GonioAxisController()
+            gonio.connect()
 
         self.control = {}
         self.control["hexapod"]= hexapod()
