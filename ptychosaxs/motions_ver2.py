@@ -1,6 +1,16 @@
 
 from PyQt5.QtCore import QObject, pyqtSignal
-from pihexapod.gcs import Hexapod, plot_record, IP, WaveGenID
+try:
+    from pihexapod.gcs import Hexapod, plot_record, IP, WaveGenID
+    PIHEXAPOD_AVAILABLE = True
+except Exception as _pihexapod_exc:
+    print(f"[WARNING] pihexapod not available ({_pihexapod_exc}). "
+          "Hexapod motors will be disabled.")
+    PIHEXAPOD_AVAILABLE = False
+    Hexapod = object
+    plot_record = None
+    IP = None
+    WaveGenID = None
 acsIP = "10.54.122.157"
 from acspy.control import Controller, Axis
 from acspy import acsc
@@ -33,11 +43,26 @@ def generate_raster_scan_positions(size):
 class hexapod(Hexapod):
 
     def __init__(self):
-        super().__init__(IP)
+        self.axes = ["X", "Y", "Z", "U", "V", "W"]
         self.motornames = self.axes
         self.motorunits = ["mm","mm","mm","deg","deg","deg"]
-        self.connected = [True,True,True,True,True,True]
         self.WaveGenID = WaveGenID
+        if not PIHEXAPOD_AVAILABLE:
+            # pihexapod isn't installed/importable: don't even try to connect.
+            self.connected = [False, False, False, False, False, False]
+            return
+        try:
+            super().__init__(IP)
+            self.connected = [True, True, True, True, True, True]
+        except Exception as exc:
+            print(f"[WARNING] Hexapod connection failed ({exc}). "
+                  "Hexapod motors will be disabled.")
+            self.connected = [False, False, False, False, False, False]
+
+    def is_servo_on(self, axis):
+        if not PIHEXAPOD_AVAILABLE or not any(self.connected):
+            return False
+        return super().is_servo_on(axis)
 
     def mvx(self, target, relative=False):
         if relative:
