@@ -219,20 +219,27 @@
     <string>Log filename:</string>
    </property>
   </widget>
-  <widget class="QPushButton" name="pushButton_dataBasepaths">
-   <property name="enabled">
-    <bool>false</bool>
-   </property>
+  <widget class="QCheckBox" name="checkBox_runningOnLinux">
    <property name="geometry">
     <rect>
-     <x>560</x>
-     <y>46</y>
-     <width>81</width>
-     <height>28</height>
+     <x>442</x>
+     <y>49</y>
+     <width>205</width>
+     <height>22</height>
     </rect>
    </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+   <property name="toolTip">
+    <string>Check this when the GUI itself is running on Linux, so the Working folder on the main window is already a Linux path. The Working folder is then used as the data basepath too, and handed to the detector IOCs unchanged.
+
+Leave unchecked on Windows: the Working folder is then a Windows path (e.g. Z:\12IDC\...) whose drive letter is replaced by the Data basepath below before being handed to the IOCs.</string>
+   </property>
    <property name="text">
-    <string>linux path</string>
+    <string>Running on Linux?</string>
    </property>
   </widget>
   <widget class="QLineEdit" name="lineEdit_dataBasepaths">
@@ -240,7 +247,7 @@
     <rect>
      <x>150</x>
      <y>50</y>
-     <width>401</width>
+     <width>281</width>
      <height>20</height>
     </rect>
    </property>
@@ -250,7 +257,9 @@
     </font>
    </property>
    <property name="toolTip">
-    <string>Experiment log file will be saved in this folder.  QDS softglue data will be saved under /positions.</string>
+    <string>Linux path the detector IOCs write under. The Working folder is appended to it, minus its drive letter.
+
+Ignored when "Running on Linux?" is checked - the Working folder is then already a Linux path and is used as-is.</string>
    </property>
    <property name="maxLength">
     <number>500</number>

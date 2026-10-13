@@ -89,8 +89,16 @@ class pilatus(AD_Pilatus):
 			else:
 				self.Arm()
 	
-	def step_ready(self, expt, N_image, pulsespershot=1, fn=""):
+	def step_ready(self, expt, N_image, pulsespershot=1, fn="", period=0):
 		self.SetExposureTime(expt)
+		# AcquirePeriod is camserver's expperiod: the floor on how closely two
+		# exposures may follow one another. Nothing in step mode used to set
+		# it, so the camera kept whatever a previous fly scan or alignment had
+		# left there, and that value became the minimum time per scan point
+		# however short the exposure was. Set once here, before arming.
+		# period=0 means "leave it as it is", for callers that do not pass one.
+		if period:
+			self.SetExposurePeriod(period)
 		self.setArrayCounter(0)
 		self.ImageMode = 1  #  multiple image
 		self.TriggerMode = 3 # external triger mode
@@ -227,7 +235,10 @@ class dante(AD_Dante):
 			else:
 				self.Arm()
 	
-	def step_ready(self, expt, N_image, pulsespershot=1, fn="", number=-1):
+	def step_ready(self, expt, N_image, pulsespershot=1, fn="", number=-1, period=0):
+		# period is accepted and ignored: the Dante has no exposure-period
+		# parameter (AD_Dante exposes no AcquirePeriod), and the step scan
+		# passes the same period to every detector it arms.
 		self.SetExposureTime(expt)
 		self.setArrayCounter(0)
 		self.setFileTemplate('%s%s_%5.5d.h5')
@@ -363,8 +374,12 @@ class XSP(AD_XSP):
 			else:
 				self.Arm()
 	
-	def step_ready(self, expt, N_image, pulsespershot = 1,fn=""):
+	def step_ready(self, expt, N_image, pulsespershot = 1, fn="", period=0):
 		self.SetExposureTime(expt)
+		# See pilatus.step_ready: programmed once here so a stale period
+		# cannot throttle the scan. period=0 leaves it untouched.
+		if period:
+			self.SetExposurePeriod(period)
 		self.setArrayCounter(0)
 		self.setFileTemplate('%s%s_%5.5d.h5')
 		self.FileTemplate ='%s%s_%5.5d.h5'

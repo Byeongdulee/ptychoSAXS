@@ -116,7 +116,7 @@ def test_controller_speed_roundtrip(ctrl):
     the two being unlinked."""
     assert ctrl.get_speed("X") == 1.0
     ctrl.set_speed("X", 2.5)
-    assert FakeMotorPV("12ideMCS2:m1_vCh.A").get() == pytest.approx(2.5)
+    assert FakeMotorPV("12ideMCS2:m1.VELO").get() == pytest.approx(2.5)
     assert ctrl.get_speed("X") == pytest.approx(2.5)
 
 

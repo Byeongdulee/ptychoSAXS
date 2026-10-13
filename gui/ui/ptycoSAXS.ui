@@ -3815,6 +3815,60 @@ Scans</string>
      <string>Sample alignment GUI</string>
     </property>
    </widget>
+   <widget class="QLabel" name="label_scan_axes">
+    <property name="geometry">
+     <rect>
+      <x>250</x>
+      <y>748</y>
+      <width>111</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>2-D scan axes:</string>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="cb_xmotor">
+    <property name="geometry">
+     <rect>
+      <x>365</x>
+      <y>745</y>
+      <width>91</width>
+      <height>26</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
+    </property>
+    <property name="toolTip">
+     <string>Fast (X) axis for 2-D step and fly scans.</string>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="cb_ymotor">
+    <property name="geometry">
+     <rect>
+      <x>465</x>
+      <y>745</y>
+      <width>91</width>
+      <height>26</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
+    </property>
+    <property name="toolTip">
+     <string>Slow (Y) axis for 2-D step and fly scans.</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -3870,6 +3924,8 @@ Scans</string>
     <addaction name="actionSet_Log_Filename"/>
     <addaction name="separator"/>
     <addaction name="actionSave_scan"/>
+    <addaction name="separator"/>
+    <addaction name="actionIOC_info"/>
    </widget>
    <widget class="QMenu" name="menuSmarAct">
     <property name="title">
@@ -4260,6 +4316,14 @@ Scans</string>
   <action name="actionRatio_of_exptime_period_for_Flyscan">
    <property name="text">
     <string>Set fly acquisition time</string>
+   </property>
+  </action>
+  <action name="actionIOC_info">
+   <property name="text">
+    <string>IOC info...</string>
+   </property>
+   <property name="toolTip">
+    <string>Which machine serves each IOC, and when it last started.</string>
    </property>
   </action>
   <action name="actionRecord_traj_during_scan">

@@ -77,8 +77,8 @@ TILTPITCH_JOG_MAP = {
 # range here is rejected (never sent to the controller) and that motor's
 # "move to" field turns pale red until a valid move is made.
 SOFT_LIMITS = {
-    "X": (-14.0, 14.0),
-    "Y": (-14.0, 14.0),
+    "X": (-14.5, 14.5),
+    "Y": (-14.5, 14.5),
     "TILT": (-5.0, 5.0),
     "PITCH": (-5.0, 5.0),
 }

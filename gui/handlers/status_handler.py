@@ -143,6 +143,11 @@ class StatusHandler:
             self.ui.edit_workingfolder.setText(self.w.parameters.working_folder)
         self.w.update_scanname()
         self.w.push_filepath_to_detectors()
+        if self.w.is_ptychomode:
+            ptycho_folder = self.w.scan_handler._gui_scan_folder(
+                "ptycho", self.w.scan_handler.scannumberstring
+            )
+            print("Ptycho images will be saved to: %s" % ptycho_folder)
 
     # ------------------------------------------------------------------
     # Status posting

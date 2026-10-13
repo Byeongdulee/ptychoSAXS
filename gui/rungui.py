@@ -68,16 +68,53 @@ DEBUG_DEVICES = DEBUG_MODE and DEBUG_LEVEL in (0, 1)  # non-motors are stubbed
 #   DEBUG_EPICS    Every other EPICS device: scan-number PV, softglue, DG645,
 #                    struck scaler, shutter, detectors
 #                    no axes — devices only
+#   DEBUG_DG645    Just the DG645 delay generator, separately from the rest
+#                    of DEBUG_EPICS. tools/dg645.py is the only module here
+#                    that imports InstrumentKit (`instruments`), so this is
+#                    the switch that lets the GUI run with real detectors
+#                    and softglue in an environment without that package.
+#                    no axes — one device
 #
-# Any one of the three motor flags being True disables every scan button.
+# DEBUG_HEXAPOD, DEBUG_GONIO, DEBUG_EPICS or DEBUG_DG645 being True disables
+# every scan button: a scan would record fabricated positions, or frames
+# taken on fabricated triggers, into a real data file. DEBUG_ACS does not -
+# phi is optional hardware, so a simulated phi just reports as not
+# connected and disables its own row.
 DEBUG_HEXAPOD = False
-DEBUG_ACS = False
+DEBUG_ACS = True
 DEBUG_GONIO = False
-DEBUG_QDS = False
+DEBUG_QDS = True
 DEBUG_EPICS = False
+DEBUG_DG645 = False
+
+# ==========================================================================
+# Which driver each stage uses
+# ==========================================================================
+# The hexapod is the only stage reachable two ways - the same GCS protocol
+# either goes over TCP to the C-887, or the stage is driven through the
+# 12idbHXP motor records instead. Everything else has one driver.
+#
+#   "epics"   the 12idbHXP motor records. Fly scans still speak GCS: there
+#             is no EPICS trajectory interface, so they go over TCP, or
+#             tunnelled through 12idbHXP:asyn_1 if the socket cannot be
+#             opened (experimental, and refused unless the IOC's buffers
+#             are big enough - see hexapod_traj.AsynGcsTrajectory).
+#   "direct"  pihexapod/pipython straight at the C-887 at 10.54.122.145,
+#             one connection serving both motion and trajectory.
+HEXAPOD_TRANSPORT = "epics"
+
+# The goniometer: the SmarAct MCS2 SDK through ptychosaxs/smaract_gonio.py
+# instead of the 12ideMCS1 motor records. No EPICS either way - this is a
+# choice of driver, not of transport. Needs the SmarAct SDK installed and a
+# route to the crate, so it is for the machine wired to the MCS2.
+GONIO_USE_SMARACT = False
+
+# phi has no switch: acspy is the only driver, because no IOC exists for
+# the tomography rotation stage.
 
 _DEBUG_FLAG_NAMES = (
-    "DEBUG_HEXAPOD", "DEBUG_ACS", "DEBUG_GONIO", "DEBUG_QDS", "DEBUG_EPICS",
+    "DEBUG_HEXAPOD", "DEBUG_ACS", "DEBUG_GONIO", "DEBUG_QDS",
+    "DEBUG_EPICS", "DEBUG_DG645",
 )
 
 # `--debug` still works: its levels force whole groups of the flags above.
@@ -90,7 +127,22 @@ if DEBUG_DEVICES:
 # so DEBUG_EPICS folds into it instead of duplicating every check downstream.
 DEBUG_DEVICES = DEBUG_DEVICES or DEBUG_EPICS
 
-# Scans move motors, so any simulated motor controller disables all of them.
+# Stubbing every device stubs the DG645 too; the flag exists so the reverse
+# is also possible - one simulated device, everything else real.
+DEBUG_DG645 = DEBUG_DG645 or DEBUG_DEVICES
+
+# A scan writes motor positions into a real data file, so a simulated stage
+# whose axes a scan would record disables every scan.
+#
+# phi is deliberately not in this list. It is already optional hardware -
+# the motor panel has always tolerated it being absent - so a simulated phi
+# takes that same path: its own row is disabled and nothing else is. The
+# DG645 counts because it gates the detector triggers, so a simulated one
+# means the frames a scan records are not the frames it thinks they are.
+DEBUG_SCAN_BLOCKING = DEBUG_HEXAPOD or DEBUG_GONIO or DEBUG_EPICS or DEBUG_DG645
+
+# Kept for the caution banner: "is anything simulated at all", which is a
+# wider question than "may a scan run".
 DEBUG_ANY_MOTOR = DEBUG_HEXAPOD or DEBUG_ACS or DEBUG_GONIO
 
 # The motor and interferometer libraries are imported by
@@ -100,14 +152,26 @@ os.environ["PTYCHOSAXS_DEBUG_HEXAPOD"] = "1" if DEBUG_HEXAPOD else "0"
 os.environ["PTYCHOSAXS_DEBUG_ACS"] = "1" if DEBUG_ACS else "0"
 os.environ["PTYCHOSAXS_DEBUG_GONIO"] = "1" if DEBUG_GONIO else "0"
 os.environ["PTYCHOSAXS_DEBUG_QDS"] = "1" if DEBUG_QDS else "0"
+# scan_handler imports DG645_Error at module scope and reads this to decide
+# whether it can.
+os.environ["PTYCHOSAXS_DEBUG_DG645"] = "1" if DEBUG_DG645 else "0"
+
+# motions_ver2 reads these back out of the environment, for the same reason
+# it reads the debug flags that way: it is imported long before anything
+# holds a reference to this module's globals.
+os.environ["PTYCHOSAXS_HEXAPOD_TRANSPORT"] = HEXAPOD_TRANSPORT
+os.environ["PTYCHOSAXS_GONIO_SMARACT"] = "1" if GONIO_USE_SMARACT else "0"
 
 
 def _debug_flag_lines():
     """Line range of the editable flag block above, for the caution banner.
 
     Read back out of the source so the printed numbers cannot drift as this
-    file is edited. Only the unindented `NAME = ...` assignments match, not
-    the `--debug` overrides that reassign the same names indented.
+    file is edited. Only the first contiguous run of unindented
+    `NAME = ...` assignments counts - that is the block a reader edits. The
+    `--debug` overrides reassign the same names indented, and a couple of
+    flags are later OR-ed together at the left margin; neither belongs in
+    the range.
     """
     try:
         with open(__file__, encoding="utf-8") as fh:
@@ -117,7 +181,14 @@ def _debug_flag_lines():
             ]
     except OSError:
         nums = []
-    return f"{min(nums)}-{max(nums)}" if nums else "the DEBUG_* block near the top"
+    if not nums:
+        return "the DEBUG_* block near the top"
+    last = nums[0]
+    for n in nums[1:]:
+        if n != last + 1:
+            break
+        last = n
+    return f"{nums[0]}-{last}"
 
 
 _debug_on = [
@@ -127,16 +198,20 @@ _debug_on = [
         ("gonio", DEBUG_GONIO),
         ("QDS", DEBUG_QDS),
         ("EPICS devices", DEBUG_EPICS),
+        ("DG645", DEBUG_DG645 and not DEBUG_EPICS),
     ) if is_on
 ]
 if _debug_on:
     print(
-        "Caution: Debug Mode set for at least one motor "
+        "Caution: Debug Mode set for at least one controller or device "
         f"({', '.join(_debug_on)}). "
         f"To disable, see rungui.py:{_debug_flag_lines()}"
     )
-    if DEBUG_ANY_MOTOR:
-        print("         Scanning is disabled while any motor is simulated.")
+    if DEBUG_SCAN_BLOCKING:
+        print("         Scanning is disabled while those are simulated.")
+    if DEBUG_ACS and not DEBUG_SCAN_BLOCKING:
+        print("         phi is simulated, so it reports as not connected; "
+              "every other stage still scans.")
 
 # Path setup must come before any hardware import (including debug stubs)
 _gui_dir = os.path.dirname(os.path.abspath(__file__))
@@ -146,20 +221,24 @@ if _repo_root not in sys.path:
     sys.path.append(_repo_root)
 sys.path.append(os.path.join(_repo_root, "debug"))
 
+import pv_consent
+from ptychosaxs import pv_audit
+
 if DEBUG_MODE:
     print(f"[DEBUG MODE] Level {DEBUG_LEVEL}")
     print(f"  Motors:  {'STUB' if DEBUG_MOTORS else 'REAL'}")
     print(f"  Devices: {'STUB' if DEBUG_DEVICES else 'REAL'}")
+
+# Keyed on what is actually simulated, not on --debug. The DEBUG_* flags
+# above are hand-editable, so a stub can be selected with DEBUG_MODE false -
+# which used to leave the name undefined and fail at instantiation.
+# Only the stubs this module instantiates are imported; the rest were dead
+# names that an import error would have hidden.
+if DEBUG_MOTORS or DEBUG_DEVICES or DEBUG_DG645:
     from debug_stubs import (
-        HexapodStub,
-        PhiStub,
-        PilatusStub,
         ShutterStub,
         DG645Stub,
         SGZStub,
-        QDSStub,
-        StruckStub,
-        BeamStatusStub,
         InstrumentsStub,
     )
 
@@ -172,7 +251,6 @@ import datetime
 import pathlib
 import time
 import re
-import urllib.parse
 import numpy as np
 from typing import List
 from threading import Lock
@@ -215,144 +293,17 @@ try:
 except ImportError:
     requests = None  # only used for optional beamline status URL fetch
 
-try:
-    import py12inifunc
-except ImportError:
-    # Minimal stub so the GUI can initialise without the beamline INI library.
-    # All values match the defaults that ptyco_main_control.__init__ falls back
-    # to when readini() raises an exception.
-    class _IniParams:
-        _qds_unit = 1
-        _qds_x_sensor = 0
-        _qds_y_sensor = 1
-        countsperexposure = 0
-        working_folder = ""
-        _ref_X = 0.0
-        _ref_Z = 0.0
-        _ref_Z2 = 0.0
-        _qds_time_interval = 0.1
-        _step_acq_time = 1
-        _qds_R_vert = 10.0
-        _qds_th0_vert = -30.0
-        _qds_R_cyl = 50.0
-        softglue_channels = ["B", "C", "D"]
-        logfilename = ""
-        scan_number = 0
-        scan_name = "debug_scan"
-        scan_time = -1
-        saxsmode = 0
-        _ratio_exp_period = 0.2
-        _fly_acq_time = 0.033
-        _pulses_per_step = 1
-        base_linux_datafolder = "/tmp"
-        _save_us_optics = True
-
-        def readini(self):
-            pass
-
-        def writeini(self):
-            pass
-
-    class _Py12IniFuncStub:
-        def ini(self, *a, **kw):
-            return _IniParams()
-
-        def read(self, *a, **kw):
-            return {}
-
-        def write(self, *a, **kw):
-            pass
-
-    py12inifunc = _Py12IniFuncStub()
-
-# ── py12inifunc safety wrapper ───────────────────────────────────────────
-#
-# py12inifunc's on-disk format is one line per attribute:
-#   "<description>, <key> : <value>\n"
-# read back by splitting on ',' then on ':' with no maxsplit, and by
-# treating any value with more than one whitespace-separated token as a
-# list of floats. That breaks in two ways this GUI actually hits:
-#   - a text value containing ',', ':' or a space (e.g. an absolute Windows
-#     path like "C:\Users\...\log.txt" chosen via a file-browse dialog)
-#     desyncs the ',' / ':' split for every future read AND write --
-#     writeini() re-reads the whole file first to learn the existing line
-#     layout, so one bad line corrupts every other field too.
-#   - softglue_channels is a list of channel letters (e.g. ["B","C","D"]),
-#     not numbers, so py12inifunc's float-list parsing/formatting for
-#     multi-token values raises on both read and write.
-#
-# SafeIni percent-encodes these fields immediately before handing them to
-# the real writeini()/readini(), and decodes them immediately after, so
-# every other line of this codebase keeps seeing plain, real values.
-INI_TEXT_FIELDS = ("logfilename", "working_folder", "base_linux_datafolder", "scan_name")
-INI_LIST_FIELDS = ("softglue_channels",)
-
-
-def _ini_quote_text(value):
-    # py12inifunc parses an all-whitespace value as an empty *list*, not an
-    # empty string (readini's `val.split()` on "" yields []), so an empty
-    # string needs its own non-blank placeholder to round-trip correctly.
-    s = str(value)
-    return urllib.parse.quote(s, safe="/") if s else "-"
-
-
-def _ini_unquote_text(value):
-    return "" if value == "-" else urllib.parse.unquote(value)
-
-
-def _ini_quote_list(values):
-    return urllib.parse.quote(",".join(str(v) for v in values) or "-", safe="")
-
-
-def _ini_unquote_list(raw):
-    decoded = urllib.parse.unquote(raw)
-    return [] if decoded in ("", "-") else decoded.split(",")
-
-
-if isinstance(py12inifunc.ini, type):
-
-    class SafeIni(py12inifunc.ini):
-        def readini(self, ini_name=""):
-            super().readini(ini_name)
-            for field in INI_TEXT_FIELDS:
-                val = getattr(self, field, None)
-                if isinstance(val, str):
-                    setattr(self, field, _ini_unquote_text(val))
-                elif isinstance(val, list) and not val:
-                    # py12inifunc's empty-list-for-blank-value quirk (see
-                    # _ini_quote_text) -- shouldn't occur once the on-disk
-                    # value has gone through _ini_quote_text, but a
-                    # hand-edited or not-yet-migrated .ini could still hit it.
-                    setattr(self, field, "")
-            for field in INI_LIST_FIELDS:
-                val = getattr(self, field, None)
-                if isinstance(val, str):
-                    setattr(self, field, _ini_unquote_list(val))
-
-        def writeini(self, ini_name=""):
-            saved = {}
-            for field in INI_TEXT_FIELDS:
-                val = getattr(self, field, None)
-                if isinstance(val, str):
-                    saved[field] = val
-                    setattr(self, field, _ini_quote_text(val))
-            for field in INI_LIST_FIELDS:
-                val = getattr(self, field, None)
-                if isinstance(val, list):
-                    saved[field] = val
-                    setattr(self, field, _ini_quote_list(val))
-            try:
-                super().writeini(ini_name)
-            finally:
-                for field, val in saved.items():
-                    setattr(self, field, val)
-
-    _IniClass = SafeIni
-else:
-    # py12inifunc import failed and py12inifunc.ini is the stub factory
-    # method, not a class -- nothing to subclass, and its readini/writeini
-    # are already no-ops.
-    _IniClass = py12inifunc.ini
+# The .ini format, its percent-encoding layer and its first-run handling all
+# live in beamline_ini. That module replaces the external py12inifunc package,
+# which was imported behind a try/except that fell back to a no-op stub: on any
+# machine without it installed the GUI silently stopped remembering the working
+# folder, log filename, data basepaths, scan name and scan number.
+from beamline_ini import (
+    SafeIni as _IniClass,
+    ensure_default_ini as _ensure_default_ini,
+    quote_list as _ini_quote_list,
+    quote_text as _ini_quote_text,
+)
 
 # ==========================================================================
 # Hardware imports — split by motor vs. device debug flags
@@ -362,11 +313,20 @@ if not DEBUG_MOTORS:
     from ptychosaxs.ptychosaxs import instruments
 
 # Device-side imports (real when DEBUG_DEVICES is False, i.e. level 2)
+# tools/dg645.py imports InstrumentKit, which the other device modules do
+# not, so it gets its own guard: an environment without that package can
+# still run everything else for real.
+if not DEBUG_DG645:
+    import tools.dg645 as dg645
+    from tools.dg645 import DG645_Error
+else:
+    class DG645_Error(Exception):
+        """Stand-in for tools.dg645's, so the handlers' except clauses still
+        name something when the real module is not imported."""
+
 if not DEBUG_DEVICES:
     import epics
     from tools.softglue import sgz_pty, SOFTGLUE_Setup_Error
-    import tools.dg645 as dg645
-    from tools.dg645 import DG645_Error
     from tools.struck import struck
     from tools.shutter import shutter
     from tools.detectors import (
@@ -399,19 +359,42 @@ else:
 if DEBUG_DEVICES:
     SCAN_NUMBER_IOC = None
     s12softglue = SGZStub()
-    dg645_12ID = DG645Stub()
 else:
     SCAN_NUMBER_IOC = epics.PV("12idc:data:fileIndex")
     s12softglue = sgz_pty()
+
+if DEBUG_DG645:
+    dg645_12ID = DG645Stub()
+else:
     try:
         dg645_12ID = dg645.dg645_12ID.open_from_uri(dg645.ADDRESS_12IDC)
-    except:
-        print("failed to connect DG645. Will not be able to collect detector images")
+    except Exception as exc:
+        print(
+            f"failed to connect DG645 ({exc}). Will not be able to collect "
+            "detector images. Set DEBUG_DG645 = True to run with a simulated "
+            "one instead."
+        )
+        dg645_12ID = None
 
 # ==========================================================================
 # Constants
 # ==========================================================================
 status_url = "https://12ide.xray.aps.anl.gov/PVapp/ptycho_status"
+
+# "The GUI itself is running on Linux", set by the setup window's
+# "Running on Linux?" checkbox.
+#
+# It governs how the Working folder on the main window is read. On Linux the
+# Working folder is already a Linux path, so the GUI does its own I/O there
+# and hands the same path to the detector IOCs. On Windows it is a Windows
+# path (Z:\12IDC\...) whose drive letter has to be swapped for
+# base_linux_datafolder before the IOCs, which always run on Linux, see it.
+#
+# Kept in QSettings rather than the .ini because it describes the machine the
+# GUI is installed on, not the experiment - an .ini copied between the Windows
+# console and a Linux workstation should not carry the wrong answer with it.
+# The default is this machine's own OS, so a fresh install is already right.
+RUNNING_ON_LINUX_KEY = "paths/runningOnLinux"
 
 HEXAPOD_FLYMODE_WAVELET = 0
 HEXAPOD_FLYMODE_STANDARD = 1
@@ -431,12 +414,12 @@ inifilename = os.path.join(INI_DIR, "pty-co-saxs.ini")
 STRUCK_CHANNELS = [2, 3, 4, 5]
 
 # Default contents of pty-co-saxs.ini as (description, attribute, value)
-# triples, written in py12inifunc's "<description>, <attribute> : <value>"
-# line format. The file holds per-installation state (reference positions,
+# triples, in beamline_ini's "<description>, <attribute> : <value>" line
+# format. The file holds per-installation state (reference positions,
 # working folder, scan number, ...) and is not tracked in git, so this table
 # is the only definition of a fresh one. Values match the fallbacks
-# ptyco_main_control.__init__ applies when readini() fails. Descriptions must
-# not contain a comma - that is the field separator py12inifunc splits on.
+# ptyco_main_control.__init__ applies when readini() fails. A description
+# should not contain a comma - that is the field separator.
 INI_DEFAULT_ENTRIES = [
     ("Reference Position X", "_ref_X", "0.0000"),
     ("Reference Position Y", "_ref_Z", "0.0000"),
@@ -466,6 +449,8 @@ INI_DEFAULT_ENTRIES = [
     ("Number of Frames per Exposure", "_pulses_per_step", "1.0000"),
     ("ABC", "_step_acq_time", "1.0000"),
     ("ABC", "_fly_acq_time", "0.0330"),
+    ("Index of the 2D scan fast axis", "_xmotor", "%.4f" % DEFAULTS["xmotor"]),
+    ("Index of the 2D scan slow axis", "_ymotor", "%.4f" % DEFAULTS["ymotor"]),
     ("Save Upstream Optics Positions", "_save_us_optics", "1.0000"),
     ("SAXS Mode (0 for ptychography. 1 for SAXS)", "saxsmode", "1.0000"),
 ]
@@ -473,51 +458,12 @@ INI_DEFAULT_ENTRIES = [
 
 def ensure_default_ini(path=inifilename):
     """Create pty-co-saxs.ini from INI_DEFAULT_ENTRIES if it does not exist,
-    append any single entry missing from an existing file, and repair any
-    INI_TEXT_FIELDS/INI_LIST_FIELDS line still holding a raw, pre-SafeIni
-    value (a value with a ',', ':' or space, or a multi-token
-    softglue_channels list) that would otherwise crash py12inifunc's ','/':'
-    split, or its whitespace-token float parsing, on the very next read.
+    and back-fill any entry missing from an existing file.
 
-    Entries already in the file keep their saved value; only absent ones are
-    added, so a GUI upgrade that needs a new field no longer requires the
-    .ini to be hand-edited first.
+    Thin wrapper binding this GUI's default table to the generic
+    implementation in beamline_ini.
     """
-    text = ""
-    if os.path.exists(path):
-        with open(path) as f:
-            text = f.read()
-
-    lines = text.splitlines()
-    present = set()
-    changed = False
-    for i, line in enumerate(lines):
-        if "," not in line or ":" not in line:
-            continue
-        desc, rest = line.split(",", 1)
-        key, raw_value = rest.split(":", 1)
-        desc, key, raw_value = desc.strip(), key.strip(), raw_value.strip()
-        present.add(key)
-
-        if key in INI_TEXT_FIELDS:
-            if raw_value == "" or any(c in raw_value for c in ":, \t"):
-                lines[i] = "%s, %s : %s" % (desc, key, _ini_quote_text(raw_value))
-                changed = True
-        elif key in INI_LIST_FIELDS:
-            tokens = raw_value.split()
-            if len(tokens) != 1 or any(c in raw_value for c in ":,"):
-                lines[i] = "%s, %s : %s" % (desc, key, _ini_quote_list(tokens))
-                changed = True
-
-    missing = [e for e in INI_DEFAULT_ENTRIES if e[1] not in present]
-    if not missing and not changed:
-        return
-
-    lines.extend(
-        "%s, %s : %s" % (description, name, value) for description, name, value in missing
-    )
-    with open(path, "w") as f:
-        f.write("\n".join(lines) + "\n")
+    _ensure_default_ini(path, INI_DEFAULT_ENTRIES)
 
 # Detector attribute/layout PVs (PILATUS1). The attributes XML drives
 # NDAttributes; the layout XML drives the HDF1 file writer.
@@ -696,11 +642,18 @@ class ptyco_main_control(QObject):
         guiName = os.path.join(UI_DIR, "ptycoSAXS.ui")
         self.pts = pts
         print("Connecting to PTS...")
-        if not DEBUG_MOTORS and not DEBUG_HEXAPOD:
+        if not DEBUG_MOTORS:
             if not self.pts.hexapod.is_servo_on("X"):
                 print("Hexapod servo is off. Trying to turn it on...")
-                self.handle_hexapod_error()
-                print("Hexapod servo is now on.")
+                if self.handle_hexapod_error():
+                    print("Hexapod servo is now on.")
+                else:
+                    # Not fatal: the panel and step moves still work once the
+                    # servo comes back, and saying so beats a silent failure.
+                    print(
+                        "Hexapod servo could not be enabled. Check that the "
+                        "IOC can reach the controller (File > IOC info)."
+                    )
         # self.beamstatus = beamstatus()
         self.ui = uic.loadUi(guiName)
 
@@ -724,6 +677,22 @@ class ptyco_main_control(QObject):
         self.motor_handler = MotorHandler(self)
         self.scan_handler = ScanHandler(self)
         self.status_handler = StatusHandler(self)
+
+        # A per-instance copy of the module defaults. The scan-axis selectors
+        # write here, and every scan entry point resolves its unset motor
+        # indices from it, so the two cannot disagree.
+        self.DEFAULTS = dict(DEFAULTS)
+
+        # Asked once, here, and nowhere else. The answer governs every
+        # scan-number write for the session, including the ones scans make
+        # on worker threads where no dialog could be shown.
+        self.pv_consent = pv_consent.PvWriteConsent(parent=self.ui)
+        if SCAN_NUMBER_IOC is not None:
+            if self.pv_consent.request() == pv_consent.CLOSED:
+                # Dismissed without answering. Guessing either way is worse
+                # than not starting.
+                print("No answer given about beamline PV writes; exiting.")
+                sys.exit(1)
 
         self.messages = _ErrorDict(self._on_error_message)
         self.messages["recent error message"] = ""
@@ -827,22 +796,33 @@ class ptyco_main_control(QObject):
                 raise RuntimeError(f"Motor '{name}' failed to connect.")
 
         if phi_not_connected:
-            QMessageBox.warning(
-                self.ui,
-                "Warning",
-                "Warning: tomography phi stage not connected",
-                QMessageBox.Ok,
-            )
+            # A modal dialog is right for phi having gone missing, and wrong
+            # for phi having been switched off on purpose - that would stop
+            # every debug launch dead until someone clicked it.
+            if DEBUG_ACS:
+                print(
+                    "phi is simulated (DEBUG_ACS/DEBUG_PHI), so it reports as "
+                    "not connected and its controls are disabled."
+                )
+            else:
+                QMessageBox.warning(
+                    self.ui,
+                    "Warning",
+                    "Warning: tomography phi stage not connected",
+                    QMessageBox.Ok,
+                )
         #        print(motornames, " line 252")
         # motors for 2d and 3d scans.....
-        xm = DEFAULTS["xmotor"]  # JD
-        ym = DEFAULTS["ymotor"]  # JD
+        self._init_scan_axis_selectors()
+        xm = self.DEFAULTS["xmotor"]
+        ym = self.DEFAULTS["ymotor"]
 
         phim = (
             self.motornames.index("phi")
             if "phi" in self.motornames
             else DEFAULTS["phimotor"]
         )
+        self.DEFAULTS["phimotor"] = phim
 
         # Populate motor labels and wire up buttons for each connected motor
         for i, name in enumerate(self.motornames):
@@ -929,17 +909,19 @@ class ptyco_main_control(QObject):
         self.isStopScanIssued = False
         self.is_hexrecord_required = False
         self.shutter_close_after_scan = False
-        self.ui.actionflyX_and_stepY.triggered.connect(lambda: self.fly2d(xm, ym))
-        self.ui.actionsnake.triggered.connect(lambda: self.fly2d(xm, ym, snake=True))
-        self.ui.actionstepscan.triggered.connect(lambda: self.stepscan2d(xm, ym))
-        self.ui.actionnormal_2D.triggered.connect(lambda: self.fly3d(xm, ym, phim))
+        self.ui.actionflyX_and_stepY.triggered.connect(lambda: self.fly2d())
+        self.ui.actionsnake.triggered.connect(lambda: self.fly2d(snake=True))
+        self.ui.actionstepscan.triggered.connect(lambda: self.stepscan2d())
+        self.ui.actionnormal_2D.triggered.connect(lambda: self.fly3d())
         self.ui.actionsnake_2D.triggered.connect(
-            lambda: self.fly3d(xm, ym, phim, snake=True)
+            lambda: self.fly3d(snake=True)
         )
-        self.ui.actionstep_2D.triggered.connect(lambda: self.stepscan3d(xm, ym, phim))
-        self.ui.pb_lup_step2d.clicked.connect(lambda: self.stepscan2d(xm, ym))
+        self.ui.actionstep_2D.triggered.connect(
+            lambda: self.stepscan3d(*self._scan_axis_indices())
+        )
+        self.ui.pb_lup_step2d.clicked.connect(lambda: self.stepscan2d())
         self.ui.pb_SAXSscan_fly2d.clicked.connect(
-            lambda: self.fly2d(xm, ym, snake=True)
+            lambda: self.fly2d(snake=True)
         )
         self.ui.pb_extra_scans.clicked.connect(self._open_extra_scans_window)
         # pb_sample_alignment is added to ptycoSAXS.ui by hand. Warn rather
@@ -960,7 +942,9 @@ class ptyco_main_control(QObject):
         self.ui.pb_sendScanParamToMacro.setEnabled(False)
         self.ui.pb_sendScanParamToMacro.clicked.connect(self._send_scan_param_to_macro)
         self.ui.pushButton_plotScanPositions.clicked.connect(
-            lambda: self.scan_handler.plot_scan_positions_2d(xm, ym)
+            lambda: self.scan_handler.plot_scan_positions_2d(
+                self.DEFAULTS["xmotor"], self.DEFAULTS["ymotor"]
+            )
         )
         self.ui.pushButton_saveCurrent.clicked.connect(
             self.scan_handler.save_current_positions
@@ -971,15 +955,22 @@ class ptyco_main_control(QObject):
         self.ui.pushButton_goToSaved.clicked.connect(
             self.scan_handler.go_to_saved_positions
         )
-        self.ui.pb_lup_step3d.clicked.connect(lambda: self.stepscan3d(xm, ym, phim))
-        self.ui.pb_SAXSscan_fly3d.clicked.connect(
-            lambda: self.fly3d(xm, ym, phim, snake=True)
+        self.ui.pb_lup_step3d.clicked.connect(
+            lambda: self.stepscan3d(*self._scan_axis_indices())
         )
-        self.ui.pb_helix_scan.clicked.connect(lambda: self.scan_handler.helix_fly_choose_axis(phim))
+        self.ui.pb_SAXSscan_fly3d.clicked.connect(
+            lambda: self.fly3d(snake=True)
+        )
+        self.ui.pb_helix_scan.clicked.connect(
+            lambda: self.scan_handler.helix_fly_choose_axis(self.DEFAULTS["phimotor"])
+        )
 
-        if DEBUG_ANY_MOTOR:
+        if DEBUG_SCAN_BLOCKING:
             self._disable_all_scan_controls()
+        elif not self.pts.hexapod.can_fly:
+            self._disable_fly_scan_controls()
 
+        self.ui.actionIOC_info.triggered.connect(self.show_ioc_info)
         self.ui.actionSelect_time_intervals.triggered.connect(self.select_timeintervals)
         self.ui.actionTrigout.triggered.connect(lambda: self.set_softglue_in(1))
         self.ui.actionDetout.triggered.connect(lambda: self.set_softglue_in(2))
@@ -1041,8 +1032,13 @@ class ptyco_main_control(QObject):
         self.ui.actionSet_shot_number_per_a_step.triggered.connect(
             self.set_shotnumber_per_step
         )
-        self.parameters.scan_number += 1
-        # self.ui.edit_scannumber.setText(str(int(self.parameters.scan_number)+1))
+        # Start from the IOC's fileIndex where it can be read, so this GUI
+        # picks up whatever the beamline last numbered rather than carrying
+        # on from its own ini. Reading is unconditional - consent governs
+        # writes, and this writes nothing.
+        self.parameters.scan_number = pv_audit.startup_scan_number(
+            self.read_scan_number_from_ioc(), self.parameters.scan_number
+        )
         self.update_scannumber()
         self.ui.actionRatio_of_exptime_period_for_Flyscan.triggered.connect(
             self.set_fly_acquisition_time
@@ -1215,11 +1211,15 @@ class ptyco_main_control(QObject):
     def _disable_all_scan_controls(self) -> None:
         """Grey out every control that starts a scan.
 
-        Called when any motor controller is simulated (see the DEBUG_* flags
-        at the top of this file). A scan run against a simulated stage would
-        write fabricated positions into a real data file, so none may start.
-        Acquisition that moves no motor (takeshot, time series) stays live,
-        as do the stop and reset controls.
+        Called when a simulated stage or device would corrupt a scan's
+        record of itself - see DEBUG_SCAN_BLOCKING at the top of this file.
+        A scan run against one would write fabricated positions into a real
+        data file, so none may start. Acquisition that moves no motor
+        (takeshot, time series) stays live, as do the stop and reset
+        controls.
+
+        A simulated phi does not land here: it is optional hardware, so it
+        reports as not connected and only its own row is disabled.
         """
         scan_buttons = [
             "pb_lup_step2d",
@@ -1248,6 +1248,118 @@ class ptyco_main_control(QObject):
             action = getattr(self.ui, name, None)
             if action is not None:
                 action.setEnabled(False)
+
+    def _disable_fly_scan_controls(self) -> None:
+        """Grey out only the controls that need the hexapod's wave generator.
+
+        Narrower than _disable_all_scan_controls: step scans move the stage
+        through the EPICS motor records and are unaffected by a missing
+        trajectory transport, so disabling them too would be wrong.
+        """
+        for name in ("pb_SAXSscan_fly2d", "pb_SAXSscan_fly3d", "pb_helix_scan"):
+            widget = self.ui.findChild(QPushButton, name)
+            if widget is not None:
+                widget.setEnabled(False)
+        # Only the hexapod's own slots. The 1-D fly launchers for phi and
+        # the gonio stages (slots 7-9) drive scan_kind "fly_phi", which
+        # steps the stage and never touches the wave generator.
+        for n, name in enumerate(self.motornames, start=1):
+            if name not in self.pts.hexapod.axes:
+                continue
+            widget = self.ui.findChild(QPushButton, "pb_SAXSscan_%i" % n)
+            if widget is not None:
+                widget.setEnabled(False)
+        for name in ("actionflyX_and_stepY", "actionsnake", "actionnormal_2D",
+                     "actionsnake_2D"):
+            action = getattr(self.ui, name, None)
+            if action is not None:
+                action.setEnabled(False)
+        print(
+            "Fly scans disabled: hexapod trajectory transport is %s - %s"
+            % (self.pts.hexapod.traj_state, self.pts.hexapod.traj_reason)
+        )
+
+    # ── 2-D scan axis selection ────────────────────────────────────────────
+
+    def _scan_axis_indices(self):
+        """(x, y, phi) motor indices as the selectors currently have them."""
+        return (
+            self.DEFAULTS["xmotor"],
+            self.DEFAULTS["ymotor"],
+            self.DEFAULTS["phimotor"],
+        )
+
+    def _init_scan_axis_selectors(self) -> None:
+        """Populate the 2-D scan axis combo boxes and seed them from the ini.
+
+        The scan engine was already parameterised by motor index; what was
+        missing was any way to choose. These write into self.DEFAULTS, which
+        every scan entry point resolves its unset indices from, so changing a
+        selection takes effect on the next scan without rewiring anything.
+        """
+        for key, widget_name in (("xmotor", "cb_xmotor"), ("ymotor", "cb_ymotor")):
+            combo = getattr(self.ui, widget_name, None)
+            if combo is None:
+                continue  # older .ui without the selectors
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItems(self.motornames)
+            index = self._saved_scan_axis(key)
+            combo.setCurrentIndex(index)
+            self.DEFAULTS[key] = index
+            combo.blockSignals(False)
+            combo.currentIndexChanged.connect(
+                lambda i, key=key: self._on_scan_axis_changed(key, i)
+            )
+
+    def _saved_scan_axis(self, key):
+        """The stored index for 'xmotor'/'ymotor', clamped to what exists.
+
+        A stale ini - written when a different set of motors was connected -
+        must not be able to index past the end of motornames.
+        """
+        try:
+            index = int(float(getattr(self.parameters, "_" + key)))
+        except (AttributeError, TypeError, ValueError):
+            index = DEFAULTS[key]
+        if not 0 <= index < len(self.motornames):
+            index = min(DEFAULTS[key], len(self.motornames) - 1)
+        return max(index, 0)
+
+    def _on_scan_axis_changed(self, key, index) -> None:
+        if index < 0:
+            return
+        self.DEFAULTS[key] = index
+        setattr(self.parameters, "_" + key, float(index))
+        try:
+            self.parameters.writeini()
+        except Exception as exc:
+            print(f"Could not save the {key} selection: {exc}")
+
+    # ── IOC info ───────────────────────────────────────────────────────────
+
+    def show_ioc_info(self) -> None:
+        """Report which machine serves each IOC, and when it last started.
+
+        An IOC that restarted mid-session is otherwise invisible: the records
+        still answer and autosave has put plausible numbers back, with
+        nothing to say the positions predate the restart.
+        """
+        from ptychosaxs import ioc_info
+
+        try:
+            rows = ioc_info.collect()
+            link_ok = ioc_info.hexapod_link_status()
+            report = ioc_info.format_report(rows, link_ok)
+        except Exception as exc:
+            report = f"Could not read the IOC information: {exc}"
+        dialog = QMessageBox(self.ui)
+        dialog.setWindowTitle("IOC info")
+        dialog.setText("IOCs this GUI talks to:")
+        dialog.setDetailedText(report)
+        # Monospace, or the columns do not line up.
+        dialog.setStyleSheet("QTextEdit { font-family: monospace; min-width: 620px; }")
+        dialog.exec_()
 
     # ── Motor context menu ─────────────────────────────────────────────────
 
@@ -1360,7 +1472,7 @@ class ptyco_main_control(QObject):
     # ── Gonio & hexapod speed control ─────────────────────────────────────
 
     def handle_hexapod_error(self):
-        self.pts.hexapod.handle_error()
+        return self.pts.hexapod.handle_error()
 
     def smaract_set_defaultspeed(self):
         gonio = self.pts.gonio
@@ -1571,9 +1683,6 @@ class ptyco_main_control(QObject):
     def save2disk_softglue_original(self):
         return self.scan_handler.save2disk_softglue_original()
 
-    def save_hexapod_record(self, filename, option="a"):
-        return self.scan_handler.save_hexapod_record(filename, option)
-
     def flydone(self, return_motor=True, reset_scannumber=True, donedone=True):
         return self.scan_handler.flydone(return_motor, reset_scannumber, donedone)
 
@@ -1593,7 +1702,7 @@ class ptyco_main_control(QObject):
     def fly0(self, motornumber=-1, update_progress=None, update_status=None):
         return self.scan_handler.fly0(motornumber, update_progress, update_status)
 
-    def fly2d(self, xmotor=0, ymotor=1, scanname="", snake=False):
+    def fly2d(self, xmotor=None, ymotor=None, scanname="", snake=False):
         return self.scan_handler.fly2d(xmotor, ymotor, snake)
 
     def fly2d0(
@@ -1610,7 +1719,7 @@ class ptyco_main_control(QObject):
             xmotor, ymotor, scanname, update_progress, update_status
         )
 
-    def fly3d(self, xmotor=0, ymotor=1, phimotor=6, scanname="", snake=False):
+    def fly3d(self, xmotor=None, ymotor=None, phimotor=None, scanname="", snake=False):
         return self.scan_handler.fly3d(xmotor, ymotor, phimotor, scanname, snake)
 
     def fly3d0(
@@ -1640,7 +1749,7 @@ class ptyco_main_control(QObject):
     def stepscan0(self, motornumber=-1, update_progress=None, update_status=None):
         return self.scan_handler.stepscan0(motornumber, update_progress, update_status)
 
-    def stepscan2d(self, xmotor=0, ymotor=1):
+    def stepscan2d(self, xmotor=None, ymotor=None):
         return self.scan_handler.stepscan2d(xmotor, ymotor)
 
     def stepscan2d0(self, xmotor=0, ymotor=1, update_progress=None, update_status=None):
@@ -1702,6 +1811,53 @@ class ptyco_main_control(QObject):
 
     def update_scannumber(self):
         return self.scan_handler.update_scannumber()
+
+    def read_scan_number_from_ioc(self):
+        """The IOC's fileIndex as an int, or None if it cannot be read.
+
+        None covers every way that can happen - no PV object in debug
+        mode, the IOC not answering, a disconnected channel - because the
+        caller treats them the same: fall back to the ini.
+        """
+        pv = self.SCAN_NUMBER_IOC
+        if pv is None or not pv.connected:
+            return None
+        try:
+            value = pv.get(timeout=1.0)
+        except Exception as exc:
+            print(f"Could not read {pv_audit.SCAN_NUMBER_PV}: {exc}")
+            return None
+        if value is None:
+            return None
+        print(f"Scan number taken from {pv_audit.SCAN_NUMBER_PV}: {int(value)}")
+        return int(value)
+
+    def write_scan_number_to_ioc(self) -> bool:
+        """Put the scan number to the IOC at the start of a scan.
+
+        The only thing in this GUI that writes a beamline PV. Call it when
+        a scan begins and at no other time: starting up, finishing a scan
+        and nudging the number with the +/- buttons all leave the IOC
+        alone, so the PV reflects the scan that is actually running.
+
+        Silently does nothing when the operator declined at startup, which
+        is what declining means. Returns whether the PV was written.
+        """
+        if not self.pv_consent.granted:
+            return False
+        pv = self.SCAN_NUMBER_IOC
+        if pv is None:
+            return False
+        pv.put(int(self.parameters.scan_number))
+        return True
+
+    def on_configuration_changed(self, what="the configuration"):
+        """Ask for PV-write consent again after a configuration change."""
+        self.pv_consent.revoke()
+        if self.pv_consent.request(reason=f"reloading after {what} changed") \
+                == pv_consent.CLOSED:
+            print("No answer given about beamline PV writes; exiting.")
+            sys.exit(1)
 
     def on_scan_folder_advanced(self, scan_number):
         return self.scan_handler.on_scan_folder_advanced(scan_number)
@@ -2031,6 +2187,32 @@ class ptyco_main_control(QObject):
         self.extra_scans_window.raise_()
         self.extra_scans_window.activateWindow()
 
+    # ── Which OS the GUI is on ─────────────────────────────────────────────
+
+    def running_on_linux(self) -> bool:
+        """Whether the Working folder is already a Linux path.
+
+        See RUNNING_ON_LINUX_KEY. Defaults to this machine's own OS, so an
+        installation that never opens the setup window is still correct.
+        """
+        return QSettings("ptychoSAXS", "ptychoSAXS").value(
+            RUNNING_ON_LINUX_KEY, os.name != "nt", type=bool
+        )
+
+    def set_running_on_linux(self, value: bool) -> None:
+        """Persist the "Running on Linux?" answer and re-push the paths.
+
+        The detector FilePaths currently on the IOCs were derived under the
+        old answer, so they are recomputed here rather than left stale until
+        the next scan starts.
+        """
+        if bool(value) == self.running_on_linux():
+            return
+        QSettings("ptychoSAXS", "ptychoSAXS").setValue(
+            RUNNING_ON_LINUX_KEY, bool(value)
+        )
+        self.push_filepath_to_detectors()
+
     def _open_setup_window(self):
         """Open the setup configuration dialog."""
         import time as _time
@@ -2077,6 +2259,20 @@ class ptyco_main_control(QObject):
         dlg.lineEdit_dataBasepaths.setText(
             getattr(self.parameters, "base_linux_datafolder", "")
         )
+
+        # "Running on Linux?" — see RUNNING_ON_LINUX_KEY. When it is checked
+        # the Working folder is the data basepath, so the basepath field
+        # below it is unused; greying it out says so rather than leaving a
+        # stale value looking as though it still applies.
+        dlg.checkBox_runningOnLinux.setChecked(self.running_on_linux())
+
+        def _on_running_on_linux_toggled(checked):
+            dlg.lineEdit_dataBasepaths.setEnabled(not checked)
+            dlg.label_dataBasepaths.setEnabled(not checked)
+
+        dlg.checkBox_runningOnLinux.toggled.connect(_on_running_on_linux_toggled)
+        _on_running_on_linux_toggled(dlg.checkBox_runningOnLinux.isChecked())
+
         dlg.lineEdit_nBursts.setValidator(QIntValidator(1, 9999, dlg))
         dlg.lineEdit_nBursts.setText(str(int(self.parameters._pulses_per_step)))
         dlg.lineEdit_scanWait.setText(str(self.parameters._step_acq_time))
@@ -2137,13 +2333,16 @@ class ptyco_main_control(QObject):
         else:
             dlg.radioButton_10ms.setChecked(True)
 
-        # Browse button — pick a log file path without closing the dialog
+        # Browse button — pick a log file path without closing the dialog.
+        # Logging only ever appends to this file (see write_scaninfo_to_logfile),
+        # so picking an existing filename should not warn about overwriting it.
         def _browse_logfile():
             path, _ = QFileDialog.getSaveFileName(
                 dlg,
                 "Select Log File",
                 dlg.lineEdit_logFname.text(),
                 "Text files (*.txt);;All files (*)",
+                options=QFileDialog.DontConfirmOverwrite,
             )
             if path:
                 dlg.lineEdit_logFname.setText(path)
@@ -2180,6 +2379,11 @@ class ptyco_main_control(QObject):
 
         # Data base paths
         self.parameters.base_linux_datafolder = dlg.lineEdit_dataBasepaths.text()
+
+        # Which OS the GUI is on. Applied before the detector selections below,
+        # so anything that pushes a FilePath on the way through already uses
+        # the new interpretation of the Working folder.
+        self.set_running_on_linux(dlg.checkBox_runningOnLinux.isChecked())
 
         # Numeric fields
         try:

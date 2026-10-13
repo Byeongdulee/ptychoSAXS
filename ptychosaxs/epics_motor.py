@@ -29,7 +29,6 @@ FIELDS = {
     "drive": ".VAL",
     "done": ".DMOV",
     "velocity": ".VELO",
-    "set_velocity": "_vCh.A",
     "unit": ".EGU",
     "tweak_step": ".TWV",
     "tweak_forward": ".TWF",
@@ -95,7 +94,7 @@ class EpicsMotorController:
         if self._pv_class is None:
             raise RuntimeError(
                 "pyepics is not installed - cannot reach the EPICS motor records. "
-                "Run with --debug_mode to use simulated motors instead."
+                "Run rungui.py with --debug to use simulated motors instead."
             )
         for name in self.names:
             for field in self.FIELDS:
@@ -168,15 +167,34 @@ class EpicsMotorController:
         or the wait timed out - callers during a scan prefer to log and carry
         on rather than lose the run.
         """
+        done_events = self._start_many(targets)
+        if done_events is None:
+            return False
+        if not wait:
+            return True
+        return self._wait_many(done_events, timeout)
+
+    def _start_many(self, targets):
+        """Issue every move non-blocking and return one completion event each.
+
+        Split out of mv_many so a rig that has to do something between
+        starting the moves and waiting for them can - see
+        epics_hexapod.HexapodAxisController.move_coordinated, which releases
+        the IOC's deferred-moves flag in that gap. Returns None if any put was
+        refused, which means the record was not connected and the move never
+        went out.
+        """
         done_events = []
         for axis, target in targets:
             pv = self._pv(axis, "drive")
             done = threading.Event()
             if pv.put(target, callback=lambda done=done, **kwargs: done.set()) is None:
-                return False  # not connected: the put never went out
+                return None  # not connected: the put never went out
             done_events.append(done)
-        if not wait:
-            return True
+        return done_events
+
+    def _wait_many(self, done_events, timeout: float = MOVE_TIMEOUT_S) -> bool:
+        """Wait for every completion event, sharing one deadline across them."""
         deadline = time.monotonic() + timeout
         for done in done_events:
             if not done.wait(max(0.0, deadline - time.monotonic())):
@@ -215,7 +233,16 @@ class EpicsMotorController:
         return self._read(axis, "velocity")
 
     def set_speed(self, axis, vel: float) -> None:
-        self._pv(axis, "set_velocity").put(vel)
+        """Set the velocity in the axis's unit/s.
+
+        This writes .VELO - the same field get_speed reads - rather than the
+        motor database's $(M)_vCh soft record. _vCh is a multiplier, not a
+        velocity: its CALC is min(max(a*b,c),d) with b=.S, c=.SBAS, d=.SMAX
+        and a unlinked, so writing a velocity into .A scales the current speed
+        and then clamps it to .SMAX. Every rig here has .SMAX = 0, which makes
+        that clamp produce zero.
+        """
+        self._pv(axis, "velocity").put(vel)
 
     # -- status -----------------------------------------------------------------
 

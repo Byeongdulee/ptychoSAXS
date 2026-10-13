@@ -235,9 +235,23 @@ def test_get_speed_returns_velocity_and_none(gonio):
 
 
 def test_set_speed_roundtrip(gonio):
+    """set_speed writes the same field get_speed reads.
+
+    It used to write the motor database's $(M)_vCh soft record, whose CALC is
+    min(max(a*b,c),d) over .S/.SBAS/.SMAX with .A unlinked - so .A is a
+    multiplier, not a velocity, and with .SMAX = 0 on every rig here the
+    clamp drove the speed to zero.
+    """
     gonio.set_speed("trans1", 2.5)
-    assert FakeMotorPV(_TRANS1 + "_vCh.A").get() == pytest.approx(2.5)
+    assert FakeMotorPV(_TRANS1 + ".VELO").get() == pytest.approx(2.5)
     assert gonio.get_speed("trans1") == (pytest.approx(2.5), None)
+
+
+def test_set_speed_does_not_touch_the_velocity_multiplier(gonio):
+    """_vCh.A scales the current speed and clamps it to .SMAX; writing a
+    velocity into it is not the same operation and must not happen."""
+    gonio.set_speed("trans1", 2.5)
+    assert FakeMotorPV.history(_TRANS1 + "_vCh.A") == []
 
 
 def test_set_speed_accepts_and_ignores_acceleration(gonio):

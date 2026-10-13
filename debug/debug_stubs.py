@@ -23,73 +23,16 @@ DEBUG_MODE check.
 
 import time as _time
 import random as _random
-import numpy as np
+
+try:
+    from ptychosaxs.hexapod_traj import SimulatedTrajectory
+except ImportError:  # running with ptychosaxs/ itself on sys.path
+    from hexapod_traj import SimulatedTrajectory
 
 
 # ---------------------------------------------------------------------------
 # Motor stubs
 # ---------------------------------------------------------------------------
-
-class HexapodStub:
-    """Simulates the PI hexapod 6-axis stage. All positions start at 0.0."""
-
-    axes = ["X", "Y", "Z", "U", "V", "W"]
-
-    def __init__(self, *args, **kwargs):
-        self._pos = {ax: 0.0 for ax in self.axes}
-        self.motornames = self.axes
-        self.motorunits = ["mm", "mm", "mm", "deg", "deg", "deg"]
-        self.connected = [True] * 6
-        print("[DEBUG] HexapodStub initialised.")
-
-    def connect(self) -> None:
-        print("[DEBUG] HexapodStub: connect()")
-
-    def disconnect(self) -> None:
-        print("[DEBUG] HexapodStub: disconnect()")
-
-    def isconnected(self, axis=None) -> bool:
-        return True
-
-    def is_servo_on(self, axis) -> bool:
-        return True
-
-    def mv(self, axis: str, position: float) -> bool:
-        print(f"[DEBUG] HexapodStub: mv({axis!r}, {position})")
-        self._pos[axis] = position
-        return True
-
-    def mvr(self, axis: str, delta: float) -> None:
-        self._pos[axis] += delta
-        print(f"[DEBUG] HexapodStub: mvr({axis!r}, {delta}) → {self._pos[axis]:.6f}")
-
-    def get_pos(self) -> dict:
-        return dict(self._pos)
-
-    def set_pos(self, axis: str, pos: float = 0) -> None:
-        self._pos[axis] = pos
-
-    def ismoving(self, axis: str) -> bool:
-        return False
-
-    def isattarget(self, axis: str) -> bool:
-        return True
-
-    def get_speed(self):
-        return 1.0
-
-    def set_speed(self, vel: float) -> None:
-        print(f"[DEBUG] HexapodStub: set_speed({vel})")
-
-    def handle_error(self) -> bool:
-        return True
-
-    def run_traj(self) -> None:
-        print("[DEBUG] HexapodStub: run_traj()")
-
-    def get_records(self) -> dict:
-        return {ax: (0.0, 0.0) for ax in self.axes}
-
 
 class PhiStub:
     """Simulates the ACS phi rotation stage."""
@@ -594,90 +537,53 @@ class _MotorSignals:
         return _Signals()
 
 
-class _HexapodInfo:
-    """Minimal hexapod attribute bag for InstrumentsStub."""
+class _HexapodInfo(SimulatedTrajectory):
+    """Minimal hexapod attribute bag for InstrumentsStub.
+
+    The trajectory half - set_traj, set_traj_SNAKE2, the pulse arithmetic and
+    WaveGenID - is inherited from SimulatedTrajectory rather than copied, so
+    the stub and the debug-mode hexapod cannot drift apart. Only the motion
+    half is local, because it reads positions from the dict InstrumentsStub
+    shares across all its sub-objects.
+    """
+
     axes = ["X", "Y", "Z", "U", "V", "W"]
     motornames = axes
     motorunits = ["mm", "mm", "mm", "deg", "deg", "deg"]
 
     def __init__(self, pos_dict: dict) -> None:
+        super().__init__()
         self._pos = pos_dict
-        self.pulse_number = 0
-        self.pulse_step = 0.0
 
-    def is_servo_on(self, axis) -> bool:
+    # The facade's fly-scan predicates. _HexapodInfo stands in for the whole
+    # hexapod here, not just its trajectory half, so it has to answer these
+    # too - scan_handler asks can_fly before offering a fly scan.
+    can_fly = True
+    traj_state = SimulatedTrajectory.state
+    traj_reason = SimulatedTrajectory.reason
+
+    def is_servo_on(self, axis="") -> bool:
         return True
 
-    def isattarget(self, axis) -> bool:
+    def isattarget(self, axis="") -> bool:
         return True
 
     def ismoving(self, axis) -> bool:
         return False
 
-    def get_pos(self) -> dict:
-        return {ax: self._pos.get(ax, 0.0) for ax in self.axes}
+    def get_pos(self, axis=None):
+        if axis is None:
+            return {ax: self._pos.get(ax, 0.0) for ax in self.axes}
+        return self._pos.get(axis, 0.0)
 
     def handle_error(self) -> bool:
         return True
 
-    def set_traj(self, axis, total_time, distance, start_pos, direction, step_time, samples) -> None:
-        """Stub for setting a 1-D trajectory."""
-        print(f"[DEBUG] _HexapodInfo.set_traj({axis}, total_time={total_time}, distance={distance}, start_pos={start_pos})")
-        self.pulse_step = step_time
-        self.pulse_number = round(total_time / step_time) if step_time else 0
-
-    def set_traj_SNAKE2(self, step_time, Xst, Xdist, Xstep, Yst, Yfe, Ystep) -> None:
-        """Stub for setting a 2-D SNAKE trajectory.
-
-        Mirrors the real hardware's phantom-trigger/even-row quirks (see
-        gui/handlers/scan_handler.py's _adjust_axis_length) so pulse_number is
-        a faithful stand-in for offline testing of fly-scan code paths.
-        """
-        print(f"[DEBUG] _HexapodInfo.set_traj_SNAKE2(step_time={step_time}, X=[{Xst}, {Xst+Xdist}], Xstep={Xstep}, Y=[{Yst}, {Yfe}], Ystep={Ystep})")
-        self.pulse_step = step_time
-        Xfe = Xst + Xdist
-        x_step = -abs(Xstep) if Xst > Xfe else abs(Xstep)
-        y_step = -abs(Ystep) if Yst > Yfe else abs(Ystep)
-        n_x = len(np.arange(Xst, Xfe + x_step / 2, x_step)) + 1  # phantom trigger
-        n_y = len(np.arange(Yst, Yfe + y_step / 2, y_step))
-        n_y += n_y % 2  # pad to even
-        self.pulse_number = n_x * n_y
-
-    def analyze_pulse_steps(self):
-        """Stub for analyzing pulse steps."""
-        return 1, 1
-
-    def assign_axis2wavtable(self, axis, wave_id) -> None:
-        """Stub for assigning axis to waveform table."""
-        print(f"[DEBUG] _HexapodInfo.assign_axis2wavtable({axis}, {wave_id})")
-
-    def goto_start_pos(self, axis) -> None:
-        """Stub for moving to start position."""
-        print(f"[DEBUG] _HexapodInfo.goto_start_pos({axis})")
-
-    def run_traj(self, axis) -> None:
-        """Stub for running trajectory."""
-        print(f"[DEBUG] _HexapodInfo.run_traj({axis})")
-
-    def istraj_running(self) -> bool:
-        """Stub for checking if trajectory is running."""
-        return False
-
-    def stop_traj(self) -> None:
-        """Stub for stopping trajectory."""
-        print("[DEBUG] _HexapodInfo.stop_traj()")
-
-    def wait(self) -> None:
-        """Stub for waiting."""
-        print("[DEBUG] _HexapodInfo.wait()")
-
-    def get_records(self):
-        """Stub for getting trajectory records."""
-        return []
-
     def mv(self, *args, wait=True):
         """Stub for moving axes."""
         print(f"[DEBUG] _HexapodInfo.mv({args}, wait={wait})")
+        for axis, target in zip(args[0::2], args[1::2]):
+            self._pos[axis] = target
         return True
 
 
@@ -795,6 +701,26 @@ class InstrumentsStub:
             self.signals.AxisNameSignal.emit(str(axis))
             self.signals.AxisPosSignal.emit(new_pos)
             print(f"[DEBUG L1] mvr({axis!r}, {float(delta):.6f}) -> {new_pos:.6f}")
+
+    def can_coordinate(self, xaxis, yaxis) -> bool:
+        """Every axis here is simulated by the same object, so a pair can
+        always be "started together"."""
+        return True
+
+    def mv_xy(self, xaxis, xp, yaxis, yp, wait=True, timeout=None) -> bool:
+        """Move a scan's two grid axes to one point.
+
+        The 2-D step scan calls this for every point, so without it the
+        scan's own `except Exception` would swallow an AttributeError and
+        the stage would silently never move - every point recording the
+        same position.
+        """
+        self.mv(xaxis, xp, wait=wait)
+        self.mv(yaxis, yp, wait=wait)
+        return True
+
+    def controller_for(self, axis):
+        return self
 
     def get_pos(self, axis) -> float:
         return self._pos.get(axis, 0.0)
@@ -1013,6 +939,8 @@ _MOTOR_TWEAK_REVERSE = ".TWR"
 _MOTOR_VELOCITY = ".VELO"
 _MOTOR_SET_VELOCITY = "_vCh.A"
 _MOTOR_SET_MODE = ".SET"
+_MOTOR_SERVO = ".CNEN"
+_MOTOR_SERVO_READBACK = ":SERVO"
 
 # Starting value for any field not written yet. A record whose suffix is
 # absent here reads back 0.
@@ -1025,6 +953,14 @@ _MOTOR_DEFAULTS = {
     ".SPMG": 3,
     _MOTOR_SET_VELOCITY: 1.0,
     _MOTOR_SET_MODE: 0,  # Use mode: a .VAL write moves rather than redefines
+    # Servo on by default. Starting it off would make the hexapod's startup
+    # check in rungui.py try to recover from a fault on every debug launch.
+    _MOTOR_SERVO: 1,
+    _MOTOR_SERVO_READBACK: 1,
+    ".MSTA": 0,
+    # asynRecord .CNCT: 1 is Connect. Offline, the simulated controller is
+    # reachable - an unreachable one is a hardware state, not a debug one.
+    ".CNCT": 1,
 }
 
 # Engineering unit per record prefix, so .EGU reads back something sensible
@@ -1034,6 +970,10 @@ _MOTOR_UNITS = {
     "12ideMCS2:m4": "deg",
     "12ideMCS1:m3": "deg",
     "12ideMCS1:m4": "deg",
+    # Hexapod: X/Y/Z are linear, U/V/W are the rotations.
+    "12idbHXP:m4": "deg",
+    "12idbHXP:m5": "deg",
+    "12idbHXP:m6": "deg",
 }
 
 # Every field suffix FakeMotorPV recognises, longest first so a suffix that
@@ -1063,7 +1003,18 @@ class FakeMotorPV:
 
     _store = {}
 
+    # Every put in order, as (pvname, value). A store only keeps the latest
+    # value per record, which hides sequences: a deferred move writes DEFER 1,
+    # then the targets, then DEFER 0, and ends up reading 0 exactly as if it
+    # had never been set. Shared like _store, and cleared by reset().
+    _history = []
+
     connected = True
+
+    # EPICS alarm severity, as epics.PV exposes it. 0 is NO_ALARM; a test
+    # sets 3 (INVALID) to stand for a record whose device support could not
+    # read its hardware, which still has a value but not a trustworthy one.
+    severity = 0
 
     def __init__(self, pvname, *args, **kwargs):
         self.pvname = pvname
@@ -1075,6 +1026,14 @@ class FakeMotorPV:
     def reset(cls):
         """Drop all simulated records - lets a test start from a clean slate."""
         cls._store = {}
+        cls._history = []
+
+    @classmethod
+    def history(cls, pvname=None):
+        """Puts in order: every one, or just those to a named record."""
+        if pvname is None:
+            return list(cls._history)
+        return [value for name, value in cls._history if name == pvname]
 
     @staticmethod
     def _split(pvname):
@@ -1117,6 +1076,7 @@ class FakeMotorPV:
         if not self.connected:
             return None
         self._store[self.pvname] = val
+        self._history.append((self.pvname, val))
         moved = None
 
         if self._field == _MOTOR_DRIVE:

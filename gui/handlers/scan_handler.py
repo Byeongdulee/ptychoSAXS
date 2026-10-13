@@ -9,6 +9,7 @@ import time
 import os
 import csv
 import json
+import math
 import numpy as np
 import re
 import traceback
@@ -19,6 +20,8 @@ from collections import deque
 from PyQt5.QtWidgets import QMessageBox, QInputDialog, QLabel, QLineEdit, QFileDialog, QPushButton, QCheckBox, QDialog, QVBoxLayout
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
 import pyqtgraph as pg
+
+from ptychosaxs.hexapod_traj import TrajectoryUnavailable
 
 # tools.detectors / tools.dg645 / tools.softglue each import `epics` at module
 # level just to expose these three plain Exception subclasses. `epics` drags
@@ -35,6 +38,12 @@ if _DEBUG_MODE:
     _DEBUG_LEVEL = int(os.environ.get("PTYCHOSAXS_DEBUG_LEVEL", _DEBUG_LEVEL))
 _DEBUG_DEVICES = _DEBUG_MODE and _DEBUG_LEVEL in (0, 1)
 
+# tools/dg645.py also imports InstrumentKit (`instruments`), which the other
+# device modules do not, so it has a flag of its own - rungui exports it
+# before importing this module. That is what lets the GUI run with real
+# detectors and softglue in an environment without InstrumentKit.
+_DEBUG_DG645 = _DEBUG_DEVICES or os.environ.get("PTYCHOSAXS_DEBUG_DG645") == "1"
+
 if _DEBUG_DEVICES:
     class DET_MIN_READOUT_Error(Exception):
         pass
@@ -42,15 +51,17 @@ if _DEBUG_DEVICES:
     class DET_OVER_READOUT_SPEED_Error(Exception):
         pass
 
-    class DG645_Error(Exception):
-        pass
-
     class SOFTGLUE_Setup_Error(Exception):
         pass
 else:
     from tools.detectors import DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
-    from tools.dg645 import DG645_Error
     from tools.softglue import SOFTGLUE_Setup_Error
+
+if _DEBUG_DG645:
+    class DG645_Error(Exception):
+        pass
+else:
+    from tools.dg645 import DG645_Error
 
 
 
@@ -388,6 +399,55 @@ class ScanHandler:
         if not self._check_saxs_det_mode():
             return False
         if velocities is not None and not self._check_velocity_limits(velocities):
+            return False
+        return True
+
+    def _scan_motors(self, xmotor=None, ymotor=None, phimotor=None):
+        """Fill in whichever scan-axis indices the caller left unset.
+
+        The defaults live in one place - rungui's DEFAULTS, which the axis
+        selectors write to - so a signature default here could only
+        contradict them, and used to.
+        """
+        defaults = self.w.DEFAULTS
+        return (
+            defaults["xmotor"] if xmotor is None else xmotor,
+            defaults["ymotor"] if ymotor is None else ymotor,
+            defaults["phimotor"] if phimotor is None else phimotor,
+        )
+
+    def _fly_guards(self, *axis_names) -> bool:
+        """Return False (and explain) if a fly scan cannot run right now.
+
+        Two separate reasons it might not. The trajectory is programmed into
+        the hexapod's wave generator, so every flown axis has to be a hexapod
+        axis - no other stage here has one. And the wave generator is reached
+        over GCS, which needs the pihexapod library and a live connection to
+        the C-887; the EPICS motor records that drive step scans expose no
+        trajectory interface and cannot substitute.
+
+        Checking here means the failure arrives before the detector is armed,
+        with a reason, rather than as an exception part-way through a scan.
+        """
+        hexapod = self.w.pts.hexapod
+        foreign = [name for name in axis_names if name not in hexapod.axes]
+        if foreign:
+            QMessageBox.warning(
+                self.w.ui,
+                "Fly scan not available",
+                "Fly scans are driven by the hexapod's wave generator, so "
+                "every flown axis must be a hexapod axis (%s).\n\nNot a "
+                "hexapod axis: %s." % (", ".join(hexapod.axes), ", ".join(foreign)),
+            )
+            return False
+        if not hexapod.can_fly:
+            QMessageBox.warning(
+                self.w.ui,
+                "Fly scan not available",
+                "The hexapod's trajectory transport is unavailable (%s).\n\n%s"
+                "\n\nStep scans are unaffected."
+                % (hexapod.traj_state, hexapod.traj_reason),
+            )
             return False
         return True
 
@@ -1047,12 +1107,14 @@ class ScanHandler:
     def _scan_mv(self, axis, target, wait=True, update_status=None):
         """Move a motor during a scan without letting a stage-motion timeout abort it.
 
-        pts.mv() raises a bare TimeoutError if a move doesn't settle within its
-        internal 10 s window. Uncaught, that propagates out of the worker-thread
-        scan executor into Worker.run() (rungui.py), which treats any exception
-        as fatal and aborts the whole scan. A single slow/stalled move shouldn't
-        lose an entire scan's worth of data, so scan executors call this instead
-        of self.w.pts.mv() directly and just log + continue on timeout.
+        pts.mv() raises if a move doesn't settle within its internal 10 s
+        window (TimeoutError), or if the hexapod still will not move after
+        its servo-recovery attempts (RuntimeError). Uncaught, either
+        propagates out of the worker-thread scan executor into Worker.run()
+        (rungui.py), which treats any exception as fatal and aborts the whole
+        scan. A single slow/stalled move shouldn't lose an entire scan's
+        worth of data, so scan executors call this instead of
+        self.w.pts.mv() directly and just log + continue.
 
         Deliberately does NOT set self.w.messages["recent error message"] —
         that dict key is wired (see _ErrorDict in rungui.py) to flash the GUI's
@@ -1062,13 +1124,16 @@ class ScanHandler:
         """
         try:
             self.w.pts.mv(axis, target, wait=wait)
-        except TimeoutError:
-            msg = f"Stage motion timeout moving {axis} to {target} — continuing scan. {time.ctime()}"
+        except (TimeoutError, RuntimeError) as exc:
+            msg = (
+                f"Stage motion failed moving {axis} to {target} "
+                f"({exc}) — continuing scan. {time.ctime()}"
+            )
             print(msg)
             # if update_status:
             #     update_status(msg)
 
-    def _scan_mv_xy(self, xaxis, xp, yaxis, yp, coordinated=False, update_status=None):
+    def _scan_mv_xy(self, xaxis, xp, yaxis, yp, update_status=None):
         """Move a scan's two grid axes to one point.
 
         Moving them one after the other walks the stage through a corner
@@ -1076,32 +1141,40 @@ class ScanHandler:
         pairs that share a controller able to start both at once take that
         path instead; everything else falls back to two sequential moves.
 
+        Which of those applies is pts.mv_xy's decision, not this function's —
+        it knows which controller owns each axis and whether that controller
+        can start them together. That is what lets the scan axes be swapped
+        without touching the scan engine.
+
         Like _scan_mv, any failure here is logged and the scan carries on —
         one bad point should not lose a whole run.
         """
-        if coordinated:
-            try:
-                ok = self.w.pts.gonio.mv_many(
-                    [(xaxis, xp), (yaxis, yp)], timeout=self.COORDINATED_MOVE_TIMEOUT_S
-                )
-            except Exception as e:
-                print(
-                    f"Coordinated move of {xaxis}/{yaxis} to ({xp}, {yp}) failed "
-                    f"({e}) — continuing scan. {time.ctime()}"
-                )
-                return
-            if not ok:
-                print(
-                    f"Stage motion timeout moving {xaxis}/{yaxis} to "
-                    f"({xp}, {yp}) — continuing scan. {time.ctime()}"
-                )
-                return
-            # pts.mv emits these as it moves; a coordinated move bypasses it,
-            # so the position readouts would otherwise freeze for the scan.
-            self._emit_axis_positions(xaxis, yaxis)
+        if not self.w.pts.can_coordinate(xaxis, yaxis):
+            # Two independent moves, each with its own error handling: a
+            # failure on one axis must not also skip the other.
+            self._scan_mv(xaxis, xp, update_status=update_status)
+            self._scan_mv(yaxis, yp, update_status=update_status)
             return
-        self._scan_mv(xaxis, xp, update_status=update_status)
-        self._scan_mv(yaxis, yp, update_status=update_status)
+        try:
+            ok = self.w.pts.mv_xy(
+                xaxis, xp, yaxis, yp, wait=True,
+                timeout=self.COORDINATED_MOVE_TIMEOUT_S,
+            )
+        except Exception as e:
+            print(
+                f"Move of {xaxis}/{yaxis} to ({xp}, {yp}) failed "
+                f"({e}) — continuing scan. {time.ctime()}"
+            )
+            return
+        if not ok:
+            print(
+                f"Stage motion timeout moving {xaxis}/{yaxis} to "
+                f"({xp}, {yp}) — continuing scan. {time.ctime()}"
+            )
+            return
+        # pts.mv emits these as it moves; a coordinated move bypasses it,
+        # so the position readouts would otherwise freeze for the scan.
+        self._emit_axis_positions(xaxis, yaxis)
 
     def _emit_axis_positions(self, *axes):
         """Push each axis's settled position out on the motion signals the
@@ -1573,6 +1646,99 @@ class ScanHandler:
         self.ui.lbl_scanname.setText(txt)
         self.update_label_scanCheck()
 
+    # ------------------------------------------------------------------
+    # Output paths
+    # ------------------------------------------------------------------
+    #
+    # One scan folder, two names for it, and which name you need depends on
+    # who is doing the opening:
+    #
+    #   the GUI path    what this process passes to os.makedirs and h5py, to
+    #                   create the scan folder and write the NeXus master file.
+    #   the EPICS path  what goes into a detector's FilePath PV. The IOCs are
+    #                   always on Linux, so this is always a Linux path.
+    #
+    # Running on Linux the two are identical: the Working folder is already a
+    # Linux path, so it is both what the GUI opens and what the IOCs are told.
+    # Running on Windows the Working folder is a Windows path (Z:\12IDC\...),
+    # and the EPICS path is built by swapping its drive letter for the Linux
+    # basepath -- the same folder reached over the mount from the other side.
+    #
+    # Everything goes through these three functions. They were previously
+    # open-coded in four places, which is how the master file came to have its
+    # own variant that stripped the leading "/" off an absolute Linux path and
+    # joined the rest with backslashes.
+
+    def _step_detector_period(self, expt: float) -> float:
+        """The camera exposure period to program for a step scan.
+
+        AcquirePeriod is camserver's `expperiod`: the floor on how closely
+        two exposures may follow one another. Step mode never set it -- only
+        fly_ready did -- so the camera kept whatever a previous fly scan or
+        alignment had left behind, and a stale value put that floor under
+        every point of the scan regardless of the exposure time.
+
+        Deliberately the same formula as the DG645's Cycperiod below: a
+        camera period longer than the trigger spacing would make the detector
+        ignore triggers, which reads as a frame timeout rather than as a
+        misconfiguration.
+        """
+        return round(max(expt + DETECTOR_READOUTTIME, 0.03), 6)
+
+    def _working_folder(self) -> str:
+        """The Working folder exactly as typed on the main window.
+
+        GUI thread only. Worker threads pass the copy captured at scan start
+        (`_scan_working_folder`) into the two functions below instead.
+        """
+        return self.ui.edit_workingfolder.text()
+
+    @staticmethod
+    def _join_posix(base, *parts) -> str:
+        """Join into a Linux path, dropping empty components.
+
+        `base` keeps any leading "/" it came with, so an absolute basepath
+        stays absolute; every later component is stripped of its own
+        separators so no "//" or trailing "/" can creep in.
+        """
+        out = str(base).replace("\\", "/").rstrip("/")
+        for part in parts:
+            part = str(part).replace("\\", "/").strip("/")
+            if part:
+                out = "%s/%s" % (out, part) if out else part
+        return out
+
+    def _gui_scan_folder(self, folder_type, scannumberstring, working_folder=None) -> str:
+        """The scan's output folder, as this process must open it."""
+        wf = self._working_folder() if working_folder is None else working_folder
+        if self.w.running_on_linux():
+            return self._join_posix(wf, folder_type, scannumberstring)
+        # Native separators, so this is byte-identical to what the Windows
+        # console produced before these helpers existed.
+        return os.path.join(wf, folder_type, scannumberstring)
+
+    def _epics_scan_folder(
+        self, basepath, folder_type, scannumberstring, working_folder=None
+    ) -> str:
+        """The scan's output folder, as a detector IOC must open it.
+
+        Always a Linux path. `basepath` is the IOC-side root the Working
+        folder hangs off, and is ignored entirely when the GUI is itself on
+        Linux -- there the Working folder is already the full Linux path, so
+        prepending a basepath is what produced the doubled
+        /net/micdata/data2/net/micdata/data2/... paths.
+        """
+        wf = self._working_folder() if working_folder is None else working_folder
+        if self.w.running_on_linux():
+            return self._join_posix(wf, folder_type, scannumberstring)
+        # Windows: drop the drive letter (the first path component) and hang
+        # the rest off the IOC's Linux basepath. PureWindowsPath rather than
+        # Path so the split still works when a Windows path is configured
+        # from a Linux box, where a bare Path would see no separators at all
+        # and yield a single component.
+        parts = pathlib.PureWindowsPath(wf).parts
+        return self._join_posix(basepath, *parts[1:], folder_type, scannumberstring)
+
     def _prepare_scan_files(self):
         """Create output folders and push FilePath/FileName to all detector IOCs.
 
@@ -1585,18 +1751,9 @@ class ScanHandler:
         scan_number = self.w.parameters.scan_number
         txt = "%s_%0.4i" % (scan_name, scan_number)
 
-        p = pathlib.Path(self.ui.edit_workingfolder.text())
-        wf_temp = p.parts
-        workingfolder = ""
-        for i in range(1, len(wf_temp)):
-            if i == 1:
-                workingfolder = wf_temp[i]
-            else:
-                workingfolder = "%s/%s" % (workingfolder, wf_temp[i])
-
-        Windows_workingfolder = self.ui.edit_workingfolder.text()
-        self._workingfolder = workingfolder
-        self._Windows_workingfolder = Windows_workingfolder
+        # Captured once here so the worker-thread path pushes between 3-D
+        # slices, and the master-file path builders, never touch a Qt widget.
+        self._scan_working_folder = self._working_folder()
 
         for i, det in enumerate(self.w.detector):
             if i == 0:
@@ -1654,14 +1811,13 @@ class ScanHandler:
                 det.FilePath = tif_path
                 det.FileName = filename
 
-            Windows_hdf_path = os.path.join(
-                Windows_workingfolder, folder_type, self.scannumberstring
-            ).replace("\\", "/")
-            self.w.make_positions_folder(Windows_hdf_path)
+            self.w.make_positions_folder(
+                self._gui_scan_folder(folder_type, self.scannumberstring)
+            )
 
-            hdf_path = os.path.join(
-                basepath, workingfolder, folder_type, self.scannumberstring
-            ).replace("\\", "/")
+            hdf_path = self._epics_scan_folder(
+                basepath, folder_type, self.scannumberstring
+            )
             det.filePut("FilePath", hdf_path)
             det.filePut("FileName", hdfname)
             self.w.hdf_plugin_name[i] = hdfname
@@ -1669,20 +1825,20 @@ class ScanHandler:
     def _push_filepaths_to_detectors(self):
         """Push updated FilePath and FileName to all detector IOCs.
 
-        Worker-thread-safe version of _prepare_scan_files.  Uses paths captured
-        by _prepare_scan_files at scan start (_workingfolder, _Windows_workingfolder)
-        together with the current scan_number / scannumberstring, so it can be
-        called from the worker thread between phi slices in 3D scans without
-        touching any Qt widgets.  Does not create new top-level folders (those
-        are created once by _prepare_scan_files); only creates the per-slice
-        scannumber subdirectory.
+        Worker-thread-safe version of _prepare_scan_files.  Uses the Working
+        folder captured by _prepare_scan_files at scan start
+        (_scan_working_folder) together with the current scan_number /
+        scannumberstring, so it can be called from the worker thread between
+        phi slices in 3D scans without touching any Qt widgets.  Does not
+        create new top-level folders (those are created once by
+        _prepare_scan_files); only creates the per-slice scannumber
+        subdirectory.
         """
         scan_name = self.w.parameters.scan_name
         scan_number = self.w.parameters.scan_number
         txt = "%s_%0.4i" % (scan_name, scan_number)
         scannumberstring = "S%04d" % scan_number
-        workingfolder = self._workingfolder
-        Windows_workingfolder = self._Windows_workingfolder
+        working_folder = self._scan_working_folder
 
 
         for i, det in enumerate(self.w.detector):
@@ -1728,14 +1884,13 @@ class ScanHandler:
 
             hdfname = tp + txt
 
-            Windows_hdf_path = os.path.join(
-                Windows_workingfolder, folder_type, scannumberstring
-            ).replace("\\", "/")
-            self.w.make_positions_folder(Windows_hdf_path)
+            self.w.make_positions_folder(
+                self._gui_scan_folder(folder_type, scannumberstring, working_folder)
+            )
 
-            hdf_path = os.path.join(
-                basepath, workingfolder, folder_type, scannumberstring
-            ).replace("\\", "/")
+            hdf_path = self._epics_scan_folder(
+                basepath, folder_type, scannumberstring, working_folder
+            )
             det.filePut("FilePath", hdf_path)
             det.filePut("FileName", hdfname)
             self.w.hdf_plugin_name[i] = hdfname
@@ -1749,15 +1904,6 @@ class ScanHandler:
         """
         if not self.w.use_hdf_plugin:
             return
-
-        p = pathlib.Path(self.ui.edit_workingfolder.text())
-        wf_temp = p.parts
-        workingfolder = ""
-        for i in range(1, len(wf_temp)):
-            if i == 1:
-                workingfolder = wf_temp[i]
-            else:
-                workingfolder = "%s/%s" % (workingfolder, wf_temp[i])
 
         for i, det in enumerate(self.w.detector):
             if det is None:
@@ -1793,16 +1939,19 @@ class ScanHandler:
             else:
                 continue
 
-            hdf_path = os.path.join(
-                basepath, workingfolder, folder_type, self.scannumberstring
-            ).replace("\\", "/")
+            hdf_path = self._epics_scan_folder(
+                basepath, folder_type, self.scannumberstring
+            )
             det.filePut("FilePath", hdf_path)
 
-    def _iter_detector_windows_paths(self):
-        """Yield the Windows-side folder path for each active detector at the current scan number."""
+    def _iter_detector_gui_paths(self):
+        """Yield the GUI-side folder for each active detector at the current scan number.
+
+        GUI-side because the caller (check_scan_folder) stats these folders
+        from this process, not through the IOC.
+        """
         if not hasattr(self.w, "detector"):
             return
-        Windows_workingfolder = self.ui.edit_workingfolder.text()
         scannumberstring = "S%04d" % self.w.parameters.scan_number
         for i, det in enumerate(self.w.detector):
             if det is None:
@@ -1823,9 +1972,7 @@ class ScanHandler:
                     folder_type = tp + "AXS"
             else:
                 continue
-            yield os.path.join(
-                Windows_workingfolder, folder_type, scannumberstring
-            ).replace("\\", "/")
+            yield self._gui_scan_folder(folder_type, scannumberstring)
 
     def check_scan_folder(self):
         """Check active detector folders for the current scan number.
@@ -1836,7 +1983,7 @@ class ScanHandler:
             False — at least one folder already contains a file
         """
         found_any = False
-        for folder in self._iter_detector_windows_paths():
+        for folder in self._iter_detector_gui_paths():
             found_any = True
             if os.path.isdir(folder):
                 with os.scandir(folder) as it:
@@ -2285,7 +2432,7 @@ class ScanHandler:
             scan_number: Explicit scan number to use
 
         Returns:
-            Full Windows path to master file.
+            Full path to the master file, as this process must open it.
         """
         # Determine detector index and mode
         detector_index_map = {'SAXS': 0, 'WAXS': 1}
@@ -2306,32 +2453,35 @@ class ScanHandler:
             tp = tp_map.get(detector_type)
             folder_type = tp + "AXS"
 
-        # Use Windows working folder path for file I/O on Windows machine
-        windows_workingfolder = (self._Windows_workingfolder if hasattr(self, '_Windows_workingfolder') else "").strip("/\\")
-
-        # Use provided scan_number to build scannumberstring
+        # The master file is written by this process, so it needs the GUI-side
+        # folder -- the same one make_positions_folder created at scan start.
+        #
+        # This used to build its own path instead, by stripping leading
+        # separators off the Working folder and joining the rest with
+        # backslashes. On Windows that happened to be right. On Linux it turned
+        # an absolute path into a relative one and then produced a single
+        # directory component literally named "02_test\ptycho\S0004", so
+        # os.makedirs created a stray tree under the launch directory and h5py
+        # failed to create the file at all.
         scannumberstring = f"S{scan_number:04d}"
-
-        # Build path using backslashes for Windows
-        path_parts = [windows_workingfolder, folder_type, scannumberstring]
-        detector_folder = "\\".join(p for p in path_parts if p)
+        detector_folder = self._gui_scan_folder(
+            folder_type,
+            scannumberstring,
+            getattr(self, "_scan_working_folder", None) or self._working_folder(),
+        )
         filename = f"{sample_name}_{scan_number:04d}_master.h5"
         return os.path.join(detector_folder, filename)
 
     def _get_master_file_path(self, detector_type: str, sample_name: str) -> str:
         """Get the path to the master file for a given detector and sample.
 
-        Uses Windows paths (Z:/) since file I/O happens on Windows machine.
-        The detector IOC will handle the Linux path mapping internally.
-
         Args:
             detector_type: 'SAXS' or 'WAXS'
             sample_name: Sample name extracted from detector filename
 
         Returns:
-            Full Windows path to master file.
-            - Ptycho mode: {Windows_workingfolder}/ptycho/{scannumberstring}/{sample_name}_{scan_num:04d}_master.h5
-            - Scattering mode: {Windows_workingfolder}/SAXS_or_WAXS/{scannumberstring}/{sample_name}_{scan_num:04d}_master.h5
+            Full path to the master file, as this process must open it:
+            {working folder}/{ptycho|SAXS|WAXS}/{S####}/{sample}_{####}_master.h5
         """
         scan_num = self.w.parameters.scan_number
         return self._get_master_file_path_with_number(detector_type, sample_name, scan_num)
@@ -2906,9 +3056,12 @@ class ScanHandler:
             detector_config = self._get_detector_config(detector_type)
             detector_metadata = self._fetch_detector_epics_metadata(detector_config)
 
-            # Create master file
+            # Create master file. No separator rewriting here: the path comes
+            # from _gui_scan_folder already in this platform's own form, and
+            # normalising only the directory was what let h5py be handed a
+            # path whose directory component did not exist.
             master_path = self._get_master_file_path(detector_type, sample_name)
-            master_dir = os.path.dirname(master_path).replace("\\", "/")
+            master_dir = os.path.dirname(master_path)
             try:
                 os.makedirs(master_dir, exist_ok=True)
             except (OSError, FileNotFoundError):
@@ -3076,8 +3229,9 @@ class ScanHandler:
         Returns the new scan_number.
         """
         self.w.parameters.scan_number = self.w.parameters.scan_number + 1
-        if self.w.SCAN_NUMBER_IOC is not None:
-            self.w.SCAN_NUMBER_IOC.put(int(self.w.parameters.scan_number))
+        # Each phi slice is the start of its own sub-scan, so the IOC is
+        # pointed at it before any frames are taken.
+        self.w.write_scan_number_to_ioc()
         self.w.parameters.writeini()
         return self.w.parameters.scan_number
 
@@ -3350,7 +3504,7 @@ class ScanHandler:
             return
 
         N_cnt = 0
-        if hasattr(self.w.pts.hexapod, "pulse_number"):
+        if self.w.pts.hexapod.can_fly:
             N_cnt = self.w.pts.hexapod.pulse_number
         t = []
         ct0 = time.time()
@@ -3379,7 +3533,10 @@ class ScanHandler:
         foldername, filename = self.w.get_softglue_filename()
         if len(foldername) == 0:
             return
-        foldername = os.path.join(foldername, "positions", self.scannumberstring)
+        # Written by this process (np.savetxt), so the GUI-side path.
+        foldername = self._gui_scan_folder(
+            "positions", self.scannumberstring, foldername
+        )
         self.softglue_folder = foldername
         self.softglue_filename = filename
 
@@ -3460,10 +3617,6 @@ class ScanHandler:
         except:
             print("error in save2disk_softglue")
 
-    def save_hexapod_record(self, filename, option="a"):
-        timeout = 5
-        cnt = 0
-        hpos = []
 
     def flydone(self, return_motor=True, reset_scannumber=True, donedone=True,
                 direct_gui_updates=True):
@@ -3760,7 +3913,7 @@ class ScanHandler:
         # elif clicked == cancel_btn:
         #    return None
 
-    def fly2d(self, xmotor=0, ymotor=1, snake=False):
+    def fly2d(self, xmotor=None, ymotor=None, snake=False):
         """Entry point for a 2-D fly scan (GUI thread).
 
         snake=False: steps Y with pts.mv, then flies X with fly0 for each row.
@@ -3771,7 +3924,10 @@ class ScanHandler:
         Why fly2d exists separately from fly2d0 / fly2d0_SNAKE: thread-safety —
         Qt widget reads must happen on the GUI thread.
         """
+        xmotor, ymotor, _phi = self._scan_motors(xmotor, ymotor)
         if not self._pre_scan_guards():
+            return
+        if not self._fly_guards(self.w.motornames[xmotor], self.w.motornames[ymotor]):
             return
 
         # Read parameters and check large scan BEFORE _pre_scan (which creates master file)
@@ -3888,7 +4044,7 @@ class ScanHandler:
     def update_status_bar(self, message):
         self.ui.statusbar.showMessage(message)
 
-    def fly3d(self, xmotor=0, ymotor=1, phimotor=6, slice_label_prefix="", snake=False):
+    def fly3d(self, xmotor=None, ymotor=None, phimotor=None, slice_label_prefix="", snake=False):
         """Entry point for a 3-D fly scan (GUI thread).
 
         Steps phi in the outer loop; for each phi position fly3d0 calls
@@ -3901,7 +4057,10 @@ class ScanHandler:
         Why fly3d exists separately from fly3d0: thread-safety — Qt widget
         reads must happen on the GUI thread.
         """
+        xmotor, ymotor, phimotor = self._scan_motors(xmotor, ymotor, phimotor)
         if not self._pre_scan_guards():
+            return
+        if not self._fly_guards(self.w.motornames[xmotor], self.w.motornames[ymotor]):
             return
 
         # Read parameters and check large scan BEFORE _pre_scan (which creates master file)
@@ -4022,11 +4181,13 @@ class ScanHandler:
         # Check large scan BEFORE _pre_scan (which creates master file)
         pos = self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"])
         scan_kind = "fly_hexapod_1d" if ax["name"] in self.w.pts.hexapod.axes else "fly_phi"
+        if scan_kind == "fly_hexapod_1d" and not self._fly_guards(ax["name"]):
+            return
         n_positions = self._compute_n_positions([pos], scan_kind=scan_kind)
         if not self._confirm_large_scan(n_positions, ax["expt"], self.OVERHEAD_FLY):
             return
 
-        self._pre_scan("fly", scan_kind=scan_kind)
+        self._pre_scan("fly", scan_kind=scan_kind, xmotor=motornumber)
 
         self.isMCS_ready = False
         if self.w.detector[2] is not None:
@@ -4432,7 +4593,7 @@ class ScanHandler:
         self._log_scan_header("stepscan", [ax])
         self._launch_worker(self.stepscan0, motornumber, done_signal=self.w.scandone)
 
-    def stepscan2d(self, xmotor=0, ymotor=1):
+    def stepscan2d(self, xmotor=None, ymotor=None):
         """Entry point for a 2-D step scan in snake (boustrophedon) order (GUI thread).
 
         Reads X and Y parameters, validates, logs the scan header, then launches
@@ -4443,6 +4604,7 @@ class ScanHandler:
         Why stepscan2d exists separately from stepscan2d0: same thread-safety reason
         as stepscan/stepscan0 — Qt widget reads must happen on the GUI thread.
         """
+        xmotor, ymotor, _phi = self._scan_motors(xmotor, ymotor)
         if not self._pre_scan_guards():
             return
 
@@ -4600,14 +4762,26 @@ class ScanHandler:
         )
 
     def run_stop_issued(self):
+        """Advance the scan number at the start of a scan.
+
+        This is the one moment fileIndex is written: the number is
+        advanced, pushed to the IOC, then shown. Doing it here rather than
+        at startup or on completion means the PV names the scan that is
+        about to run.
+        """
         self.w.parameters.scan_number = self.w.parameters.scan_number + 1
+        self.w.write_scan_number_to_ioc()
         self.w.update_scannumber()
         self.w.parameters.writeini()
 
     def update_scannumber(self):
-        SCAN_NUMBER_IOC = self.w.SCAN_NUMBER_IOC
-        if SCAN_NUMBER_IOC is not None:
-            SCAN_NUMBER_IOC.put(int(self.w.parameters.scan_number))
+        """Refresh the scan-number widgets. Does not touch the IOC.
+
+        12idc:data:fileIndex is written only when a scan starts, by
+        run_stop_issued and _advance_scan_number_safe, so that the PV names
+        the scan that is running. Startup, scan completion and the +/-
+        buttons all go through here and leave it alone.
+        """
         self.ui.edit_scannumber.setText(str(int(self.w.parameters.scan_number)))
         self.update_label_scanCheck()
 
@@ -4709,10 +4883,13 @@ class ScanHandler:
             DGNimage=int(self.w.parameters._pulses_per_step),
             Cycperiod=period,
         )
+        det_period = self._step_detector_period(expt)
 
         # Arm all selected detectors for the full scan length.
-        # step_ready() puts each detector in external-trigger mode and programs
-        # the total frame count it should expect (len(pos) * pulses_per_step).
+        # step_ready() puts each detector in external-trigger mode, programs
+        # the exposure time and period, and sets the total frame count it
+        # should expect (len(pos) * pulses_per_step). Once, here -- not per
+        # point.
         isDET_selected = False
         for detN, det in enumerate(self.w.detector):
             if det is not None:
@@ -4730,6 +4907,7 @@ class ScanHandler:
                         len(pos),
                         pulsespershot=self.w.parameters._pulses_per_step,
                         fn=self.w.hdf_plugin_name[detN],
+                        period=det_period,
                     )
                 except TimeoutError:
                     self.w.messages["recent error message"] = (
@@ -5046,11 +5224,7 @@ class ScanHandler:
             for i, (xp, yp) in enumerate(pos):
                 if self.isStopScanIssued:
                     break
-                self._scan_mv_xy(
-                    xaxis, xp, yaxis, yp,
-                    coordinated=is_piezo_scan,
-                    update_status=update_status,
-                )
+                self._scan_mv_xy(xaxis, xp, yaxis, yp, update_status=update_status)
                 time.sleep(min(expt, 0.05))
                 xy_readback = [self.w.pts.get_pos(xaxis), self.w.pts.get_pos(yaxis)]
                 mpos_data.append(xy_readback)
@@ -5073,8 +5247,11 @@ class ScanHandler:
             DGNimage=int(self.w.parameters._pulses_per_step),
             Cycperiod=period,
         )
+        det_period = self._step_detector_period(expt)
 
         ## prepre detectors ............
+        # Exposure time, exposure period and frame count are all programmed
+        # here, once, before the point loop starts.
         for detN, det in enumerate(self.w.detector):  # JD
             if det is not None:  # JD
                 # Skip Struck detector which doesn't support HDF5 file templates
@@ -5086,6 +5263,7 @@ class ScanHandler:
                     Nline,
                     pulsespershot=self.w.parameters._pulses_per_step,
                     fn=self.w.hdf_plugin_name[detN],
+                    period=det_period,
                 )  # Arm detector for multiple data.
                 print(f"step _ready, detector {detN}'s status: {det.Armed}")  # JD
 
@@ -5104,30 +5282,7 @@ class ScanHandler:
             if self.isStopScanIssued:
                 break
 
-            if xaxis in self.w.pts.hexapod.axes and yaxis in self.w.pts.hexapod.axes:
-                # Move both hexapod axes simultaneously.
-                # hexapod.mv(x_axis, xp, y_axis, yp) issues a single coordinated move
-                # command.  Using two separate pts.mv() calls is wrong here because it
-                # creates an unwanted intermediate position and is slower.
-                # The loop retries on hexapod fault (handle_error resets the controller).
-                pos_ok = False
-                while not pos_ok:
-                    pos_ok = self.w.pts.hexapod.mv(xaxis, xp, yaxis, yp, wait=True)
-                    if not pos_ok:
-                        self.w.messages["recent error message"] = (
-                            f"Hexapod move failed at ({xp:.4f}, {yp:.4f}), "
-                            f"attempting recovery. {time.ctime()}"
-                        )
-                        print(self.w.messages["recent error message"])
-                        pos_ok = self.w.pts.hexapod.handle_error()
-            else:
-                # Gonio pairs start both axes together; any other pair has no
-                # coordinated-move API and moves sequentially instead.
-                self._scan_mv_xy(
-                    xaxis, xp, yaxis, yp,
-                    coordinated=is_piezo_scan,
-                    update_status=update_status,
-                )
+            self._scan_mv_xy(xaxis, xp, yaxis, yp, update_status=update_status)
 
             if is_piezo_scan:
                 # Read back the actual settled position from the SmarAct
@@ -5886,7 +6041,7 @@ class ScanHandler:
         if abs(period) < self.OVERHEAD_FLY:
             self.w.messages["recent error message"] = (
                 "Period < %d ms — Pilatus 2M maximum rate is 30 Hz."
-                % (100 * OVERHEAD_FLY)
+                % (1000 * self.OVERHEAD_FLY)
             )
             print(self.w.messages["recent error message"])
             raise DET_OVER_READOUT_SPEED_Error(self.w.messages["recent error message"])
@@ -6205,12 +6360,27 @@ class ScanHandler:
             while not istraj_running:
                 try:
                     self.w.pts.hexapod.run_traj(axis)
-                except:
-                    pass
+                except TrajectoryUnavailable:
+                    # No point retrying, and no point waiting out the five
+                    # attempts with the detector armed and the shutter open.
+                    self.w.messages["recent error message"] = (
+                        "Hexapod trajectory transport is unavailable (%s): %s"
+                        % (self.w.pts.hexapod.traj_state,
+                           self.w.pts.hexapod.traj_reason)
+                    )
+                    print(self.w.messages["recent error message"])
+                    return DETECTOR_NOT_STARTED_ERROR
+                except Exception as exc:
+                    # A transient GCS error is worth another attempt, but it
+                    # should not vanish silently the way a bare except made it.
+                    print(f"run_traj attempt failed ({exc}); retrying.")
                 wait_for_traj_start_s = 0.05  # brief pause before checking if hexapod trajectory has started moving
                 time.sleep(wait_for_traj_start_s)
                 pos_tmp = self.w.pts.get_pos(axis)
-                if pos_tmp != pos:
+                # An unreachable record reads nan, and nan != nan is True -
+                # so without this a dropped IOC would look like a running
+                # trajectory and the scan would "finish" with no data.
+                if not math.isnan(pos_tmp) and pos_tmp != pos:
                     istraj_running = True
                 # istraj_running = self.w.is_traj_running()
                 i = i + 1
@@ -6825,7 +6995,7 @@ class ScanHandler:
         try:
             xmotor = int(data["xmotor"])
         except:
-            xmotor = DEFAULTS["xmotor"]
+            xmotor = self.w.DEFAULTS["xmotor"]
         try:
             detectors = data["detectors"]
         except:
@@ -6833,11 +7003,11 @@ class ScanHandler:
         try:
             ymotor = int(data["ymotor"])
         except:
-            ymotor = DEFAULTS["ymotor"]
+            ymotor = self.w.DEFAULTS["ymotor"]
         try:
             phimotor = int(data["phimotor"])
         except:
-            phimotor = DEFAULTS["phimotor"]
+            phimotor = self.w.DEFAULTS["phimotor"]
         try:
             scanname = data["scanname"]
         except:
