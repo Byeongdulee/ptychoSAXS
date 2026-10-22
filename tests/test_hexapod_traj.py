@@ -353,3 +353,31 @@ def test_the_installed_library_has_the_surface_we_call():
     missing = [name for name in TRAJ_METHODS if not hasattr(gcs.Hexapod, name)]
     assert missing == []
     assert set(getattr(gcs, "WaveGenID", {})) == {"X", "Y", "Z", "U", "V", "W"}
+
+
+# ---------------------------------------------------------------------------
+# get_records is transport-dependent
+# ---------------------------------------------------------------------------
+
+def test_get_records_is_refused_over_the_epics_transport():
+    """Draining DRR? through asyn_1 is one CA transaction per scan point;
+    a 3000-point attempt took the IOC down. The fly scan does not need it,
+    so the transport stays available and only this call refuses."""
+    from hexapod_traj import PiHexapodTrajectory, TrajectoryUnavailable
+
+    backend = PiHexapodTrajectory(_CompleteHexapod("12idbHXP"), _WAVE_GEN_ID,
+                                  transport="epics", address="12idbHXP")
+    assert backend.available is True
+    with pytest.raises(TrajectoryUnavailable) as exc:
+        backend.get_records()
+    assert "IMAX" in str(exc.value)
+
+
+def test_get_records_still_works_over_the_direct_transport():
+    from hexapod_traj import PiHexapodTrajectory
+
+    device = _CompleteHexapod("10.0.0.1")
+    backend = PiHexapodTrajectory(device, _WAVE_GEN_ID, transport="direct",
+                                  address="10.0.0.1")
+    assert backend.get_records() == "get_records"  # _record() echoes the name
+    assert device.calls[-1][0] == "get_records"

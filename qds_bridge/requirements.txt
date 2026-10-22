@@ -1,0 +1,4 @@
+# Publisher (Windows, sec12mic) needs both.
+# Subscriber (Linux) needs only pyzmq.
+pyzmq
+pyqudis

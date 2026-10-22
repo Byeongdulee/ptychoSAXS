@@ -63,6 +63,7 @@ INI_INT_FIELDS = (
     "_qds_x_sensor",
     "_qds_y_sensor",
     "_save_us_optics",
+    "_check_optics_prescan",
     "_xmotor",
     "_ymotor",
 )

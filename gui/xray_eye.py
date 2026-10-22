@@ -25,6 +25,25 @@ EYE_CMD_PV = "usxRIO:Galil2Bo0_CMD"
 # readback, which reflects intent immediately rather than lagging the motion.
 EYE_STATUS_PV = "usxRIO:Galil2Bo0_STATUS.VAL"
 
+# Which camera is serving as the X-ray eye changes from run to run, so the
+# areaDetector prefix is named exactly once, here. Everything that talks to
+# the eye camera goes through camera_pv() or one of the names built from it,
+# so swapping cameras is this one line.
+CAMERA_PREFIX = "12idBFS1"
+
+
+def camera_pv(field):
+    """An areaDetector field on whichever camera is currently the X-ray eye."""
+    return "%s:%s" % (CAMERA_PREFIX, field)
+
+
+# Exposure time, in seconds. As everywhere in areaDetector the plain record is
+# the setpoint and _RBV is what the camera actually accepted, so a drive box
+# follows the first and a readback label the second -- the same split the
+# optics panel's motor rows use for .VAL and .RBV.
+EYE_EXPOSURE_PV = camera_pv("cam1:AcquireTime")
+EYE_EXPOSURE_RBV_PV = camera_pv("cam1:AcquireTime_RBV")
+
 
 def eye_in_from_cmd(value):
     """True when the last command inserted the eye, None if unreadable."""

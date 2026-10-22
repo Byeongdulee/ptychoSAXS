@@ -39,6 +39,7 @@ CONNECT_TIMEOUT_S = 1.5
 # serving any connected channel, which is the one fact worth having.
 IOC_TABLE = [
     ("12idbHXP", "Hexapod (PI C-887)", "12idbHXP:m1.RBV"),
+    ("12idePtycho", "Tomography phi stage", "12idePtycho:m1.RBV"),
     ("12ideMCS1", "Goniometer (trans/tilt)", "12ideMCS1:m1.RBV"),
     ("12ideMCS2", "CRL 3D-print stage", "12ideMCS2:m1.RBV"),
     ("12ideSFT", "Soft motors", "12ideSFT:m4.RBV"),

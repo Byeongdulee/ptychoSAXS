@@ -858,6 +858,20 @@ class DebugCamera(DebugEpicsMotorController):
         )
 
 
+class DebugSaxsZ(DebugEpicsMotorController):
+    """Debug stub for the SAXS detector Z stage (12idcACS1:m1) — 1 motor.
+
+    Separate from DebugCamera, which stubs the optical camera (12idc:m2);
+    the optics panel drives this one.
+    """
+
+    def __init__(self):
+        super().__init__(
+            names=["SAXS_Z"],
+            units=["mm"],
+        )
+
+
 class DebugBeamstop(DebugEpicsMotorController):
     """Debug stub for the SAXS beamstop — 2 motors (hor, ver)."""
 
@@ -949,6 +963,7 @@ _MOTOR_DEFAULTS = {
     _MOTOR_DRIVE: 0.0,
     ".DMOV": 1,  # never busy - simulated moves complete instantly
     _MOTOR_VELOCITY: 1.0,
+    ".ACCL": 1.0,  # seconds from rest to .VELO, as the motor record defines it
     _MOTOR_TWEAK_STEP: 0.001,
     ".SPMG": 3,
     _MOTOR_SET_VELOCITY: 1.0,
@@ -970,6 +985,8 @@ _MOTOR_UNITS = {
     "12ideMCS2:m4": "deg",
     "12ideMCS1:m3": "deg",
     "12ideMCS1:m4": "deg",
+    # phi, the tomography rotation.
+    "12idePtycho:m1": "deg",
     # Hexapod: X/Y/Z are linear, U/V/W are the rotations.
     "12idbHXP:m4": "deg",
     "12idbHXP:m5": "deg",

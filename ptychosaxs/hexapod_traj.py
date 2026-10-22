@@ -21,8 +21,13 @@ of poisoning the module, and tests can inject their own importer.
 """
 
 import importlib
+import socket
+import time
 
 import numpy as np
+
+# The C-887's GCS command port.
+GCS_PORT = 50000
 
 # The surface scan_handler.py reaches through pts.hexapod. Kept as module
 # constants so the tests can parametrise over them and cannot drift from the
@@ -112,8 +117,31 @@ class PiHexapodTrajectory(TrajectoryBackend):
         if disconnect is not None:
             disconnect()
 
+    def get_records(self, Ndata=0):
+        """Read the controller's position record (DRR?).
+
+        Refused on the EPICS transport. IFMT=Hybrid returns one line per
+        read, so a scan's worth of record would be one Channel Access round
+        trip per point - thousands of them, at ~2.6 ms each, and an attempt
+        at 3000 points took the IOC down on 2026-10-19. A fly scan does not
+        need this; only fly_result() and plot_qds_hex() do, and they are
+        post-hoc. Raising IMAX in the IOC's iocsh/hexapod.cmd so the reply
+        arrives in one transaction is what would make it safe.
+        """
+        if self.transport == "epics":
+            raise TrajectoryUnavailable(
+                "get_records() is not available over the EPICS transport: "
+                f"reading the position record through {self.address}:asyn_1 "
+                "costs one Channel Access transaction per scan point. The fly "
+                "scan itself does not need it. To enable it, raise IMAX in the "
+                "IOC's iocsh/hexapod.cmd so a DRR? reply fits in one read."
+            )
+        return self._dev.get_records(Ndata)
+
 
 for _name in TRAJ_METHODS:
+    if _name == "get_records":  # overridden above, transport-dependent
+        continue
     setattr(PiHexapodTrajectory, _name, _forward(_name))
 for _name in TRAJ_ATTRS:
     if _name != "WaveGenID":  # supplied from the module, not the device
@@ -251,8 +279,17 @@ class AsynGcsTrajectory(TrajectoryBackend):
       2. .BINP is DBF_CHAR[256]. IMAX and OMAX are 256 and are declared
          special(SPC_NOMOD) in asynRecord.dbd, so they cannot be raised at
          runtime - only by editing the IOC's iocsh/hexapod.cmd and
-         restarting. get_records() reads twelve columns per trajectory point;
-         it cannot work through a 256-byte buffer.
+         restarting.
+
+         NOTE, measured 2026-10-19: the 256-byte cap is per *read*, not per
+         reply, and with IFMT=Hybrid + IEOS="\n" each read returns one line.
+         A twelve-column DRR? data line measures 124 bytes, so it fits - the
+         earlier claim here that get_records() "cannot work through a
+         256-byte buffer" was wrong. What actually rules the read loop out is
+         cost and stability: one CA round trip per line (~2.6 ms/line best
+         case, so minutes for a real scan), and a 3000-point DRR? drain
+         attempted over CA took the IOC down. Raising IMAX/OMAX so the reply
+         arrives in one transaction is the prerequisite, not line width.
       3. TMOD is a record field, not a per-transaction argument. Response-less
          GCS commands would each burn the 1 s TMOT unless TMOD is flipped to
          Write first, and that flip is two transactions with an unlocked gap
@@ -268,6 +305,155 @@ class AsynGcsTrajectory(TrajectoryBackend):
     available = False
     state = "asyn-gcs"
     reason = "not implemented - see the class docstring"
+
+
+def _read_gcs_reply(sock, timeout):
+    """Read one complete GCS reply off an open socket.
+
+    Every reply line ends with "\\n". In a multi-line reply, every line
+    except the last carries a space immediately before that newline - the
+    trailing space is the controller's "more to come" marker, and its
+    absence is the only reliable end-of-reply signal. Reading until the
+    socket goes quiet instead would work but costs a full timeout on every
+    exchange, which is the mistake the asyn path made.
+    """
+    sock.settimeout(timeout)
+    buf = b""
+    while True:
+        chunk = sock.recv(4096)
+        if not chunk:  # peer closed
+            break
+        buf += chunk
+        if buf.endswith(b"\n"):
+            lines = buf.split(b"\n")
+            # lines[-1] is "" because buf ends in the separator, so the
+            # last complete line is lines[-2].
+            if len(lines) >= 2 and not lines[-2].endswith(b" "):
+                break
+    return buf.decode("ascii", "replace")
+
+
+def probe_direct_gcs(address, port=GCS_PORT, command="*IDN?", timeout=3.0):
+    """Ask the C-887 who it is over a plain TCP socket.
+
+    No EPICS and no pipython. GCS is line-oriented ASCII over TCP - the
+    same bytes probe_asyn_gcs pushes through the IOC's asyn record - so a
+    socket is the whole transport. pipython's GCSDevice loads PI's
+    libpi_pi_gcs2.so even for a TCP connection, and that library's absence
+    is what makes the "direct" transport report itself unavailable on
+    Linux; none of it is needed to speak the protocol.
+
+    Note this opens a *second* connection: the IOC holds one of its own to
+    the same controller. A refusal here is itself informative - it means
+    the controller will not accept the direct transport alongside the IOC.
+
+    Returns (ok, report) - report is a multi-line string meant to be shown
+    verbatim, whichever way it went.
+    """
+    lines = [f"address: {address}:{port}", f"command: {command}",
+             "transport: raw TCP socket (no EPICS, no pipython)"]
+    sock = None
+    started = time.monotonic()
+    try:
+        sock = socket.create_connection((address, port), timeout=timeout)
+        sock.sendall((command + "\n").encode("ascii"))
+        reply = _read_gcs_reply(sock, timeout)
+    except OSError as exc:
+        lines.append(f"FAIL: {type(exc).__name__}: {exc}")
+        return False, "\n".join(lines)
+    finally:
+        if sock is not None:
+            sock.close()
+
+    elapsed = time.monotonic() - started
+    lines.append(f"bytes read: {len(reply)}")
+    lines.append(f"elapsed: {elapsed * 1000:.0f} ms")
+    lines.append(f"reply: {reply.strip()!r}")
+    if not reply.strip():
+        lines.append("FAIL: connected, but the controller sent nothing back.")
+        return False, "\n".join(lines)
+    lines.append("OK: GCS reaches the hexapod over a direct socket.")
+    return True, "\n".join(lines)
+
+
+def probe_asyn_gcs(ioc_prefix="12idbHXP", command="*IDN?", timeout=3.0):
+    """Send one short GCS query through the IOC's asyn record, return the reply.
+
+    The one question items 1-4 above cannot answer from the outside: does a
+    GCS command written to 12idbHXP:asyn_1 actually reach the C-887 and come
+    back? "*IDN?" is chosen because it is 5 characters - it fits .AOUT's 40
+    bytes with room to spare, so a failure here is the transport, not the
+    truncation of item 1.
+
+    The reply is read from .BINP rather than .AINP: .AINP is DBF_STRING (40
+    bytes) and the controller's identification string is longer than that, so
+    an ASCII read would report a truncated success. This leaves the record in
+    Binary input format, which is what pihexapod's own transport sets at
+    connect() anyway.
+
+    Returns (ok, report) - report is a multi-line string meant to be shown
+    verbatim, whichever way it went.
+    """
+    try:
+        from epics import PV, caget, caput
+    except ImportError as exc:
+        return False, f"pyepics is not importable: {exc}"
+
+    base = f"{ioc_prefix}:asyn_1"
+    lines = [f"record:  {base}", f"command: {command}"]
+
+    cnct = PV(f"{base}.CNCT")
+    if not cnct.wait_for_connection(timeout=timeout):
+        lines.append("FAIL: the asyn record itself does not connect - "
+                     "the IOC is down or the prefix is wrong.")
+        return False, "\n".join(lines)
+    if cnct.get() != 1:
+        lines.append("FAIL: the record is there but .CNCT is 0 - the IOC is "
+                     "up and the controller behind it is not.")
+        return False, "\n".join(lines)
+
+    # Hybrid input, not Binary. All three formats matter here:
+    #   ASCII  - reply goes to .AINP, a 40-byte DBF_STRING. The C-887's
+    #            identification string is 75 bytes, so this truncates and
+    #            reports the truncation as a success.
+    #   Binary - reply goes to the 256-byte .BINP, but binary means "raw
+    #            bytes, no terminator interpretation", so IEOS is ignored.
+    #            The read collects the reply and then burns the full .TMOT
+    #            waiting for bytes that never come: every exchange takes a
+    #            second and ends in a MAJOR alarm, success and failure alike.
+    #   Hybrid  - .BINP *and* EOS processing. This is the one we want.
+    # Measured on 12idbHXP: Binary 1.25 s and MAJOR, Hybrid 0.027 s and clean.
+    #
+    # Writes are put-completion because they must all land before .AOUT
+    # processes; IEOS in particular is silently ineffective if it arrives late.
+    caput(f"{base}.OFMT", "ASCII", wait=True, timeout=timeout)
+    caput(f"{base}.IFMT", "Hybrid", wait=True, timeout=timeout)
+    caput(f"{base}.OEOS", "", wait=True, timeout=timeout)
+    caput(f"{base}.IEOS", "\\n", wait=True, timeout=timeout)
+    caput(f"{base}.TMOD", "Write/Read", wait=True, timeout=timeout)
+
+    caput(f"{base}.AOUT", command + "\\n", wait=True, timeout=timeout)
+
+    # NORD, not NRRD: NRRD is how many bytes to ask for (0 = until EOS or
+    # timeout), NORD is how many actually arrived.
+    nord = int(caget(f"{base}.NORD") or 0)
+    raw = caget(f"{base}.BINP")
+    reply = ""
+    if raw is not None and nord:
+        reply = bytes(int(b) for b in raw[:nord]).decode(
+            "ascii", "replace").strip()
+
+    lines.append(f"bytes read: {nord}")
+    lines.append(f"reply: {reply!r}")
+    errs = caget(f"{base}.ERRS", as_string=True)
+    if errs:
+        lines.append(f"record error field: {errs}")
+    if not reply:
+        lines.append("FAIL: nothing came back. The record transacted but the "
+                     "controller did not answer within its .TMOT.")
+        return False, "\n".join(lines)
+    lines.append("OK: GCS commands reach the hexapod over EPICS.")
+    return True, "\n".join(lines)
 
 
 def _describe_gaps(missing, wave_gen_id):

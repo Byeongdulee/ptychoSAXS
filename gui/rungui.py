@@ -59,7 +59,9 @@ DEBUG_DEVICES = DEBUG_MODE and DEBUG_LEVEL in (0, 1)  # non-motors are stubbed
 #
 #   DEBUG_HEXAPOD  PI hexapod, pihexapod.gcs over TCP (10.54.122.145)
 #                    axes: X, Y, Z, U, V, W
-#   DEBUG_ACS      ACS controller, acspy over ethernet (10.54.122.157)
+#   DEBUG_TOMO_PHI      The phi stage, whichever driver PHI_USE_ACS selects -
+#                    the 12idePtycho motor records, or acspy over ethernet
+#                    (10.54.122.157)
 #                    axes: phi
 #   DEBUG_GONIO    Goniometer over EPICS, IOC 12ideMCS1 (ptychosaxs.epics_gonio)
 #                    axes: trans1, trans2, tilt1, tilt2
@@ -77,11 +79,11 @@ DEBUG_DEVICES = DEBUG_MODE and DEBUG_LEVEL in (0, 1)  # non-motors are stubbed
 #
 # DEBUG_HEXAPOD, DEBUG_GONIO, DEBUG_EPICS or DEBUG_DG645 being True disables
 # every scan button: a scan would record fabricated positions, or frames
-# taken on fabricated triggers, into a real data file. DEBUG_ACS does not -
+# taken on fabricated triggers, into a real data file. DEBUG_TOMO_PHI does not -
 # phi is optional hardware, so a simulated phi just reports as not
 # connected and disables its own row.
 DEBUG_HEXAPOD = False
-DEBUG_ACS = True
+DEBUG_TOMO_PHI = False
 DEBUG_GONIO = False
 DEBUG_QDS = True
 DEBUG_EPICS = False
@@ -94,14 +96,24 @@ DEBUG_DG645 = False
 # either goes over TCP to the C-887, or the stage is driven through the
 # 12idbHXP motor records instead. Everything else has one driver.
 #
-#   "epics"   the 12idbHXP motor records. Fly scans still speak GCS: there
-#             is no EPICS trajectory interface, so they go over TCP, or
-#             tunnelled through 12idbHXP:asyn_1 if the socket cannot be
-#             opened (experimental, and refused unless the IOC's buffers
-#             are big enough - see hexapod_traj.AsynGcsTrajectory).
 #   "direct"  pihexapod/pipython straight at the C-887 at 10.54.122.145,
-#             one connection serving both motion and trajectory.
-HEXAPOD_TRANSPORT = "epics"
+#             one connection serving both motion and trajectory. Needs the
+#             12idbHXP IOC stopped and PI's vendor software closed: the
+#             controller accepts exactly one TCP connection and whoever
+#             holds it locks the others out.
+#   "epics"   the 12idbHXP motor records. Step motion only - there is no
+#             EPICS trajectory interface, and tunnelling GCS through
+#             12idbHXP:asyn_1 does not work: that record shares its port
+#             with the motor driver's poller, a multi-line GCS reply is one
+#             transaction per line, and the two sides consume each other's
+#             lines. It crashed the controller three times. See
+#             hexapod_traj.AsynGcsTrajectory.
+#
+# Set to "direct" 2026-10-20 so the hexapod - step moves, tweaks and
+# readback included - speaks GCS over its own socket and touches no EPICS
+# record. If that socket cannot be opened the stage falls back to a
+# simulated stand-in with the reason printed, never silently back to EPICS.
+HEXAPOD_TRANSPORT = "direct"
 
 # The goniometer: the SmarAct MCS2 SDK through ptychosaxs/smaract_gonio.py
 # instead of the 12ideMCS1 motor records. No EPICS either way - this is a
@@ -109,17 +121,20 @@ HEXAPOD_TRANSPORT = "epics"
 # route to the crate, so it is for the machine wired to the MCS2.
 GONIO_USE_SMARACT = False
 
-# phi has no switch: acspy is the only driver, because no IOC exists for
-# the tomography rotation stage.
+# The tomography rotation stage: acspy straight at the ACS controller at
+# 10.54.122.157 instead of the 12idePtycho motor records (12idePtycho:m1,
+# "Tomo Rot"). No EPICS either way - this is a choice of driver, not of
+# transport. Needs acspy installed and a route to the ACS crate.
+PHI_USE_ACS = False
 
 _DEBUG_FLAG_NAMES = (
-    "DEBUG_HEXAPOD", "DEBUG_ACS", "DEBUG_GONIO", "DEBUG_QDS",
+    "DEBUG_HEXAPOD", "DEBUG_TOMO_PHI", "DEBUG_GONIO", "DEBUG_QDS",
     "DEBUG_EPICS", "DEBUG_DG645",
 )
 
 # `--debug` still works: its levels force whole groups of the flags above.
 if DEBUG_MOTORS:
-    DEBUG_HEXAPOD = DEBUG_ACS = DEBUG_GONIO = DEBUG_QDS = True
+    DEBUG_HEXAPOD = DEBUG_TOMO_PHI = DEBUG_GONIO = DEBUG_QDS = True
 if DEBUG_DEVICES:
     DEBUG_EPICS = True
 
@@ -143,13 +158,13 @@ DEBUG_SCAN_BLOCKING = DEBUG_HEXAPOD or DEBUG_GONIO or DEBUG_EPICS or DEBUG_DG645
 
 # Kept for the caution banner: "is anything simulated at all", which is a
 # wider question than "may a scan run".
-DEBUG_ANY_MOTOR = DEBUG_HEXAPOD or DEBUG_ACS or DEBUG_GONIO
+DEBUG_ANY_MOTOR = DEBUG_HEXAPOD or DEBUG_TOMO_PHI or DEBUG_GONIO
 
 # The motor and interferometer libraries are imported by
 # ptychosaxs.motions_ver2 / ptychosaxs.interferometers, which read the flags
 # back out of the environment. This must happen before those imports below.
 os.environ["PTYCHOSAXS_DEBUG_HEXAPOD"] = "1" if DEBUG_HEXAPOD else "0"
-os.environ["PTYCHOSAXS_DEBUG_ACS"] = "1" if DEBUG_ACS else "0"
+os.environ["PTYCHOSAXS_DEBUG_TOMO_PHI"] = "1" if DEBUG_TOMO_PHI else "0"
 os.environ["PTYCHOSAXS_DEBUG_GONIO"] = "1" if DEBUG_GONIO else "0"
 os.environ["PTYCHOSAXS_DEBUG_QDS"] = "1" if DEBUG_QDS else "0"
 # scan_handler imports DG645_Error at module scope and reads this to decide
@@ -161,6 +176,7 @@ os.environ["PTYCHOSAXS_DEBUG_DG645"] = "1" if DEBUG_DG645 else "0"
 # holds a reference to this module's globals.
 os.environ["PTYCHOSAXS_HEXAPOD_TRANSPORT"] = HEXAPOD_TRANSPORT
 os.environ["PTYCHOSAXS_GONIO_SMARACT"] = "1" if GONIO_USE_SMARACT else "0"
+os.environ["PTYCHOSAXS_PHI_ACS"] = "1" if PHI_USE_ACS else "0"
 
 
 def _debug_flag_lines():
@@ -194,7 +210,7 @@ def _debug_flag_lines():
 _debug_on = [
     name for name, is_on in (
         ("hexapod", DEBUG_HEXAPOD),
-        ("ACS/phi", DEBUG_ACS),
+        ("ACS/phi", DEBUG_TOMO_PHI),
         ("gonio", DEBUG_GONIO),
         ("QDS", DEBUG_QDS),
         ("EPICS devices", DEBUG_EPICS),
@@ -209,7 +225,7 @@ if _debug_on:
     )
     if DEBUG_SCAN_BLOCKING:
         print("         Scanning is disabled while those are simulated.")
-    if DEBUG_ACS and not DEBUG_SCAN_BLOCKING:
+    if DEBUG_TOMO_PHI and not DEBUG_SCAN_BLOCKING:
         print("         phi is simulated, so it reports as not connected; "
               "every other stage still scans.")
 
@@ -452,6 +468,7 @@ INI_DEFAULT_ENTRIES = [
     ("Index of the 2D scan fast axis", "_xmotor", "%.4f" % DEFAULTS["xmotor"]),
     ("Index of the 2D scan slow axis", "_ymotor", "%.4f" % DEFAULTS["ymotor"]),
     ("Save Upstream Optics Positions", "_save_us_optics", "1.0000"),
+    ("Check Upstream Optics Before Scans", "_check_optics_prescan", "1.0000"),
     ("SAXS Mode (0 for ptychography. 1 for SAXS)", "saxsmode", "1.0000"),
 ]
 
@@ -740,6 +757,8 @@ class ptyco_main_control(QObject):
 
         if not hasattr(self.parameters, "_save_us_optics"):
             self.parameters._save_us_optics = True
+        if not hasattr(self.parameters, "_check_optics_prescan"):
+            self.parameters._check_optics_prescan = True
 
         self.isscan = False
         self.isfly = False
@@ -799,9 +818,9 @@ class ptyco_main_control(QObject):
             # A modal dialog is right for phi having gone missing, and wrong
             # for phi having been switched off on purpose - that would stop
             # every debug launch dead until someone clicked it.
-            if DEBUG_ACS:
+            if DEBUG_TOMO_PHI:
                 print(
-                    "phi is simulated (DEBUG_ACS/DEBUG_PHI), so it reports as "
+                    "phi is simulated (DEBUG_TOMO_PHI/DEBUG_PHI), so it reports as "
                     "not connected and its controls are disabled."
                 )
             else:
@@ -1029,6 +1048,15 @@ class ptyco_main_control(QObject):
         self.ui.pushButton_setAlign.clicked.connect(lambda: self.set_det_alignmode(True))
         self.ui.pushButton_setScan.clicked.connect(lambda: self.set_det_alignmode(False))
         self.ui.pushButton_checkSAXS.clicked.connect(self.update_saxs_det_status)
+        # Deliberately not connected. test_hexapod_fly() drives the direct
+        # GCS socket, which requires the 12idbHXP IOC to be stopped, and that
+        # is not a state a running GUI should assume. Disabled rather than
+        # left silently inert; wire it up when the fly path is driven from
+        # the IOC instead.
+        self.ui.pushButton_test_gcs.setEnabled(False)
+        self.ui.pushButton_test_gcs.setToolTip(
+            "Disabled: the hexapod fly test needs the 12idbHXP IOC stopped. "
+            "See rungui.test_hexapod_fly().")
         self.ui.actionSet_shot_number_per_a_step.triggered.connect(
             self.set_shotnumber_per_step
         )
@@ -1094,6 +1122,8 @@ class ptyco_main_control(QObject):
         # ── Setup window ───────────────────────────────────────────────────
         self.ui.pushButton_setup.clicked.connect(self._open_setup_window)
         self.ui.pushButton_openOpticsGui.clicked.connect(self._open_optics_gui)
+        self.ui.pushButton_checkUpOptics.clicked.connect(
+            self._open_optics_status_window)
 
         # Defaults
         self.isStruckCountNeeded = False
@@ -1360,6 +1390,263 @@ class ptyco_main_control(QObject):
         # Monospace, or the columns do not line up.
         dialog.setStyleSheet("QTextEdit { font-family: monospace; min-width: 620px; }")
         dialog.exec_()
+
+    # ── Hexapod fly-scan test ──────────────────────────────────────────────
+    #
+    # A short fly scan on one hexapod axis, in three stages you step through
+    # with a dialog each time. Split this way because the stages carry very
+    # different risk: stage 1 writes nothing, stage 2 writes to the
+    # controller but moves nothing, and only stage 3 moves the stage. Stage 2
+    # is where the GCS-over-EPICS transport is actually exercised - it sends
+    # the WAV and TWS commands that used to be truncated by .AOUT - so a
+    # failure there is a transport problem, and a failure in stage 3 is not.
+
+    # Deliberately tiny. Every trigger point is one TWS command, and every
+    # command is a separate transaction on the port the motor driver polls.
+    # Writes are off and the button is unwired (see where the other buttons
+    # are connected). This drives the DIRECT socket transport, which needs
+    # the EPICS IOC stopped, because the C-887 accepts one TCP connection and
+    # the IOC holds it. That is not a state a running GUI should assume, so
+    # this is kept for hand-testing rather than offered as a control.
+    #
+    # It no longer touches asyn_1. Driving a fly scan through that record
+    # crashed the controller three times: the record and the motor driver's
+    # poller share one port, a multi-line GCS reply is one transaction per
+    # line, and each side consumes the other's lines in the gaps. No buffer
+    # or batch size fixes that, so the EPICS path is abandoned here.
+    FLY_TEST_ALLOW_WRITES = False
+
+    FLY_TEST_AXIS = "X"
+    FLY_TEST_TRAVEL_MM = 0.02      # 20 um
+    FLY_TEST_TIME_S = 2.0
+    FLY_TEST_PULSE_PERIOD_S = 0.1  # -> 21 triggers
+    FLY_TEST_RAMP_POINTS = 5
+
+    def test_hexapod_fly(self) -> None:
+        """Build and optionally run a short hexapod fly scan over GCS.
+
+        Builds its own direct-socket backend rather than using self.pts.hexapod,
+        whose transport is whatever the GUI is configured for. Position comes
+        from the controller (POS?) rather than the motor records, so the whole
+        test is one connection to the C-887 and nothing else.
+        """
+        if DEBUG_HEXAPOD:
+            QMessageBox.information(
+                self.ui, "Hexapod fly test",
+                "DEBUG_HEXAPOD is on - the hexapod is a stub.")
+            return
+
+        from ptychosaxs import hexapod as hexapod_mod
+        from ptychosaxs import hexapod_traj
+
+        # -- stage 1: resolve a direct transport. Writes nothing. ---------
+        try:
+            traj = hexapod_traj.make_trajectory_backend(
+                hexapod_mod.HEXAPOD_IP, prefer="direct", log=lambda *a: None)
+            report = self._fly_test_readiness(traj)
+        except Exception as exc:
+            QMessageBox.critical(self.ui, "Hexapod fly test",
+                                 f"Could not resolve the hexapod transport.\n\n"
+                                 f"{type(exc).__name__}: {exc}")
+            return
+
+        if not traj.available:
+            dialog = QMessageBox(self.ui)
+            dialog.setWindowTitle("Hexapod fly test")
+            dialog.setIcon(QMessageBox.Warning)
+            dialog.setText("No fly transport is available.")
+            dialog.setDetailedText(report)
+            dialog.setStyleSheet(
+                "QTextEdit { font-family: monospace; min-width: 620px; }")
+            dialog.exec_()
+            return
+
+        # Python imports a module once per process, so editing pihexapod
+        # while this GUI is running leaves the old code in memory and the
+        # object here will not match the file on disk. Refuse rather than
+        # let a stale module reach the hardware.
+        stale = self._fly_test_stale_transport(traj)
+        if stale:
+            QMessageBox.critical(
+                self.ui, "Hexapod fly test",
+                "The loaded pihexapod is out of date - restart the GUI "
+                "before testing.\n\n" + stale)
+            return
+
+        axis = self.FLY_TEST_AXIS
+        travel = self.FLY_TEST_TRAVEL_MM
+        try:
+            # POS? on the controller, not the motor record: this test holds
+            # the only connection, and the IOC is expected to be stopped.
+            start = float(traj._dev.get_pos()[axis])
+        except Exception as exc:
+            QMessageBox.critical(self.ui, "Hexapod fly test",
+                                 f"Could not read {axis}: {exc}")
+            return
+
+        pulses = int(self.FLY_TEST_TIME_S / self.FLY_TEST_PULSE_PERIOD_S) + 1
+        plan = (
+            f"axis            {axis}\n"
+            f"start           {start:.5f} mm   (current position)\n"
+            f"travel          {travel:+.5f} mm\n"
+            f"end             {start + travel:.5f} mm\n"
+            f"duration        {self.FLY_TEST_TIME_S:g} s\n"
+            f"triggers        {pulses}  (every {self.FLY_TEST_PULSE_PERIOD_S:g} s)\n"
+        )
+
+        if not self.FLY_TEST_ALLOW_WRITES:
+            dialog = QMessageBox(self.ui)
+            dialog.setWindowTitle("Hexapod fly test")
+            dialog.setIcon(QMessageBox.Warning)
+            dialog.setText("Readiness only - writing is disabled.")
+            dialog.setInformativeText(
+                "This drives the direct socket transport, which needs the "
+                "12idbHXP IOC and PI's vendor software both stopped - the "
+                "C-887 accepts only one TCP connection.\n\n"
+                "Set FLY_TEST_ALLOW_WRITES = True in rungui.py to enable the "
+                "build and run stages.")
+            dialog.setDetailedText(report + "\n\nPlanned trajectory\n" + plan)
+            dialog.setStyleSheet(
+                "QTextEdit { font-family: monospace; min-width: 620px; }")
+            dialog.exec_()
+            return
+
+        if not self._fly_test_confirm(
+                "Build the trajectory?",
+                "This writes the waveform and trigger tables to the controller.\n"
+                "It does NOT move the hexapod.",
+                report + "\n\nPlanned trajectory\n" + plan):
+            return
+
+        # -- stage 2: WAV / TWS / CTO. Writes to the controller, no motion. -
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            t0 = time.time()
+            traj.set_traj(axis, self.FLY_TEST_TIME_S, travel, start, 1,
+                             self.FLY_TEST_PULSE_PERIOD_S,
+                             self.FLY_TEST_RAMP_POINTS)
+            build_s = time.time() - t0
+        except Exception as exc:
+            dialog = QMessageBox(self.ui)
+            dialog.setWindowTitle("Hexapod fly test")
+            dialog.setIcon(QMessageBox.Critical)
+            dialog.setText("Building the trajectory failed.")
+            dialog.setDetailedText(
+                f"{type(exc).__name__}: {exc}\n\n{report}\n\n{plan}")
+            dialog.setStyleSheet(
+                "QTextEdit { font-family: monospace; min-width: 620px; }")
+            dialog.exec_()
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        built = (f"Trajectory built in {build_s:.2f} s.\n\n" + plan +
+                 f"\n{pulses} trigger points were written over "
+                 f"{getattr(traj, 'transport', traj.state)}.")
+
+        if not self._fly_test_confirm(
+                "Run it? This MOVES the hexapod.",
+                f"The hexapod will move {axis} to {start:.5f} mm and then fly "
+                f"{travel:+.5f} mm over {self.FLY_TEST_TIME_S:g} s, firing "
+                f"{pulses} triggers.\n\nMake sure the sample and detector are "
+                f"clear.",
+                built):
+            QMessageBox.information(
+                self.ui, "Hexapod fly test",
+                "Stopped after building the trajectory. Nothing moved.\n\n"
+                "The transport worked: the waveform and trigger tables are "
+                "loaded on the controller.")
+            return
+
+        # -- stage 3: motion. --------------------------------------------
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            t0 = time.time()
+            traj.goto_start_pos(axis)
+            traj.run_traj(axis, wait=True)
+            run_s = time.time() - t0
+            landed = float(traj._dev.get_pos()[axis])
+        except Exception as exc:
+            QMessageBox.critical(
+                self.ui, "Hexapod fly test",
+                f"The trajectory was built but running it failed.\n\n"
+                f"{type(exc).__name__}: {exc}")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        dialog = QMessageBox(self.ui)
+        dialog.setWindowTitle("Hexapod fly test")
+        dialog.setIcon(QMessageBox.Information)
+        dialog.setText("Fly scan completed.")
+        dialog.setDetailedText(
+            built + f"\n\nran in        {run_s:.2f} s\n"
+                    f"landed at     {landed:.5f} mm\n"
+                    f"expected      {start + travel:.5f} mm\n"
+                    f"difference    {(landed - start - travel) * 1000:+.2f} um")
+        dialog.setStyleSheet(
+            "QTextEdit { font-family: monospace; min-width: 620px; }")
+        dialog.exec_()
+
+    def _fly_test_readiness(self, traj) -> str:
+        """What the direct transport resolved to. Touches no EPICS records."""
+        lines = [
+            f"available       {traj.available}",
+            f"state           {traj.state}",
+            f"transport       {getattr(traj, 'transport', '-')}",
+            f"address         {getattr(traj, 'address', '-')}",
+        ]
+        if traj.reason:
+            lines.append(f"reason          {traj.reason}")
+        # Reaching through to the library's transport: only this test needs
+        # it, so it is not worth a facade method.
+        dev = getattr(getattr(traj, "_dev", None), "pidev", None)
+        if dev is not None:
+            gateway = getattr(getattr(dev, "pidev", None), "_gateway", None)
+            lines.append(f"device          {type(dev).__name__}")
+            lines.append(f"gateway         "
+                         f"{type(gateway).__name__ if gateway else 'n/a'}")
+        lines.append("")
+        lines.append("The C-887 accepts one TCP connection. This test needs")
+        lines.append("the 12idbHXP IOC and PI's vendor software both stopped.")
+        return "\n".join(lines)
+
+    def _fly_test_stale_transport(self, traj) -> str:
+        """Empty if the live transport has the fixes; else why it doesn't.
+
+        Checks the object in memory, not the file on disk - a stale import
+        is exactly the case where those two disagree.
+        """
+        import inspect
+        import sys
+
+        if getattr(traj, "transport", None) != "direct":
+            return ""  # only the direct transport is used here
+        dev = getattr(getattr(traj, "_dev", None), "pidev", None)
+        if dev is None:
+            return "could not reach the transport object to check it"
+        module = sys.modules.get(type(dev).__module__)
+        if not hasattr(module, "GCS_PORT"):
+            # The pre-fix pigcs built GCSDevice(devname), which loads PI's
+            # libpi_pi_gcs2.so and fails on Linux. The socket-gateway
+            # version defines GCS_PORT; its absence means the old module.
+            return ("Loaded from:\n  " + inspect.getfile(type(dev)) +
+                    "\n\nMissing:\n  - connect through a PISocket gateway "
+                    "(no libpi_pi_gcs2.so)")
+        return ""
+
+    def _fly_test_confirm(self, text, informative, detail) -> bool:
+        dialog = QMessageBox(self.ui)
+        dialog.setWindowTitle("Hexapod fly test")
+        dialog.setIcon(QMessageBox.Question)
+        dialog.setText(text)
+        dialog.setInformativeText(informative)
+        dialog.setDetailedText(detail)
+        dialog.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        dialog.setDefaultButton(QMessageBox.Cancel)
+        dialog.setStyleSheet(
+            "QTextEdit { font-family: monospace; min-width: 620px; }")
+        return dialog.exec_() == QMessageBox.Yes
 
     # ── Motor context menu ─────────────────────────────────────────────────
 
@@ -2091,6 +2378,44 @@ class ptyco_main_control(QObject):
                 self.ui, "Optics GUI", "Could not launch optics GUI:\n%s" % e
             )
 
+    def _optics_caget(self):
+        """The caget optics_status should use, or None to let it use epics.
+
+        In debug mode there are no PVs to read, so hand it a reader that
+        always fails -- every block then reports "undefined" rather than the
+        panel inventing positions.
+        """
+        if DEBUG_DEVICES:
+            return lambda pv: None
+        return None
+
+    def optics_status_report(self):
+        """Current upstream optics state, as an optics_status.OpticsStatus.
+
+        One place both the Check Upstream Optics window and the pre-scan
+        guard read from, so they can never disagree.
+        """
+        import optics_status
+
+        return optics_status.read_status(caget=self._optics_caget())
+
+    def _open_optics_status_window(self):
+        """Show the upstream optics report. Non-modal, so it can stay open
+        while motors are nudged from the optics GUI's separate process."""
+        from optics_status_dialog import OpticsStatusDialog
+
+        window = getattr(self, "optics_status_window", None)
+        if window is None:
+            window = OpticsStatusDialog(
+                self.ui,
+                caget=self._optics_caget(),
+                eye_state=lambda: self.xray_eye.is_in(),
+            )
+            self.optics_status_window = window
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
     def _open_macro_window(self):
         """Open (or raise) the non-modal scan macro window."""
         if getattr(self, "macro_window", None) is None:
@@ -2300,6 +2625,9 @@ class ptyco_main_control(QObject):
         dlg.checkBox_usOpticsScanSave.setChecked(
             getattr(self.parameters, "_save_us_optics", True)
         )
+        dlg.checkBox_opticsPreScanCheck.setChecked(
+            getattr(self.parameters, "_check_optics_prescan", True)
+        )
         # Sample alignment workflow mode. Lives in QSettings rather than the
         # scan .ini because it is a per-operator UI preference, not a scan
         # parameter, and it is mirrored by the "Expert User" checkbox on the
@@ -2423,6 +2751,9 @@ class ptyco_main_control(QObject):
         # whereas a False written as the text "False" would read back truthy.
         self.parameters._save_us_optics = int(
             dlg.checkBox_usOpticsScanSave.isChecked()
+        )
+        self.parameters._check_optics_prescan = int(
+            dlg.checkBox_opticsPreScanCheck.isChecked()
         )
 
         # Sample alignment expert mode. Only takes effect the next time the

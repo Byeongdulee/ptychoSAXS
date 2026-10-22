@@ -67,11 +67,21 @@ ASYN_CONNECTED = 1
 
 # The asyn record's read buffer, which bounds any GCS reply tunnelled through
 # it. IMAX is declared special(SPC_NOMOD) in asynRecord.dbd, so this is fixed
-# at IOC boot and cannot be raised from here. pihexapod's own EPICS transport
-# wants at least 2**12 and only warns when it does not get it; a DRR? record
-# dump is far larger than that, so we refuse the transport instead.
+# at IOC boot and cannot be raised from here.
+#
+# This used to demand 4096 on the grounds that a DRR? record dump would not
+# fit. That conflated two different things. IMAX bounds one *read*, and with
+# IFMT=Hybrid each read returns one line, so what has to fit is the longest
+# single reply line - 130 bytes for a six-axis POS?, 124 for a twelve-column
+# DRR? row (both measured on 12idbHXP, Oct 2026). 256 carries every command
+# a fly scan sends.
+#
+# What 256 does rule out is bulk readback: draining thousands of DRR? lines
+# one Channel Access round trip at a time is slow and took the IOC down once.
+# So the gate passes, and get_records() is the thing that refuses - see
+# hexapod_traj.PiHexapodTrajectory.get_records.
 ASYN_IMAX_PV = f"{IOC_PREFIX}:asyn_1.IMAX"
-ASYN_MIN_IMAX = 4096
+ASYN_MIN_IMAX = 256
 
 # EPICS alarm severity. A record at INVALID did not successfully read its
 # device, so its value is whatever it was last left at.

@@ -360,12 +360,22 @@ def test_ioc_link_reports_the_controller_socket(hexapod):
 
 
 def test_asyn_passthrough_is_refused_when_the_buffer_is_too_small(hexapod):
-    """IMAX is fixed at IOC boot and is 256 on this IOC, far below what a
-    GCS reply needs - so the GCS-over-EPICS transport must not be offered."""
-    FakeMotorPV("12idbHXP:asyn_1.IMAX").put(256)
+    """IMAX bounds one read, and IFMT=Hybrid returns one line per read, so
+    what has to fit is the longest single reply line. Below that even a
+    POS? comes back clipped, and the transport must not be offered."""
+    FakeMotorPV("12idbHXP:asyn_1.IMAX").put(128)
     ok, why = hexapod.asyn_passthrough_status()
     assert ok is False
     assert "IMAX" in why
+
+
+def test_asyn_passthrough_is_accepted_at_the_ioc_s_actual_buffer_size(hexapod):
+    """256 is what 12idbHXP boots with. It carries every command a fly scan
+    sends (longest measured reply line: 130 B for POS?, 124 B for a DRR?
+    row), so the transport is offered; get_records() is what refuses."""
+    FakeMotorPV("12idbHXP:asyn_1.IMAX").put(256)
+    ok, why = hexapod.asyn_passthrough_status()
+    assert ok is True, why
 
 
 def test_asyn_passthrough_is_refused_when_the_controller_is_unreachable(hexapod):

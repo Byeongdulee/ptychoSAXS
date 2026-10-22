@@ -1,0 +1,2013 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>OpticsMotorsSmall</class>
+ <widget class="QMainWindow" name="OpticsMotorsSmall">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>547</width>
+    <height>601</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Microscopy Optics - small</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <property name="styleSheet">
+    <string notr="true">QSlider::groove:horizontal {
+    height: 12px;
+    background: #ccc;
+    border-radius: 6px;
+}
+
+QSlider::handle:horizontal {
+    width: 28px;
+    height: 18px;
+    background: #2196F3;
+    border-radius: 9px;
+    margin: -3px 0;
+}
+
+QSlider::sub-page:horizontal {
+    background: #66bb6a;
+    border-radius: 6px;
+}
+
+QSlider::add-page:horizontal {
+    background: #bbb;
+    border-radius: 6px;
+}</string>
+   </property>
+   <widget class="QWidget" name="col_osa" native="true">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>168</width>
+      <height>365</height>
+     </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
+    </property>
+    <widget class="QLabel" name="lbl_osa_title">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>0</y>
+       <width>111</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>OSA</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rbcap_osa_ver">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>82</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>ver RBV</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rb_osa_ver">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>82</y>
+       <width>85</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.0000</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_mvcap_osa_ver">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>104</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Drive</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ed_mv_osa_ver">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>104</y>
+       <width>85</width>
+       <height>24</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Hit enter to move.</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rbcap_osa_hor">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>30</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>hor RBV</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rb_osa_hor">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>30</y>
+       <width>85</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.0000</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_mvcap_osa_hor">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>52</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Drive</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ed_mv_osa_hor">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>52</y>
+       <width>85</width>
+       <height>24</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Hit enter to move.</string>
+     </property>
+    </widget>
+    <widget class="QFrame" name="frame_osa_dpad">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>130</y>
+       <width>148</width>
+       <height>95</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QFrame#frame_osa_dpad { background-color: rgb(210, 210, 210); border: 1px solid #888; }</string>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::Box</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <widget class="QPushButton" name="pb_osa_up">
+      <property name="geometry">
+       <rect>
+        <x>47</x>
+        <y>4</y>
+        <width>54</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="accessibleDescription">
+       <string notr="true"/>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>↑</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_osa_left">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>30</y>
+        <width>41</width>
+        <height>28</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>←</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="ed_osa_step">
+      <property name="geometry">
+       <rect>
+        <x>49</x>
+        <y>30</y>
+        <width>50</width>
+        <height>28</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="text">
+       <string>0.002</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_osa_right">
+      <property name="geometry">
+       <rect>
+        <x>101</x>
+        <y>30</y>
+        <width>41</width>
+        <height>28</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>→</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_osa_down">
+      <property name="geometry">
+       <rect>
+        <x>47</x>
+        <y>60</y>
+        <width>54</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="accessibleDescription">
+       <string notr="true"/>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>↓</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_osa_stepDown">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>65</y>
+        <width>39</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: #ab47bc; color: white;</string>
+      </property>
+      <property name="text">
+       <string>0.1x</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_osa_stepUp">
+      <property name="geometry">
+       <rect>
+        <x>103</x>
+        <y>65</y>
+        <width>39</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: #ab47bc; color: white;</string>
+      </property>
+      <property name="text">
+       <string>10x</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QFrame" name="frame_osa_reg">
+     <property name="geometry">
+      <rect>
+       <x>4</x>
+       <y>229</y>
+       <width>160</width>
+       <height>130</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QFrame#frame_osa_reg { background-color: #fffde7; }</string>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::Box</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <widget class="QPushButton" name="pb_osa_enable">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>6</y>
+        <width>32</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
+      <property name="text">
+       <string>No</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_osa_in">
+      <property name="geometry">
+       <rect>
+        <x>42</x>
+        <y>6</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
+      <property name="text">
+       <string>In</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_osa_out">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>6</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
+      <property name="text">
+       <string>Out</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_osa_ax0">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>38</y>
+        <width>31</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>ver</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_osa_in_0">
+      <property name="geometry">
+       <rect>
+        <x>42</x>
+        <y>38</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_osa_out_0">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>38</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_osa_ax1">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>62</y>
+        <width>31</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>hor</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_osa_in_1">
+      <property name="geometry">
+       <rect>
+        <x>42</x>
+        <y>62</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_osa_out_1">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>62</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_osa_status">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>90</y>
+        <width>41</width>
+        <height>30</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>----</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_osa_moveSetCap">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>94</y>
+        <width>71</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>move-set</string>
+      </property>
+     </widget>
+     <widget class="QSlider" name="slider_osa_moveSet">
+      <property name="geometry">
+       <rect>
+        <x>120</x>
+        <y>96</y>
+        <width>36</width>
+        <height>22</height>
+       </rect>
+      </property>
+      <property name="maximum">
+       <number>1</number>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+     </widget>
+    </widget>
+   </widget>
+   <widget class="QPushButton" name="pushButton_stopAll">
+    <property name="geometry">
+     <rect>
+      <x>460</x>
+      <y>455</y>
+      <width>81</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: #cc0000; color: white;</string>
+    </property>
+    <property name="text">
+     <string>Stop
+All</string>
+    </property>
+   </widget>
+   <widget class="QFrame" name="frame_allInOut">
+    <property name="geometry">
+     <rect>
+      <x>210</x>
+      <y>490</y>
+      <width>211</width>
+      <height>46</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QFrame#frame_allInOut { background-color: #fffde7; }</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::Box</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QPushButton" name="pushButton_allIn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>9</y>
+       <width>61</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>All In</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_allStatus">
+     <property name="geometry">
+      <rect>
+       <x>80</x>
+       <y>9</y>
+       <width>51</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>----</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pushButton_allOut">
+     <property name="geometry">
+      <rect>
+       <x>140</x>
+       <y>9</y>
+       <width>61</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>All Out</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QLabel" name="lbl_zheader_name_2">
+    <property name="geometry">
+     <rect>
+      <x>372</x>
+      <y>403</y>
+      <width>81</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>X-ray Eye</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_Less">
+    <property name="geometry">
+     <rect>
+      <x>430</x>
+      <y>510</y>
+      <width>51</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(50, 255, 50);</string>
+    </property>
+    <property name="text">
+     <string>Less</string>
+    </property>
+   </widget>
+   <widget class="QWidget" name="col_ztrans" native="true">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>380</y>
+      <width>168</width>
+      <height>111</height>
+     </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
+    </property>
+    <widget class="QLabel" name="lbl_name_ztrans">
+     <property name="geometry">
+      <rect>
+       <x>9</x>
+       <y>1</y>
+       <width>91</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>BSZP_Ztrans</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rb_ztrans">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>20</y>
+       <width>61</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.0000</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ed_mv_ztrans">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>40</y>
+       <width>61</width>
+       <height>24</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Hit enter to move.</string>
+     </property>
+    </widget>
+    <widget class="QFrame" name="frame_ztrans_tweak">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>70</y>
+       <width>141</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QFrame#frame_ztrans_tweak { background-color: rgb(210, 210, 210); border: 1px solid #888; }</string>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::Box</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <widget class="QPushButton" name="pb_ztrans_plus">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>4</y>
+        <width>31</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>&gt;&gt;</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="ed_ztrans_step">
+      <property name="geometry">
+       <rect>
+        <x>45</x>
+        <y>4</y>
+        <width>51</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>0.01</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_ztrans_minus">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>4</y>
+        <width>31</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>&lt;&lt;</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QLabel" name="lbl_zheader_moveto">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>40</y>
+       <width>61</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>50</weight>
+       <bold>false</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Drive</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_zheader_RBV">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>20</y>
+       <width>61</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>50</weight>
+       <bold>false</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>RBV</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QFrame" name="frame">
+    <property name="geometry">
+     <rect>
+      <x>370</x>
+      <y>378</y>
+      <width>161</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(0, 210, 255);</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::Panel</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QLabel" name="lbl_pos_units">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>1</y>
+       <width>151</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>9</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>All positions in mm</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QWidget" name="col_zp" native="true">
+    <property name="geometry">
+     <rect>
+      <x>190</x>
+      <y>10</y>
+      <width>168</width>
+      <height>471</height>
+     </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
+    </property>
+    <widget class="QLabel" name="lbl_zp_title">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>0</y>
+       <width>111</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Zone plate</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rbcap_zp_ver">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>82</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>ver RBV</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rb_zp_ver">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>82</y>
+       <width>85</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.0000</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_mvcap_zp_ver">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>104</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Drive</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ed_mv_zp_ver">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>104</y>
+       <width>85</width>
+       <height>24</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Hit enter to move.</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rbcap_zp_hor">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>30</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>hor RBV</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rb_zp_hor">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>30</y>
+       <width>85</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.0000</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_mvcap_zp_hor">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>52</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Drive</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ed_mv_zp_hor">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>52</y>
+       <width>85</width>
+       <height>24</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Hit enter to move.</string>
+     </property>
+    </widget>
+    <widget class="QFrame" name="frame_zp_dpad">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>130</y>
+       <width>148</width>
+       <height>95</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QFrame#frame_zp_dpad { background-color: rgb(210, 210, 210); border: 1px solid #888; }</string>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::Box</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <widget class="QPushButton" name="pb_zp_up">
+      <property name="geometry">
+       <rect>
+        <x>47</x>
+        <y>4</y>
+        <width>54</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="accessibleDescription">
+       <string notr="true"/>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>↑</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_zp_left">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>30</y>
+        <width>41</width>
+        <height>28</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>←</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="ed_zp_step">
+      <property name="geometry">
+       <rect>
+        <x>49</x>
+        <y>30</y>
+        <width>50</width>
+        <height>28</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="text">
+       <string>0.002</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_zp_right">
+      <property name="geometry">
+       <rect>
+        <x>101</x>
+        <y>30</y>
+        <width>41</width>
+        <height>28</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>→</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_zp_down">
+      <property name="geometry">
+       <rect>
+        <x>47</x>
+        <y>60</y>
+        <width>54</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="accessibleDescription">
+       <string notr="true"/>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>↓</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_zp_stepDown">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>65</y>
+        <width>39</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: #ab47bc; color: white;</string>
+      </property>
+      <property name="text">
+       <string>0.1x</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_zp_stepUp">
+      <property name="geometry">
+       <rect>
+        <x>103</x>
+        <y>65</y>
+        <width>39</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: #ab47bc; color: white;</string>
+      </property>
+      <property name="text">
+       <string>10x</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QFrame" name="frame_zp_reg">
+     <property name="geometry">
+      <rect>
+       <x>4</x>
+       <y>229</y>
+       <width>160</width>
+       <height>130</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QFrame#frame_zp_reg { background-color: #fffde7; }</string>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::Box</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <widget class="QPushButton" name="pb_zp_enable">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>6</y>
+        <width>32</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
+      <property name="text">
+       <string>No</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_zp_in">
+      <property name="geometry">
+       <rect>
+        <x>42</x>
+        <y>6</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
+      <property name="text">
+       <string>In</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_zp_out">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>6</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
+      <property name="text">
+       <string>Out</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_zp_ax0">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>38</y>
+        <width>31</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>ver</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_zp_in_0">
+      <property name="geometry">
+       <rect>
+        <x>42</x>
+        <y>38</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_zp_out_0">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>38</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_zp_ax1">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>62</y>
+        <width>31</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>hor</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_zp_in_1">
+      <property name="geometry">
+       <rect>
+        <x>42</x>
+        <y>62</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_zp_out_1">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>62</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_zp_status">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>90</y>
+        <width>41</width>
+        <height>30</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>----</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_zp_moveSetCap">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>94</y>
+        <width>71</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>move-set</string>
+      </property>
+     </widget>
+     <widget class="QSlider" name="slider_zp_moveSet">
+      <property name="geometry">
+       <rect>
+        <x>120</x>
+        <y>96</y>
+        <width>36</width>
+        <height>22</height>
+       </rect>
+      </property>
+      <property name="maximum">
+       <number>1</number>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QListWidget" name="listWidget_zpList">
+     <property name="geometry">
+      <rect>
+       <x>4</x>
+       <y>391</y>
+       <width>160</width>
+       <height>76</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_zp_addPos">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>362</y>
+       <width>151</width>
+       <height>26</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Edit...</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QWidget" name="col_bs" native="true">
+    <property name="geometry">
+     <rect>
+      <x>370</x>
+      <y>10</y>
+      <width>168</width>
+      <height>365</height>
+     </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
+    </property>
+    <widget class="QLabel" name="lbl_bs_title">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>0</y>
+       <width>111</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Beamstop</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rbcap_bs_ver">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>80</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>ver RBV</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rb_bs_ver">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>80</y>
+       <width>85</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.0000</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_mvcap_bs_ver">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>102</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Drive</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ed_mv_bs_ver">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>102</y>
+       <width>85</width>
+       <height>24</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Hit enter to move.</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rbcap_bs_hor">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>30</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>hor RBV</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rb_bs_hor">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>30</y>
+       <width>85</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.0000</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_mvcap_bs_hor">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>52</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Drive</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ed_mv_bs_hor">
+     <property name="geometry">
+      <rect>
+       <x>76</x>
+       <y>52</y>
+       <width>85</width>
+       <height>24</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Hit enter to move.</string>
+     </property>
+    </widget>
+    <widget class="QFrame" name="frame_bs_dpad">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>130</y>
+       <width>148</width>
+       <height>95</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QFrame#frame_bs_dpad { background-color: rgb(210, 210, 210); border: 1px solid #888; }</string>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::Box</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <widget class="QPushButton" name="pb_bs_up">
+      <property name="geometry">
+       <rect>
+        <x>47</x>
+        <y>4</y>
+        <width>54</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="accessibleDescription">
+       <string notr="true"/>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>↑</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_bs_left">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>30</y>
+        <width>41</width>
+        <height>28</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>←</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="ed_bs_step">
+      <property name="geometry">
+       <rect>
+        <x>49</x>
+        <y>30</y>
+        <width>50</width>
+        <height>28</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="text">
+       <string>0.002</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_bs_right">
+      <property name="geometry">
+       <rect>
+        <x>101</x>
+        <y>30</y>
+        <width>41</width>
+        <height>28</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>→</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_bs_down">
+      <property name="geometry">
+       <rect>
+        <x>47</x>
+        <y>60</y>
+        <width>54</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="accessibleDescription">
+       <string notr="true"/>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>↓</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_bs_stepDown">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>65</y>
+        <width>39</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: #ab47bc; color: white;</string>
+      </property>
+      <property name="text">
+       <string>0.1x</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_bs_stepUp">
+      <property name="geometry">
+       <rect>
+        <x>103</x>
+        <y>65</y>
+        <width>39</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: #ab47bc; color: white;</string>
+      </property>
+      <property name="text">
+       <string>10x</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QFrame" name="frame_bs_reg">
+     <property name="geometry">
+      <rect>
+       <x>4</x>
+       <y>229</y>
+       <width>160</width>
+       <height>130</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QFrame#frame_bs_reg { background-color: #fffde7; }</string>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::Box</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <widget class="QPushButton" name="pb_bs_enable">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>6</y>
+        <width>32</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
+      <property name="text">
+       <string>No</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_bs_in">
+      <property name="geometry">
+       <rect>
+        <x>44</x>
+        <y>6</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
+      <property name="text">
+       <string>In</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_bs_out">
+      <property name="geometry">
+       <rect>
+        <x>102</x>
+        <y>6</y>
+        <width>51</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
+      <property name="text">
+       <string>Out</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_bs_ax0">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>38</y>
+        <width>31</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>ver</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_bs_in_0">
+      <property name="geometry">
+       <rect>
+        <x>44</x>
+        <y>38</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_bs_out_0">
+      <property name="geometry">
+       <rect>
+        <x>102</x>
+        <y>38</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_bs_ax1">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>62</y>
+        <width>31</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>hor</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_bs_in_1">
+      <property name="geometry">
+       <rect>
+        <x>44</x>
+        <y>62</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_bs_out_1">
+      <property name="geometry">
+       <rect>
+        <x>102</x>
+        <y>62</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_bs_status">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>90</y>
+        <width>41</width>
+        <height>30</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>12</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>----</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lbl_bs_moveSetCap">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>94</y>
+        <width>71</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>move-set</string>
+      </property>
+     </widget>
+     <widget class="QSlider" name="slider_bs_moveSet">
+      <property name="geometry">
+       <rect>
+        <x>120</x>
+        <y>96</y>
+        <width>36</width>
+        <height>22</height>
+       </rect>
+      </property>
+      <property name="maximum">
+       <number>1</number>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+     </widget>
+    </widget>
+   </widget>
+   <widget class="QPushButton" name="pushButton_exit">
+    <property name="geometry">
+     <rect>
+      <x>460</x>
+      <y>410</y>
+      <width>81</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: #FF0000; color: white;</string>
+    </property>
+    <property name="text">
+     <string>Exit</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_xrayEyeIn">
+    <property name="geometry">
+     <rect>
+      <x>370</x>
+      <y>423</y>
+      <width>81</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>In</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_xrayEyeOut">
+    <property name="geometry">
+     <rect>
+      <x>370</x>
+      <y>453</y>
+      <width>81</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Out</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_More">
+    <property name="geometry">
+     <rect>
+      <x>490</x>
+      <y>510</y>
+      <width>51</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(50, 255, 50);</string>
+    </property>
+    <property name="text">
+     <string>More</string>
+    </property>
+   </widget>
+   <widget class="QWidget" name="col_ztrans_2" native="true">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>495</y>
+      <width>196</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
+    </property>
+    <widget class="QLineEdit" name="ed_xeExp">
+     <property name="geometry">
+      <rect>
+       <x>130</x>
+       <y>12</y>
+       <width>61</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 255, 255);</string>
+     </property>
+     <property name="text">
+      <string>0.002</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_xeExp_label">
+     <property name="geometry">
+      <rect>
+       <x>5</x>
+       <y>5</y>
+       <width>81</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>X-ray eye
+exp time</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_xeExp_RBV">
+     <property name="geometry">
+      <rect>
+       <x>75</x>
+       <y>17</y>
+       <width>51</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.002</string>
+     </property>
+    </widget>
+   </widget>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>547</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionSnapshotMotors"/>
+    <addaction name="separator"/>
+    <addaction name="actionExportPositions"/>
+    <addaction name="actionImportPositions"/>
+    <addaction name="actionOpen_user_GUI"/>
+   </widget>
+   <addaction name="menuFile"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionSnapshotMotors">
+   <property name="text">
+    <string>Snapshot motors</string>
+   </property>
+  </action>
+  <action name="actionSeparator">
+   <property name="text">
+    <string/>
+   </property>
+  </action>
+  <action name="actionExportPositions">
+   <property name="text">
+    <string>Export positions</string>
+   </property>
+  </action>
+  <action name="actionImportPositions">
+   <property name="text">
+    <string>Import positions</string>
+   </property>
+  </action>
+  <action name="actionOpen_user_GUI">
+   <property name="text">
+    <string>Open user GUI</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

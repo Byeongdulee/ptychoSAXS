@@ -20,6 +20,12 @@ class camera(epicsmotor): # motors for optical camera
     def __init__(self, pvlist=["12idc:m2"]):
         super().__init__(pvlist)
 
+class saxs_z(epicsmotor): # SAXS detector Z == the sample-detector distance
+    # Not the same stage as `camera` above (12idc:m2, the optical camera).
+    # This is the motor NeXus records as /entry/instrument/detector/distance.
+    def __init__(self, pvlist=["12idcACS1:m1"]):
+        super().__init__(pvlist)
+
 class beamstop(epicsmotor): # motors for beamstop
     def __init__(self, pvlist=["12ideSFT:m4", "12ideSFT:m5"]):
         super().__init__(pvlist)

@@ -14,7 +14,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 # simulated stand-in is used instead, so nothing is connected to.
 #
 #   PTYCHOSAXS_DEBUG_HEXAPOD   pihexapod.gcs   axes: X, Y, Z, U, V, W
-#   PTYCHOSAXS_DEBUG_ACS       acspy           axes: phi
+#   PTYCHOSAXS_DEBUG_ACS       epics_phi/acspy axes: phi
 #   PTYCHOSAXS_DEBUG_GONIO     epics_gonio     axes: trans1, trans2, tilt1, tilt2
 DEBUG_HEXAPOD = os.environ.get("PTYCHOSAXS_DEBUG_HEXAPOD") == "1"
 DEBUG_ACS = os.environ.get("PTYCHOSAXS_DEBUG_ACS") == "1"
@@ -242,12 +242,19 @@ def _build_gonio(transport):
 def _build_phi(transport):
     """The tomography rotation stage.
 
-    acspy is the only driver - no IOC exists for it - so there is no switch
-    for this one. When an IOC appears, add EPICS to CHOICES["phi"] in
-    transport.py and give it a branch here.
+    Two drivers, chosen by rungui's PHI_USE_ACS: the 12idePtycho motor
+    records (ptychosaxs/epics_phi.py), or acspy straight at the ACS
+    controller. Nothing is tunnelled - when acspy is selected EPICS is not
+    involved at all.
     """
     if transport == SIMULATED:
         return _PhiDebug()
+    if transport == EPICS:
+        from ptychosaxs.epics_phi import PhiAxisController
+
+        phi_axis = PhiAxisController()
+        phi_axis.connect()
+        return phi_axis
 
     try:
         from acspy.control import Axis

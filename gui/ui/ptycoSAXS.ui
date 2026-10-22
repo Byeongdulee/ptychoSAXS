@@ -3869,6 +3869,42 @@ Scans</string>
      <string>Slow (Y) axis for 2-D step and fly scans.</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="pushButton_checkUpOptics">
+    <property name="geometry">
+     <rect>
+      <x>570</x>
+      <y>743</y>
+      <width>191</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Check Upstream Optics</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_test_gcs">
+    <property name="geometry">
+     <rect>
+      <x>770</x>
+      <y>740</y>
+      <width>191</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>test gcs</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -3876,7 +3912,7 @@ Scans</string>
      <x>0</x>
      <y>0</y>
      <width>1167</width>
-     <height>23</height>
+     <height>25</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuHexapod">

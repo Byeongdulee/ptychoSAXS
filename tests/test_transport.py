@@ -1,9 +1,9 @@
 """
 pytest suite for driver selection.
 
-Two switches exist: which transport the hexapod uses, and whether the
-goniometer is driven by the SmarAct SDK instead of its IOC. phi has
-neither. What is worth testing is mostly the refusals - a mistyped switch,
+Three switches exist: which transport the hexapod uses, and whether the
+goniometer and phi are driven by their vendor libraries instead of their
+IOCs. What is worth testing is mostly the refusals - a mistyped switch,
 and a driver whose library is not installed here - because the design
 promise is that either costs one stage rather than the whole GUI.
 
@@ -69,16 +69,27 @@ def test_the_hexapod_switch_does_not_touch_the_gonio():
 
 
 # ---------------------------------------------------------------------------
-# phi has no switch
+# phi's driver - its IOC by default, acspy on request
 # ---------------------------------------------------------------------------
 
-def test_phi_is_always_acspy():
-    assert t.resolve("phi", env={}) == (t.DIRECT, "")
-    assert t.resolve("phi", env={t.ENV_HEXAPOD_TRANSPORT: t.EPICS}) == (t.DIRECT, "")
+def test_phi_defaults_to_its_ioc():
+    assert t.resolve("phi", env={}) == (t.EPICS, "")
 
 
-def test_phi_has_exactly_one_driver():
-    assert t.CHOICES["phi"] == (t.DIRECT,)
+@pytest.mark.parametrize("set_to", ["1", "true", "TRUE", "yes", "on"])
+def test_phi_switches_to_acspy(set_to):
+    assert t.resolve("phi", env={t.ENV_PHI_ACS: set_to}) == (t.DIRECT, "")
+
+
+@pytest.mark.parametrize("set_to", ["0", "false", "no", "off", ""])
+def test_anything_else_leaves_phi_on_epics(set_to):
+    assert t.resolve("phi", env={t.ENV_PHI_ACS: set_to}) == (t.EPICS, "")
+
+
+def test_the_hexapod_switch_does_not_touch_phi():
+    """They are separate concepts - phi has no transport."""
+    env = {t.ENV_HEXAPOD_TRANSPORT: t.DIRECT}
+    assert t.resolve("phi", env=env)[0] == t.EPICS
 
 
 # ---------------------------------------------------------------------------
@@ -124,9 +135,10 @@ def _all_simulated(monkeypatch):
 
 
 def test_a_missing_library_falls_back_instead_of_raising(monkeypatch, capsys):
-    """phi needs acspy. Where it is absent the stage is simulated and the
-    GUI still starts - that is the whole design."""
+    """The acspy phi needs acspy. Where it is absent the stage is simulated
+    and the GUI still starts - that is the whole design."""
     _all_simulated(monkeypatch)
+    monkeypatch.setenv(t.ENV_PHI_ACS, "1")
     import motions_ver2
 
     def _explode(driver):

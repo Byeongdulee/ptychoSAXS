@@ -18,6 +18,10 @@ import pathlib
 import inspect
 from collections import deque
 from PyQt5.QtWidgets import QMessageBox, QInputDialog, QLabel, QLineEdit, QFileDialog, QPushButton, QCheckBox, QDialog, QVBoxLayout
+
+# The upstream-optics motor/PV table, shared with the optics panel and
+# rungui's Check Upstream Optics report so the three cannot disagree.
+import optics_status as _optics_status
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
 import pyqtgraph as pg
 
@@ -383,7 +387,8 @@ class ScanHandler:
                 return False
         return False
 
-    def _pre_scan_guards(self, velocities: dict = None) -> bool:
+    def _pre_scan_guards(self, velocities: dict = None, confirm_name: bool = True,
+                         det_mode: bool = True) -> bool:
         """Run all pre-scan guards and return False if any fail.
         Call this at the top of every scan entry point before any other logic.
         Add new guards here so they apply to all scan types.
@@ -391,16 +396,110 @@ class ScanHandler:
         velocities, if given, maps axis name -> planned fly velocity for that
         axis (same units as MAX_VELOCITY) and is checked by
         _check_velocity_limits. Only helix_fly passes this today.
+
+        confirm_name and det_mode let the quick-acquisition entry points
+        (takeshot, time_series) opt out of the two guards that would get in
+        their way, while still inheriting every other guard -- including any
+        added later. They used to skip this method entirely, which is why
+        they silently missed new guards.
+
+        Order matters: the cheap, certain checks run first, so a scan that
+        was going to be rejected on its name never pays for the optics
+        check's EPICS round-trips.
         """
-        if not self._confirm_scan_name():
+        if confirm_name and not self._confirm_scan_name():
             return False
         if not self._check_hdf_for_multi_pulse():
             return False
-        if not self._check_saxs_det_mode():
+        if det_mode and not self._check_saxs_det_mode():
             return False
         if velocities is not None and not self._check_velocity_limits(velocities):
             return False
+        if not self._check_optics_configuration():
+            return False
         return True
+
+    # How many times the optics warning may re-prompt after the operator
+    # asks to see the diagram, before it gives up and cancels the scan.
+    OPTICS_PROMPT_MAX_ROUNDS = 20
+
+    def _check_optics_configuration(self) -> bool:
+        """Warn when the upstream optics are not set up for ptychography.
+
+        Advisory only -- the operator can always proceed, and any failure of
+        the check itself passes silently. A guard that can block scanning
+        because an .ini moved would be worse than no guard at all.
+
+        Turned off by the "Check upstream optics before scans" checkbox on
+        the setup dialog, for non-ptycho measurements.
+
+        Once the operator proceeds past a given set of problems, the same set
+        stops asking: operators run many scans in a row, and a dialog on
+        every one of them would just get the checkbox switched off for good.
+        A *different* problem re-warns, and clearing the fault resets it.
+        """
+        if not getattr(self.w.parameters, "_check_optics_prescan", True):
+            return True
+
+        try:
+            import optics_status
+
+            status = self.w.optics_status_report()
+            ok, problems = optics_status.check_good_for_ptycho(status)
+        except Exception as exc:
+            print(f"Warning: upstream optics check failed, continuing: {exc}")
+            return True
+
+        acked = getattr(self, "_optics_warning_acked", None)
+        if acked is None:
+            acked = self._optics_warning_acked = set()
+        if ok:
+            acked.clear()
+            return True
+
+        key = tuple(sorted(problems))
+        if key in acked:
+            return True
+
+        dlg = QMessageBox(self.w.ui)
+        dlg.setWindowTitle("Upstream Optics")
+        dlg.setIcon(QMessageBox.Warning)
+        dlg.setText("The upstream optics are not set up for ptychography:\n\n- "
+                    + "\n- ".join(problems))
+        dlg.setInformativeText("Scan anyway?")
+        proceed = dlg.addButton("Scan anyway", QMessageBox.AcceptRole)
+        show = dlg.addButton("Show diagram", QMessageBox.ActionRole)
+        cancel = dlg.addButton("Cancel scan", QMessageBox.RejectRole)
+        dlg.setDefaultButton(cancel)
+
+        # "Show diagram" returns to this question afterwards, so the prompt
+        # loops. Bounded rather than `while True`: if the diagram cannot be
+        # opened at all, an unbounded loop would re-prompt forever with no
+        # way for the operator out of it.
+        for _ in range(self.OPTICS_PROMPT_MAX_ROUNDS):
+            dlg.exec_()
+            clicked = dlg.clickedButton()
+            if clicked is proceed:
+                acked.add(key)
+                return True
+            if clicked is not show:
+                return False
+            # Reuse the same report window the Check Upstream Optics button
+            # opens, modally, then come back to this question.
+            try:
+                from optics_status_dialog import OpticsStatusDialog
+
+                report = OpticsStatusDialog(
+                    self.w.ui,
+                    caget=self.w._optics_caget(),
+                    eye_state=lambda: self.w.xray_eye.is_in(),
+                    problems=problems,
+                )
+                report.exec_()
+            except Exception as exc:
+                print(f"Warning: could not show optics diagram: {exc}")
+                return False    # cannot help further; treat as cancel
+        return False
 
     def _scan_motors(self, xmotor=None, ymotor=None, phimotor=None):
         """Fill in whichever scan-axis indices the caller left unset.
@@ -577,6 +676,10 @@ class ScanHandler:
         # Query optics PVs once and cache for both CSV and master file (avoid duplicate queries)
         self._cached_us_optics = self._get_us_optics_positions()
         self._cached_zone_plate_optics = self._fetch_zone_plate_optics_metadata()
+        # Read once here, on the GUI thread: 3-D scans rewrite a master file
+        # per slice from a worker thread, and the installed optic cannot
+        # change mid-scan anyway.
+        self._cached_optics_identity = self._fetch_optics_identity()
         self._cached_gonio_trans = self._get_gonio_trans_positions()
 
         # Create NeXus master files before scan starts
@@ -661,16 +764,16 @@ class ScanHandler:
             "scan_negative_edge",
             "scan_positive_edge",
             "scan_step_size",
-            "BS_ver",
-            "BS_hor",
-            "ZP_ver",
-            "ZP_hor",
-            "BSZP_Ztrans",
-            "OSA_X",
-            "OSA_Z",
-            "OSA_Y",
+            # Same list, same order, as the values spliced in by
+            # _write_scan_summary_line via _get_us_optics_positions.
+            *_optics_status.US_OPTICS_MOTORS,
             "trans1",
             "trans2",
+            # Appended at the end on purpose: _migrate_scan_summary_header
+            # can only ever append, so a column inserted mid-list would land
+            # at the end of an existing CSV's header and desync it from the
+            # rows written underneath.
+            "optics_name",
         ]
 
     def _format_scan_axis_string(self, axes_params, key):
@@ -721,15 +824,13 @@ class ScanHandler:
             return ""
         return str(val)
 
+    # Derived from optics_status, which the optics panel and the Check
+    # Upstream Optics report also read, so the PV strings cannot drift
+    # between the panel, the CSV log and the master file. The names here are
+    # also the CSV column names -- see _get_scan_summary_header.
     _US_OPTICS_PVS = [
-        ("BS_ver",      "12idc:m10.RBV"),
-        ("BS_hor",      "12idc:m11.RBV"),
-        ("ZP_ver",      "12idc:m12.RBV"),
-        ("ZP_hor",      "12idc:m13.RBV"),
-        ("BSZP_Ztrans", "12idc:m14.RBV"),
-        ("OSA_X",       "12idc:m9.RBV"),
-        ("OSA_Z",       "12idc:m15.RBV"),
-        ("OSA_Y",       "12idc:m16.RBV"),
+        (_motor, _optics_status.PV_BASES[_motor] + ".RBV")
+        for _motor in _optics_status.US_OPTICS_MOTORS
     ]
 
     def _get_us_optics_positions(self):
@@ -964,11 +1065,18 @@ class ScanHandler:
         gonio_trans_values = getattr(self, '_cached_gonio_trans', None)
         if gonio_trans_values is None:
             gonio_trans_values = self._get_gonio_trans_positions()
+        optics_identity = getattr(self, "_cached_optics_identity", None) or {}
+        # Order must match _get_scan_summary_header exactly. These first four
+        # used to be written as date, time, "no", scan_id under a header
+        # reading scan, completed, date, time -- so every one of them was
+        # filed under the wrong name, and _update_scan_summary_completed
+        # could never find its row (it matches on the "scan" column, which
+        # held a date), leaving every scan marked incomplete.
         row = [
+            scan_id,
+            "no",
             timestamp.strftime("%Y-%m-%d"),
             timestamp.strftime("%H:%M:%S"),
-            "no",
-            scan_id,
             self.w.parameters.scan_name,
             scan_label,
             axes_params[0].get("expt", "") if axes_params else "",
@@ -982,6 +1090,7 @@ class ScanHandler:
             self._format_scan_axis_string(axes_params, "scan_step_size"),
             *optics_values,
             *gonio_trans_values,
+            optics_identity.get("optics_name", ""),
         ]
         self._last_scan_summary_id = scan_id
         try:
@@ -2527,6 +2636,32 @@ class ScanHandler:
 
         return zp_success if zp_success else {}
 
+    def _fetch_optics_identity(self) -> dict:
+        """Which optic is installed, for the NeXus master file and the log.
+
+        Derived from the name of the saved ZP position the zone plate is
+        currently sitting at (optics_motors.ini's [zp] registry), not from a
+        PV -- the beamline has no record of which optic is mounted, only of
+        where the operator put it.
+
+        Always returns all three keys so the writer never has to special-case
+        a missing one: an unmatched ZP gives ("unknown_optic", "", 1).
+        Never raises -- a scan must not fail over a metadata lookup.
+        """
+        import optics_status
+
+        try:
+            status = self.w.optics_status_report()
+            optics_type, optics_name, optics_ozw = optics_status.classify_optic(
+                status.zp_name)
+        except Exception as e:
+            print(f"Warning: could not determine the installed optic: {e}")
+            optics_type = optics_status.UNKNOWN_OPTIC
+            optics_name = ""
+            optics_ozw = optics_status.UNKNOWN_OZW
+        return {"optics_type": optics_type, "optics_name": optics_name,
+                "optics_ozw": optics_ozw}
+
     def _fetch_shared_epics_metadata(self, cached_zone_plate_optics: dict = None) -> dict:
         """Query all shared EPICS metadata (same for all detectors).
 
@@ -2663,16 +2798,44 @@ class ScanHandler:
             except ValueError:
                 return default
 
-        # Read X motor parameters (same logic as _read_motor_params)
+        def _p0(n):
+            """Start position for motor *n*, without prompting.
+
+            Deliberately not check_start_position. This runs from _pre_scan,
+            after _read_motor_params has already resolved p0 for these axes
+            and written it into ed_N, so the widget holds exactly the value
+            that call returned. Asking again raised the "Move to / Update"
+            dialog a second time for the same motor in a single scan launch
+            -- and the "Move to" branch leaves ed_N differing from lb_N until
+            the motor physically moves, so it re-prompted every time.
+            Building master-file metadata must not block on a modal dialog
+            anyway.
+
+            ed_N can still be empty, because entry points with no XY grid of
+            their own (takeshot, timeseries) reach here without having read
+            motors 0/2. Fall back to the current position in lb_N, which is
+            what check_start_position returned in that case -- falling back
+            to 0.0 would silently write a position grid centred on the origin.
+            """
+            value = _val(f"ed_{n}", default=None)
+            if value is not None:
+                return value
+            label = self.ui.findChild(QLabel, f"lb_{n}")
+            if label is None:
+                return 0.0
+            try:
+                return float(label.text())
+            except (TypeError, ValueError):
+                return 0.0
+
         x_n = xmotor + 1
-        x_p0 = float(self.w.check_start_position(x_n))
+        x_p0 = _p0(x_n)
         x_L = _val(f"ed_lup_{x_n}_L")
         x_R = _val(f"ed_lup_{x_n}_R")
         x_step = _val(f"ed_lup_{x_n}_N", 1.0)
 
-        # Read Y motor parameters (same logic as _read_motor_params)
         y_n = ymotor + 1
-        y_p0 = float(self.w.check_start_position(y_n))
+        y_p0 = _p0(y_n)
         y_L = _val(f"ed_lup_{y_n}_L")
         y_R = _val(f"ed_lup_{y_n}_R")
         y_step = _val(f"ed_lup_{y_n}_N", 1.0)
@@ -2938,15 +3101,28 @@ class ScanHandler:
                 slits.create_dataset(dataset_name, data=value)
                 slits[dataset_name].attrs['units'] = b'mm'
 
-        # Create zone plate group (only if at least one zone plate PV succeeded)
+        # Create zone plate group (if any zone plate PV succeeded, or if we
+        # know which optic is installed). The identity is written even when
+        # "Save Upstream Optics" is off, which suppresses the positions:
+        # which optic was used is identity, not a position log, and losing it
+        # makes the data unidentifiable afterwards.
         zp_data = {k: v for k, v in shared_meta.items() if k.startswith('/entry/instrument/zone_plate/')}
-        if zp_data:
+        identity = getattr(self, '_cached_optics_identity', None) or {}
+        if zp_data or identity:
             zp = inst.create_group('zone_plate')
             zp.attrs['NX_class'] = b'NXcollection'
             for nexus_path, value in zp_data.items():
                 dataset_name = nexus_path.split('/')[-1]
                 zp.create_dataset(dataset_name, data=value)
                 zp[dataset_name].attrs['units'] = b'mm'
+            if identity:
+                zp.attrs['optics_type'] = identity['optics_type'].encode('utf-8')
+                zp.attrs['optics_name'] = identity['optics_name'].encode('utf-8')
+                # A dataset, not an attribute: only a dataset can carry the
+                # units attribute NeXus wants. Created outside the loop above
+                # so it does not inherit that loop's unconditional "mm".
+                zp.create_dataset('optics_ozw', data=int(identity['optics_ozw']))
+                zp['optics_ozw'].attrs['units'] = b'nm'
 
     def _populate_sample_group(self, entry, shared_meta: dict, scan_positions_dict: dict) -> None:
         """Create /entry/sample group with motor positions and scan position arrays.
@@ -3314,6 +3490,9 @@ class ScanHandler:
                     from debug_stubs import PilatusStub
 
                     self.w.detector[0] = PilatusStub()
+                elif not self.detector_is_online(basename, "SAXS Pilatus",
+                                                 self.ui.actionSAXS):
+                    self.w.detector[0] = None
                 else:
                     from tools.detectors import pilatus
 
@@ -3332,6 +3511,9 @@ class ScanHandler:
                     from debug_stubs import PilatusStub
 
                     self.w.detector[1] = PilatusStub()
+                elif not self.detector_is_online(basename, "WAXS Pilatus",
+                                                 self.ui.actionWAXS):
+                    self.w.detector[1] = None
                 else:
                     from tools.detectors import pilatus
 
@@ -3399,6 +3581,42 @@ class ScanHandler:
                 self.w.detector[4] = None
         self.w.update_scanname()
 
+    # Probe PVs used to decide whether a detector's IOC is actually there.
+    # One per detector family, since their record layouts differ.
+    DETECTOR_PROBE_PV = {
+        "S12-PILATUS1:": "cam1:Acquire_RBV",
+        "12idcPIL:": "cam1:Acquire_RBV",
+        "12idSGSocket:": "SG1:Acquire_RBV",
+    }
+    DETECTOR_PROBE_TIMEOUT_S = 1.0
+
+    def detector_is_online(self, prefix, label, action=None):
+        """Whether the detector's IOC answers, before we add it to the list.
+
+        A detector whose IOC is down does not fail loudly - every PV read
+        blocks for the full channel-access timeout instead, and returns
+        None. One unreachable detector was adding ~50 s to the arming phase
+        of every fly scan, invisibly. Probe once, cheaply, and leave the
+        detector out if nothing answers; unchecking the menu entry keeps the
+        setup window honest about what is actually connected.
+        """
+        from epics import PV
+
+        probe = self.DETECTOR_PROBE_PV.get(prefix)
+        if probe is None:
+            return True  # no probe defined: do not block the detector
+        pvname = prefix + probe
+        if PV(pvname).wait_for_connection(timeout=self.DETECTOR_PROBE_TIMEOUT_S):
+            return True
+        msg = (f"{label} is not reachable ({pvname} did not connect in "
+               f"{self.DETECTOR_PROBE_TIMEOUT_S:g}s). Leaving it disabled - "
+               f"start its IOC and re-enable it in Setup.")
+        print(msg)
+        self.w.messages["recent error message"] = msg
+        if action is not None:
+            action.setChecked(False)
+        return False
+
     def switch_SGstream(self, status=True):
         basename = "12idSGSocket:"
         if status:
@@ -3407,6 +3625,9 @@ class ScanHandler:
                 from debug_stubs import SGStreamStub
 
                 self.w.detector[3] = SGStreamStub()
+            elif not self.detector_is_online(basename, "Softglue stream",
+                                             self.ui.actionSG):
+                self.w.detector[3] = None
             else:
                 from tools.detectors import SGstream
 
@@ -3833,6 +4054,15 @@ class ScanHandler:
         # the last one, right after that slice's 2-D sweep finished.
 
     def check_start_position(self, n):
+        """Resolve motor *n*'s start position, prompting if the UI disagrees.
+
+        Call this once per motor per scan launch, from _read_motor_params and
+        nowhere else. It is modal, and the "Move to" branch deliberately does
+        not move the motor, so lb_N keeps differing from ed_N and any second
+        call in the same launch prompts again. Code that needs p0 after
+        _read_motor_params has run should read ed_N, which holds the resolved
+        value (see _compute_2d_scan_positions).
+        """
         # Compare p0 and p0_move_to; only warn if difference > 0.001
         p0_move_to = self.ui.findChild(QLineEdit, "ed_%i" % n).text()
         p0 = self.ui.findChild(QLabel, "lb_%i" % n).text()
@@ -4356,6 +4586,12 @@ class ScanHandler:
 
         period_s = max(expt + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
 
+        # Deliberately opts out of the scan-name prompt: a takeshot is a
+        # quick "grab a frame" action and a name dialog would defeat it. It
+        # still runs every other guard, so a new one is not silently missed.
+        if not self._pre_scan_guards(confirm_name=False):
+            return
+
         self._pre_scan("takeshot")
         self.w.motor_p0 = {}
         axes_params = [{"name": "time", "motor_index": 0, "expt": expt,
@@ -4452,6 +4688,11 @@ class ScanHandler:
         n_images = int(edit_n.text())
         period_s = int(edit_period.text()) / 1000.0
         multi_frame = chk_multi.isChecked()
+
+        # Same opt-out as takeshot: the parameters were just confirmed in the
+        # dialog above, so only the scan-name prompt is skipped.
+        if not self._pre_scan_guards(confirm_name=False):
+            return
 
         self._pre_scan("timeseries")
         self.w.motor_p0 = {}
@@ -5069,6 +5310,36 @@ class ScanHandler:
                         )
                         break
         return timeout_occurred, TIMEOUT
+
+    def _detector_camserver_error(self):
+        """The camera's own error text when it is sitting in an error state.
+
+        A camserver failure stops frames arriving, which the fly wait loop
+        can only see as silence - it then waits out the full stall window
+        (30 s for the last frame) with nothing to report. Asking the
+        detector directly turns that into an immediate, explanatory failure.
+        Empty string when the detector is healthy or unreadable.
+        """
+        from epics import caget
+
+        for ndet, det in enumerate(self.w.detector):
+            if ndet > 1 or det is None:
+                continue
+            prefix = getattr(det, "_prefix", "")
+            if not prefix:
+                continue
+            base = prefix if prefix.endswith("cam1:") else prefix + "cam1:"
+            try:
+                if caget(base + "DetectorState_RBV", as_string=True,
+                         timeout=1) != "Error":
+                    return ""
+                return "%s / %s" % (
+                    caget(base + "StatusMessage_RBV", as_string=True, timeout=1),
+                    caget(base + "StringFromServer_RBV", as_string=True, timeout=1),
+                )
+            except Exception:
+                return ""
+        return ""
 
     def is_arming_detecotors_timedout(self):
         TIMEOUT = 10
@@ -6150,6 +6421,18 @@ class ScanHandler:
             # that silently produced a NaN or missing final frame. Waiting out the
             # full stall window and timing out on a genuine miss (which fly2d/fly3d
             # already retry on DETECTOR_NOT_STARTED_ERROR) is safer than guessing.
+            # DIAGNOSTIC - a camserver error stops frames arriving, so the loop
+            # above just waits out the full stall window with nothing to say.
+            # Surface the detector's own account instead of a 30 s silence.
+            camserver_error = self._detector_camserver_error()
+            if camserver_error:
+                self.w.messages["recent error message"] = (
+                    f"Detector reported an error after {N_imgcollected}/{Nstep} "
+                    f"frames: {camserver_error}"
+                )
+                print(self.w.messages["recent error message"])
+                return DETECTOR_NOT_STARTED_ERROR
+
             stall_limit = LAST_FRAME_TIMEOUT if N_imgcollected == Nstep - 1 else TIMEOUT
             if time.time() - t_since_last_frame > stall_limit:
                 self.w.messages["recent error message"] = (
@@ -6162,6 +6445,7 @@ class ScanHandler:
         self.w.pts.hexapod.wait()
         self._advance_scan_number_thread_safe()
         return 1
+
 
     def fly0(self, motornumber=-1, update_progress=None, update_status=None):
         t0 = time.time()

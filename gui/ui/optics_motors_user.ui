@@ -1,0 +1,727 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>506</width>
+    <height>285</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Microscopy Optics - user</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QWidget" name="col_bs" native="true">
+    <property name="geometry">
+     <rect>
+      <x>380</x>
+      <y>10</y>
+      <width>81</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
+    </property>
+    <widget class="QLabel" name="lbl_bs_title">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>0</y>
+       <width>71</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Beamstop</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_bs_status">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>30</y>
+       <width>61</width>
+       <height>30</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>----</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QFrame" name="frame_allInOut">
+    <property name="geometry">
+     <rect>
+      <x>270</x>
+      <y>85</y>
+      <width>191</width>
+      <height>81</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QFrame#frame_allInOut { background-color: #fffde7; }</string>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::Box</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QPushButton" name="pushButton_ptychoMode">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>6</y>
+       <width>111</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>Ptycho Mode</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_allStatus">
+     <property name="geometry">
+      <rect>
+       <x>130</x>
+       <y>30</y>
+       <width>51</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>----</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pushButton_xrayEyeMode">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>29</y>
+       <width>111</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>X-ray Eye Mode</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pushButton_saxsMode">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>52</y>
+       <width>111</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>SAXS Mode</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QPushButton" name="pushButton_stopAll">
+    <property name="geometry">
+     <rect>
+      <x>390</x>
+      <y>205</y>
+      <width>71</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: #cc0000; color: white;</string>
+    </property>
+    <property name="text">
+     <string>Stop All</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_exit">
+    <property name="geometry">
+     <rect>
+      <x>390</x>
+      <y>170</y>
+      <width>71</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: #FF0000; color: white;</string>
+    </property>
+    <property name="text">
+     <string>Exit</string>
+    </property>
+   </widget>
+   <widget class="QWidget" name="col_zp" native="true">
+    <property name="geometry">
+     <rect>
+      <x>270</x>
+      <y>10</y>
+      <width>101</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
+    </property>
+    <widget class="QLabel" name="lbl_zp_title">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>0</y>
+       <width>81</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Zone plate</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_zp_status">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>30</y>
+       <width>71</width>
+       <height>30</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>----</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QWidget" name="col_osa" native="true">
+    <property name="geometry">
+     <rect>
+      <x>140</x>
+      <y>10</y>
+      <width>120</width>
+      <height>176</height>
+     </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
+    </property>
+    <widget class="QLabel" name="lbl_osa_title">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>0</y>
+       <width>101</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>OSA (mm)</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rbcap_osa_ver">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>86</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>ver RBV</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rb_osa_ver">
+     <property name="geometry">
+      <rect>
+       <x>71</x>
+       <y>86</y>
+       <width>51</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.0000</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rbcap_osa_hor">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>64</y>
+       <width>66</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>hor RBV</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_rb_osa_hor">
+     <property name="geometry">
+      <rect>
+       <x>71</x>
+       <y>64</y>
+       <width>51</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.0000</string>
+     </property>
+    </widget>
+    <widget class="QFrame" name="frame_osa_dpad">
+     <property name="geometry">
+      <rect>
+       <x>3</x>
+       <y>105</y>
+       <width>114</width>
+       <height>66</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QFrame#frame_osa_dpad { background-color: rgb(210, 210, 210); border: 1px solid #888; }</string>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::Box</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <widget class="QPushButton" name="pb_osa_up">
+      <property name="geometry">
+       <rect>
+        <x>36</x>
+        <y>4</y>
+        <width>42</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="accessibleDescription">
+       <string notr="true"/>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>↑</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_osa_left">
+      <property name="geometry">
+       <rect>
+        <x>6</x>
+        <y>23</y>
+        <width>28</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>←</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="ed_osa_step">
+      <property name="geometry">
+       <rect>
+        <x>36</x>
+        <y>23</y>
+        <width>42</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 255, 255);</string>
+      </property>
+      <property name="text">
+       <string>0.002</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_osa_right">
+      <property name="geometry">
+       <rect>
+        <x>80</x>
+        <y>23</y>
+        <width>28</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>→</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pb_osa_down">
+      <property name="geometry">
+       <rect>
+        <x>36</x>
+        <y>46</y>
+        <width>42</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="accessibleDescription">
+       <string notr="true"/>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
+      </property>
+      <property name="text">
+       <string>↓</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QLabel" name="lbl_osa_status">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>30</y>
+       <width>51</width>
+       <height>30</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>----</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QWidget" name="col_saxsbs" native="true">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>121</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
+    </property>
+    <widget class="QLabel" name="lbl_saxsbs_title">
+     <property name="geometry">
+      <rect>
+       <x>8</x>
+       <y>0</y>
+       <width>111</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>SAXS Beamstop</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_saxsbs_status">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>30</y>
+       <width>61</width>
+       <height>30</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>----</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QWidget" name="col_zpList" native="true">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>85</y>
+      <width>121</width>
+      <height>146</height>
+     </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
+    </property>
+    <widget class="QListWidget" name="listWidget_zpList">
+     <property name="geometry">
+      <rect>
+       <x>5</x>
+       <y>40</y>
+       <width>111</width>
+       <height>101</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_zp_title_2">
+     <property name="geometry">
+      <rect>
+       <x>5</x>
+       <y>0</y>
+       <width>111</width>
+       <height>36</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Choose
+zone plate</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QLineEdit" name="ed_xeExp">
+    <property name="geometry">
+     <rect>
+      <x>220</x>
+      <y>210</y>
+      <width>61</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(255, 255, 255);</string>
+    </property>
+    <property name="text">
+     <string>0.002</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pb_xeExp_stepUp">
+    <property name="geometry">
+     <rect>
+      <x>340</x>
+      <y>214</y>
+      <width>41</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: #ab47bc; color: white;</string>
+    </property>
+    <property name="text">
+     <string>10x</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pb_xeExp_stepDown">
+    <property name="geometry">
+     <rect>
+      <x>290</x>
+      <y>214</y>
+      <width>41</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: #ab47bc; color: white;</string>
+    </property>
+    <property name="text">
+     <string>0.1x</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lbl_xeExp_label">
+    <property name="geometry">
+     <rect>
+      <x>140</x>
+      <y>186</y>
+      <width>171</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>X-ray eye exp time (s)</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lbl_xeExp_RBVlbl">
+    <property name="geometry">
+     <rect>
+      <x>140</x>
+      <y>215</y>
+      <width>41</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>RBV</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lbl_xeExp_RBV">
+    <property name="geometry">
+     <rect>
+      <x>180</x>
+      <y>215</y>
+      <width>51</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>0.002</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>506</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionImportPositions"/>
+    <addaction name="separator"/>
+    <addaction name="actionEnable_zone_plate_choice"/>
+    <addaction name="actionOpen_full_GUI"/>
+   </widget>
+   <addaction name="menuFile"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionImportPositions">
+   <property name="text">
+    <string>Import positions</string>
+   </property>
+  </action>
+  <action name="actionOpen_full_GUI">
+   <property name="text">
+    <string>Open full GUI</string>
+   </property>
+  </action>
+  <action name="actionEnable_zone_plate_choice">
+   <property name="text">
+    <string>Enable zone plate choice</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

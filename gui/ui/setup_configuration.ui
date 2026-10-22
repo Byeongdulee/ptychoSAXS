@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>659</width>
-    <height>346</height>
+    <height>404</height>
    </rect>
   </property>
   <property name="font">
@@ -22,7 +22,7 @@
    <property name="geometry">
     <rect>
      <x>190</x>
-     <y>300</y>
+     <y>362</y>
      <width>171</width>
      <height>28</height>
     </rect>
@@ -512,6 +512,30 @@ Sampling Rate:</string>
    <property name="text">
     <string>Save Upstream
 Optics on Scan</string>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="checkBox_opticsPreScanCheck">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>330</y>
+     <width>301</width>
+     <height>22</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+   <property name="toolTip">
+    <string>Before each scan, compare the upstream optics against the saved in/out positions and warn if they are not set up for ptychography. The warning can always be overridden. Uncheck for non-ptycho measurements.</string>
+   </property>
+   <property name="text">
+    <string>Check upstream optics before scans</string>
    </property>
    <property name="checked">
     <bool>true</bool>

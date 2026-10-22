@@ -4,6 +4,8 @@ NeXus Master File Configuration
 Maps EPICS PVs to NeXus dataset locations and units for master file creation.
 """
 
+import optics_status as _optics_status
+
 # Shared metadata queried once per scan (same for all detectors)
 SHARED_METADATA_MAP = {
     "/entry/instrument/beam/incident_wavelength": {
@@ -100,40 +102,30 @@ SLITS_METADATA_MAP = {
     },
 }
 
-# Optics metadata (zone plate) — conditional on checkBox_usOpticsScanSave
+# Optics metadata (zone plate) — conditional on checkBox_usOpticsScanSave.
+#
+# PVs come from optics_status, the same table the optics panel drives and the
+# Check Upstream Optics report reads, so these cannot drift out of step with
+# the hardware map. Only the NeXus naming lives here, and it is not a
+# one-to-one transliteration -- NeXus x/y are the motors' hor/ver, so keep
+# this mapping explicit rather than deriving the names from the motor names.
+_ZONE_PLATE_MOTORS = {
+    "zp_x":  "ZP_hor",
+    "zp_y":  "ZP_ver",
+    "zp_z":  "BSZP_Ztrans",
+    "bs_x":  "BS_hor",
+    "bs_y":  "BS_ver",
+    "osa_x": "OSA_X",
+    "osa_y": "OSA_Y",
+    "osa_z": "OSA_Z",
+}
+
 ZONE_PLATE_METADATA_MAP = {
-    "/entry/instrument/zone_plate/zp_x": {
-        "pv": "12idc:m13.RBV",
+    "/entry/instrument/zone_plate/%s" % _name: {
+        "pv": _optics_status.PV_BASES[_motor] + ".RBV",
         "units": "mm",
-    },
-    "/entry/instrument/zone_plate/zp_y": {
-        "pv": "12idc:m12.RBV",
-        "units": "mm",
-    },
-    "/entry/instrument/zone_plate/zp_z": {
-        "pv": "12idc:m14.RBV",
-        "units": "mm",
-    },
-    "/entry/instrument/zone_plate/bs_x": {
-        "pv": "12idc:m11.RBV",
-        "units": "mm",
-    },
-    "/entry/instrument/zone_plate/bs_y": {
-        "pv": "12idc:m10.RBV",
-        "units": "mm",
-    },
-    "/entry/instrument/zone_plate/osa_x": {
-        "pv": "12idc:m9.RBV",
-        "units": "mm",
-    },
-    "/entry/instrument/zone_plate/osa_y": {
-        "pv": "12idc:m16.RBV",
-        "units": "mm",
-    },
-    "/entry/instrument/zone_plate/osa_z": {
-        "pv": "12idc:m15.RBV",
-        "units": "mm",
-    },
+    }
+    for _name, _motor in _ZONE_PLATE_MOTORS.items()
 }
 
 # Detector-specific configurations

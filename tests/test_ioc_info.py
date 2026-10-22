@@ -96,7 +96,7 @@ def test_collect_returns_one_row_per_ioc_in_order(fake_pv):
 
 def test_the_real_table_covers_the_motor_iocs():
     prefixes = {prefix for prefix, _role, _probe in ioc_info.IOC_TABLE}
-    assert {"12idbHXP", "12ideMCS1", "12ideMCS2"} <= prefixes
+    assert {"12idbHXP", "12idePtycho", "12ideMCS1", "12ideMCS2"} <= prefixes
 
 
 def test_hexapod_link_reports_up_down_and_unknown(fake_pv):

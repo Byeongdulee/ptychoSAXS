@@ -9,8 +9,9 @@ hexapod's alone.
 Everything else simply has one driver or another, with no shared protocol
 underneath and nothing being tunnelled:
 
-  phi    acspy, straight at the ACS controller. There is no IOC for the
-         tomography rotation stage, so there is nothing to choose.
+  phi    the 12idePtycho motor records, or acspy straight at the ACS
+         controller. Nothing is tunnelled: EPICS is not involved at all
+         when acspy is selected.
   gonio  the 12ideMCS1 motor records, or the SmarAct MCS2 SDK through
          ptychosaxs/smaract_gonio.py. One boolean, and EPICS is not
          involved at all when the SDK is selected.
@@ -35,21 +36,23 @@ STAGES = ("hexapod", "phi", "gonio")
 # on. Add to a tuple here when a driver becomes real.
 CHOICES = {
     "hexapod": (EPICS, DIRECT),
-    "phi": (DIRECT,),
+    "phi": (EPICS, DIRECT),
     "gonio": (EPICS, DIRECT),
 }
 
-# rungui exports its two switches here. Environment variables rather than
+# rungui exports its switches here. Environment variables rather than
 # imports, for the same reason the DEBUG_* flags use them: motions_ver2 is
 # imported long before anything holds a reference to rungui's globals.
 ENV_HEXAPOD_TRANSPORT = "PTYCHOSAXS_HEXAPOD_TRANSPORT"
 ENV_GONIO_SMARACT = "PTYCHOSAXS_GONIO_SMARACT"
+ENV_PHI_ACS = "PTYCHOSAXS_PHI_ACS"
 
 DEFAULT_HEXAPOD_TRANSPORT = EPICS
 
 DESCRIPTION = {
     ("hexapod", EPICS): "the 12idbHXP motor records",
     ("hexapod", DIRECT): "pihexapod/pipython over TCP to the C-887",
+    ("phi", EPICS): "the 12idePtycho motor records",
     ("phi", DIRECT): "acspy over ethernet to the ACS controller",
     ("gonio", EPICS): "the 12ideMCS1 motor records",
     ("gonio", DIRECT): "the SmarAct MCS2 SDK (ptychosaxs.smaract_gonio)",
@@ -97,8 +100,8 @@ def resolve(stage, simulated=False, env=None):
     if stage == "gonio":
         return (DIRECT if _truthy(env.get(ENV_GONIO_SMARACT, "0")) else EPICS), ""
 
-    # phi has one driver and no switch.
-    return DIRECT, ""
+    # phi: its IOC by default, acspy when the switch asks for it.
+    return (DIRECT if _truthy(env.get(ENV_PHI_ACS, "0")) else EPICS), ""
 
 
 def describe(stage, driver) -> str:

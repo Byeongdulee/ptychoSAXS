@@ -6,12 +6,12 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>732</width>
-    <height>600</height>
+    <width>733</width>
+    <height>599</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Optics Motors</string>
+   <string>Microscopy Optics - medium</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <property name="font">
@@ -47,7 +47,7 @@ QSlider::add-page:horizontal {
    <widget class="QWidget" name="col_bs" native="true">
     <property name="geometry">
      <rect>
-      <x>10</x>
+      <x>550</x>
       <y>5</y>
       <width>168</width>
       <height>365</height>
@@ -64,7 +64,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>8</x>
        <y>0</y>
-       <width>151</width>
+       <width>111</width>
        <height>28</height>
       </rect>
      </property>
@@ -92,7 +92,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>ver</string>
+      <string>ver RBV</string>
      </property>
     </widget>
     <widget class="QLabel" name="lbl_rb_bs_ver">
@@ -118,7 +118,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>Move to:</string>
+      <string>Drive</string>
      </property>
     </widget>
     <widget class="QLineEdit" name="ed_mv_bs_ver">
@@ -144,7 +144,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>hor</string>
+      <string>hor RBV</string>
      </property>
     </widget>
     <widget class="QLabel" name="lbl_rb_bs_hor">
@@ -170,7 +170,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>Move to:</string>
+      <string>Drive</string>
      </property>
     </widget>
     <widget class="QLineEdit" name="ed_mv_bs_hor">
@@ -217,7 +217,7 @@ QSlider::add-page:horizontal {
        <string notr="true"/>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>↑</string>
@@ -233,7 +233,7 @@ QSlider::add-page:horizontal {
        </rect>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>←</string>
@@ -268,7 +268,7 @@ QSlider::add-page:horizontal {
        </rect>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>→</string>
@@ -287,7 +287,7 @@ QSlider::add-page:horizontal {
        <string notr="true"/>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>↓</string>
@@ -525,10 +525,10 @@ QSlider::add-page:horizontal {
    <widget class="QWidget" name="col_zp" native="true">
     <property name="geometry">
      <rect>
-      <x>190</x>
+      <x>370</x>
       <y>5</y>
       <width>168</width>
-      <height>488</height>
+      <height>506</height>
      </rect>
     </property>
     <property name="autoFillBackground">
@@ -542,7 +542,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>8</x>
        <y>0</y>
-       <width>151</width>
+       <width>111</width>
        <height>28</height>
       </rect>
      </property>
@@ -570,7 +570,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>ver</string>
+      <string>ver RBV</string>
      </property>
     </widget>
     <widget class="QLabel" name="lbl_rb_zp_ver">
@@ -596,7 +596,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>Move to:</string>
+      <string>Drive</string>
      </property>
     </widget>
     <widget class="QLineEdit" name="ed_mv_zp_ver">
@@ -622,7 +622,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>hor</string>
+      <string>hor RBV</string>
      </property>
     </widget>
     <widget class="QLabel" name="lbl_rb_zp_hor">
@@ -648,7 +648,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>Move to:</string>
+      <string>Drive</string>
      </property>
     </widget>
     <widget class="QLineEdit" name="ed_mv_zp_hor">
@@ -695,7 +695,7 @@ QSlider::add-page:horizontal {
        <string notr="true"/>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>↑</string>
@@ -711,7 +711,7 @@ QSlider::add-page:horizontal {
        </rect>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>←</string>
@@ -746,7 +746,7 @@ QSlider::add-page:horizontal {
        </rect>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>→</string>
@@ -765,7 +765,7 @@ QSlider::add-page:horizontal {
        <string notr="true"/>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>↓</string>
@@ -1005,7 +1005,7 @@ QSlider::add-page:horizontal {
        <x>4</x>
        <y>391</y>
        <width>160</width>
-       <height>91</height>
+       <height>111</height>
       </rect>
      </property>
     </widget>
@@ -1026,7 +1026,7 @@ QSlider::add-page:horizontal {
    <widget class="QWidget" name="col_osa" native="true">
     <property name="geometry">
      <rect>
-      <x>370</x>
+      <x>190</x>
       <y>5</y>
       <width>168</width>
       <height>365</height>
@@ -1043,7 +1043,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>8</x>
        <y>0</y>
-       <width>141</width>
+       <width>111</width>
        <height>28</height>
       </rect>
      </property>
@@ -1071,7 +1071,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>ver</string>
+      <string>ver RBV</string>
      </property>
     </widget>
     <widget class="QLabel" name="lbl_rb_osa_ver">
@@ -1097,7 +1097,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>Move to:</string>
+      <string>Drive</string>
      </property>
     </widget>
     <widget class="QLineEdit" name="ed_mv_osa_ver">
@@ -1123,7 +1123,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>hor</string>
+      <string>hor RBV</string>
      </property>
     </widget>
     <widget class="QLabel" name="lbl_rb_osa_hor">
@@ -1149,7 +1149,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>Move to:</string>
+      <string>Drive</string>
      </property>
     </widget>
     <widget class="QLineEdit" name="ed_mv_osa_hor">
@@ -1196,7 +1196,7 @@ QSlider::add-page:horizontal {
        <string notr="true"/>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>↑</string>
@@ -1212,7 +1212,7 @@ QSlider::add-page:horizontal {
        </rect>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>←</string>
@@ -1247,7 +1247,7 @@ QSlider::add-page:horizontal {
        </rect>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>→</string>
@@ -1266,7 +1266,7 @@ QSlider::add-page:horizontal {
        <string notr="true"/>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>↓</string>
@@ -1504,7 +1504,7 @@ QSlider::add-page:horizontal {
    <widget class="QWidget" name="col_saxsbs" native="true">
     <property name="geometry">
      <rect>
-      <x>550</x>
+      <x>10</x>
       <y>5</y>
       <width>168</width>
       <height>365</height>
@@ -1521,7 +1521,7 @@ QSlider::add-page:horizontal {
       <rect>
        <x>8</x>
        <y>0</y>
-       <width>151</width>
+       <width>111</width>
        <height>28</height>
       </rect>
      </property>
@@ -1549,7 +1549,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>ver</string>
+      <string>ver RBV</string>
      </property>
     </widget>
     <widget class="QLabel" name="lbl_rb_saxsbs_ver">
@@ -1575,7 +1575,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>Move to:</string>
+      <string>Drive</string>
      </property>
     </widget>
     <widget class="QLineEdit" name="ed_mv_saxsbs_ver">
@@ -1601,7 +1601,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>hor</string>
+      <string>hor RBV</string>
      </property>
     </widget>
     <widget class="QLabel" name="lbl_rb_saxsbs_hor">
@@ -1627,7 +1627,7 @@ QSlider::add-page:horizontal {
       </rect>
      </property>
      <property name="text">
-      <string>Move to:</string>
+      <string>Drive</string>
      </property>
     </widget>
     <widget class="QLineEdit" name="ed_mv_saxsbs_hor">
@@ -1674,7 +1674,7 @@ QSlider::add-page:horizontal {
        <string notr="true"/>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>↑</string>
@@ -1690,7 +1690,7 @@ QSlider::add-page:horizontal {
        </rect>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>←</string>
@@ -1725,7 +1725,7 @@ QSlider::add-page:horizontal {
        </rect>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>→</string>
@@ -1744,7 +1744,7 @@ QSlider::add-page:horizontal {
        <string notr="true"/>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: rgb(190, 190, 190);</string>
+       <string notr="true">background-color: rgb(170, 170, 170);</string>
       </property>
       <property name="text">
        <string>↓</string>
@@ -1987,9 +1987,9 @@ QSlider::add-page:horizontal {
    <widget class="QLabel" name="lbl_zheader_name">
     <property name="geometry">
      <rect>
-      <x>374</x>
+      <x>14</x>
       <y>374</y>
-      <width>111</width>
+      <width>91</width>
       <height>22</height>
      </rect>
     </property>
@@ -2001,15 +2001,15 @@ QSlider::add-page:horizontal {
      </font>
     </property>
     <property name="text">
-     <string>Z motor names</string>
+     <string>Z Motors</string>
     </property>
    </widget>
    <widget class="QLabel" name="lbl_zheader_current">
     <property name="geometry">
      <rect>
-      <x>490</x>
+      <x>110</x>
       <y>374</y>
-      <width>51</width>
+      <width>71</width>
       <height>22</height>
      </rect>
     </property>
@@ -2021,15 +2021,15 @@ QSlider::add-page:horizontal {
      </font>
     </property>
     <property name="text">
-     <string>Current</string>
+     <string>RBV</string>
     </property>
    </widget>
    <widget class="QLabel" name="lbl_zheader_moveto">
     <property name="geometry">
      <rect>
-      <x>540</x>
+      <x>180</x>
       <y>374</y>
-      <width>51</width>
+      <width>61</width>
       <height>22</height>
      </rect>
     </property>
@@ -2041,13 +2041,13 @@ QSlider::add-page:horizontal {
      </font>
     </property>
     <property name="text">
-     <string>Move to</string>
+     <string>Drive</string>
     </property>
    </widget>
    <widget class="QLabel" name="lbl_zheader_tweak">
     <property name="geometry">
      <rect>
-      <x>625</x>
+      <x>265</x>
       <y>374</y>
       <width>81</width>
       <height>22</height>
@@ -2067,9 +2067,9 @@ QSlider::add-page:horizontal {
    <widget class="QLabel" name="lbl_name_osaz">
     <property name="geometry">
      <rect>
-      <x>374</x>
+      <x>14</x>
       <y>431</y>
-      <width>111</width>
+      <width>91</width>
       <height>22</height>
      </rect>
     </property>
@@ -2087,9 +2087,9 @@ QSlider::add-page:horizontal {
    <widget class="QLabel" name="lbl_rb_osaz">
     <property name="geometry">
      <rect>
-      <x>490</x>
+      <x>110</x>
       <y>431</y>
-      <width>51</width>
+      <width>71</width>
       <height>22</height>
      </rect>
     </property>
@@ -2100,7 +2100,7 @@ QSlider::add-page:horizontal {
    <widget class="QLineEdit" name="ed_mv_osaz">
     <property name="geometry">
      <rect>
-      <x>540</x>
+      <x>180</x>
       <y>430</y>
       <width>51</width>
       <height>24</height>
@@ -2113,7 +2113,7 @@ QSlider::add-page:horizontal {
    <widget class="QPushButton" name="pb_osaz_minus">
     <property name="geometry">
      <rect>
-      <x>595</x>
+      <x>235</x>
       <y>430</y>
       <width>31</width>
       <height>24</height>
@@ -2126,7 +2126,7 @@ QSlider::add-page:horizontal {
    <widget class="QLineEdit" name="ed_osaz_step">
     <property name="geometry">
      <rect>
-      <x>630</x>
+      <x>270</x>
       <y>430</y>
       <width>51</width>
       <height>24</height>
@@ -2142,7 +2142,7 @@ QSlider::add-page:horizontal {
    <widget class="QPushButton" name="pb_osaz_plus">
     <property name="geometry">
      <rect>
-      <x>685</x>
+      <x>325</x>
       <y>430</y>
       <width>31</width>
       <height>24</height>
@@ -2152,303 +2152,38 @@ QSlider::add-page:horizontal {
      <string>&gt;&gt;</string>
     </property>
    </widget>
-   <widget class="QLabel" name="lbl_name_ztrans">
-    <property name="geometry">
-     <rect>
-      <x>374</x>
-      <y>461</y>
-      <width>111</width>
-      <height>22</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>8</pointsize>
-      <weight>75</weight>
-      <bold>true</bold>
-     </font>
-    </property>
-    <property name="text">
-     <string>BSZP_Ztrans</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="lbl_rb_ztrans">
-    <property name="geometry">
-     <rect>
-      <x>490</x>
-      <y>461</y>
-      <width>51</width>
-      <height>22</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>0.0000</string>
-    </property>
-   </widget>
-   <widget class="QLineEdit" name="ed_mv_ztrans">
-    <property name="geometry">
-     <rect>
-      <x>540</x>
-      <y>460</y>
-      <width>51</width>
-      <height>24</height>
-     </rect>
-    </property>
-    <property name="toolTip">
-     <string>Hit enter to move.</string>
-    </property>
-   </widget>
-   <widget class="QPushButton" name="pb_ztrans_minus">
-    <property name="geometry">
-     <rect>
-      <x>595</x>
-      <y>460</y>
-      <width>31</width>
-      <height>24</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>&lt;&lt;</string>
-    </property>
-   </widget>
-   <widget class="QLineEdit" name="ed_ztrans_step">
-    <property name="geometry">
-     <rect>
-      <x>630</x>
-      <y>460</y>
-      <width>51</width>
-      <height>24</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>0.01</string>
-    </property>
-    <property name="alignment">
-     <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-    </property>
-   </widget>
-   <widget class="QPushButton" name="pb_ztrans_plus">
-    <property name="geometry">
-     <rect>
-      <x>685</x>
-      <y>460</y>
-      <width>31</width>
-      <height>24</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>&gt;&gt;</string>
-    </property>
-   </widget>
-   <widget class="QFrame" name="frame_ztrans_reg">
-    <property name="geometry">
-     <rect>
-      <x>370</x>
-      <y>490</y>
-      <width>221</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">QFrame#frame_ztrans_reg { background-color: #fffde7; }</string>
-    </property>
-    <property name="frameShape">
-     <enum>QFrame::Box</enum>
-    </property>
-    <property name="frameShadow">
-     <enum>QFrame::Raised</enum>
-    </property>
-    <widget class="QPushButton" name="pb_ztrans_enable">
-     <property name="geometry">
-      <rect>
-       <x>6</x>
-       <y>6</y>
-       <width>65</width>
-       <height>26</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>12</pointsize>
-      </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">background-color: rgb(255, 180, 255);</string>
-     </property>
-     <property name="text">
-      <string>No</string>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="pb_ztrans_in">
-     <property name="geometry">
-      <rect>
-       <x>80</x>
-       <y>6</y>
-       <width>61</width>
-       <height>26</height>
-      </rect>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">background-color: rgb(255, 180, 255);</string>
-     </property>
-     <property name="text">
-      <string>Move to</string>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="pb_ztrans_out">
-     <property name="geometry">
-      <rect>
-       <x>150</x>
-       <y>6</y>
-       <width>44</width>
-       <height>26</height>
-      </rect>
-     </property>
-     <property name="visible">
-      <bool>false</bool>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">background-color: rgb(255, 180, 255);</string>
-     </property>
-     <property name="text">
-      <string>Out</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="lbl_ztrans_ax0">
-     <property name="geometry">
-      <rect>
-       <x>150</x>
-       <y>10</y>
-       <width>71</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>move-set</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="lbl_ztrans_in_0">
-     <property name="geometry">
-      <rect>
-       <x>80</x>
-       <y>38</y>
-       <width>61</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-    <widget class="QLabel" name="lbl_ztrans_out_0">
-     <property name="geometry">
-      <rect>
-       <x>134</x>
-       <y>38</y>
-       <width>58</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="visible">
-      <bool>false</bool>
-     </property>
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-    <widget class="QSlider" name="slider_ztrans_moveSet">
-     <property name="geometry">
-      <rect>
-       <x>150</x>
-       <y>36</y>
-       <width>58</width>
-       <height>22</height>
-      </rect>
-     </property>
-     <property name="maximum">
-      <number>1</number>
-     </property>
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-    </widget>
-    <widget class="QLabel" name="lbl_ztrans_status">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>40</y>
-       <width>61</width>
-       <height>26</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>12</pointsize>
-      </font>
-     </property>
-     <property name="text">
-      <string>---</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
-   </widget>
-   <widget class="QListWidget" name="listWidget_ztransList">
-    <property name="geometry">
-     <rect>
-      <x>595</x>
-      <y>490</y>
-      <width>126</width>
-      <height>46</height>
-     </rect>
-    </property>
-   </widget>
-   <widget class="QPushButton" name="pb_ztrans_addPos">
-    <property name="geometry">
-     <rect>
-      <x>595</x>
-      <y>536</y>
-      <width>126</width>
-      <height>26</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Edit...</string>
-    </property>
-   </widget>
    <widget class="QPushButton" name="pushButton_xrayEyeIn">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>380</y>
-      <width>101</width>
+      <x>550</x>
+      <y>435</y>
+      <width>81</width>
       <height>28</height>
      </rect>
     </property>
     <property name="text">
-     <string>X-ray Eye In</string>
+     <string>In</string>
     </property>
    </widget>
    <widget class="QPushButton" name="pushButton_xrayEyeOut">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>410</y>
-      <width>101</width>
+      <x>550</x>
+      <y>467</y>
+      <width>81</width>
       <height>28</height>
      </rect>
     </property>
     <property name="text">
-     <string>X-ray Eye Out</string>
+     <string>Out</string>
     </property>
    </widget>
    <widget class="QPushButton" name="pushButton_stopAll">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>508</y>
-      <width>91</width>
+      <x>640</x>
+      <y>471</y>
+      <width>81</width>
       <height>51</height>
      </rect>
     </property>
@@ -2456,15 +2191,16 @@ QSlider::add-page:horizontal {
      <string notr="true">background-color: #cc0000; color: white;</string>
     </property>
     <property name="text">
-     <string>Stop All</string>
+     <string>Stop
+All</string>
     </property>
    </widget>
    <widget class="QPushButton" name="pushButton_exit">
     <property name="geometry">
      <rect>
-      <x>120</x>
-      <y>384</y>
-      <width>61</width>
+      <x>640</x>
+      <y>413</y>
+      <width>81</width>
       <height>51</height>
      </rect>
     </property>
@@ -2475,43 +2211,11 @@ QSlider::add-page:horizontal {
      <string>Exit</string>
     </property>
    </widget>
-   <widget class="QLabel" name="label_fontSize">
-    <property name="geometry">
-     <rect>
-      <x>20</x>
-      <y>440</y>
-      <width>66</width>
-      <height>22</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Font Size</string>
-    </property>
-   </widget>
-   <widget class="QSpinBox" name="spinBox_fontSize">
-    <property name="geometry">
-     <rect>
-      <x>90</x>
-      <y>440</y>
-      <width>56</width>
-      <height>26</height>
-     </rect>
-    </property>
-    <property name="minimum">
-     <number>6</number>
-    </property>
-    <property name="maximum">
-     <number>24</number>
-    </property>
-    <property name="value">
-     <number>10</number>
-    </property>
-   </widget>
    <widget class="QFrame" name="frame_allInOut">
     <property name="geometry">
      <rect>
-      <x>110</x>
-      <y>510</y>
+      <x>370</x>
+      <y>520</y>
       <width>251</width>
       <height>46</height>
      </rect>
@@ -2582,8 +2286,8 @@ QSlider::add-page:horizontal {
    <widget class="QPushButton" name="pb_saxsz_plus">
     <property name="geometry">
      <rect>
-      <x>685</x>
-      <y>399</y>
+      <x>325</x>
+      <y>400</y>
       <width>31</width>
       <height>24</height>
      </rect>
@@ -2595,8 +2299,8 @@ QSlider::add-page:horizontal {
    <widget class="QPushButton" name="pb_saxsz_minus">
     <property name="geometry">
      <rect>
-      <x>595</x>
-      <y>399</y>
+      <x>235</x>
+      <y>400</y>
       <width>31</width>
       <height>24</height>
      </rect>
@@ -2608,8 +2312,8 @@ QSlider::add-page:horizontal {
    <widget class="QLineEdit" name="ed_saxsz_step">
     <property name="geometry">
      <rect>
-      <x>630</x>
-      <y>399</y>
+      <x>270</x>
+      <y>400</y>
       <width>51</width>
       <height>24</height>
      </rect>
@@ -2624,8 +2328,8 @@ QSlider::add-page:horizontal {
    <widget class="QLineEdit" name="ed_mv_saxsz">
     <property name="geometry">
      <rect>
-      <x>540</x>
-      <y>399</y>
+      <x>180</x>
+      <y>400</y>
       <width>51</width>
       <height>24</height>
      </rect>
@@ -2637,9 +2341,9 @@ QSlider::add-page:horizontal {
    <widget class="QLabel" name="lbl_rb_saxsz">
     <property name="geometry">
      <rect>
-      <x>490</x>
-      <y>400</y>
-      <width>51</width>
+      <x>110</x>
+      <y>401</y>
+      <width>71</width>
       <height>22</height>
      </rect>
     </property>
@@ -2650,9 +2354,9 @@ QSlider::add-page:horizontal {
    <widget class="QLabel" name="lbl_name_saxsz">
     <property name="geometry">
      <rect>
-      <x>374</x>
-      <y>400</y>
-      <width>111</width>
+      <x>14</x>
+      <y>401</y>
+      <width>91</width>
       <height>22</height>
      </rect>
     </property>
@@ -2670,8 +2374,8 @@ QSlider::add-page:horizontal {
    <widget class="QFrame" name="frame">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>470</y>
+      <x>550</x>
+      <y>375</y>
       <width>171</width>
       <height>31</height>
      </rect>
@@ -2696,7 +2400,7 @@ QSlider::add-page:horizontal {
      </property>
      <property name="font">
       <font>
-       <pointsize>11</pointsize>
+       <pointsize>10</pointsize>
        <weight>75</weight>
        <bold>true</bold>
       </font>
@@ -2706,14 +2410,248 @@ QSlider::add-page:horizontal {
      </property>
     </widget>
    </widget>
+   <widget class="QWidget" name="col_ztrans" native="true">
+    <property name="geometry">
+     <rect>
+      <x>5</x>
+      <y>490</y>
+      <width>361</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
+    </property>
+    <widget class="QPushButton" name="pb_xeExp_stepDown">
+     <property name="geometry">
+      <rect>
+       <x>230</x>
+       <y>15</y>
+       <width>51</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: #ab47bc; color: white;</string>
+     </property>
+     <property name="text">
+      <string>0.1x</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ed_xeExp">
+     <property name="geometry">
+      <rect>
+       <x>175</x>
+       <y>12</y>
+       <width>51</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 255, 255);</string>
+     </property>
+     <property name="text">
+      <string>0.002</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_xeExp_stepUp">
+     <property name="geometry">
+      <rect>
+       <x>285</x>
+       <y>15</y>
+       <width>51</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: #ab47bc; color: white;</string>
+     </property>
+     <property name="text">
+      <string>10x</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_xeExp_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>5</y>
+       <width>91</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>X-ray eye
+exp time (s)</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_xeExp_RBV">
+     <property name="geometry">
+      <rect>
+       <x>110</x>
+       <y>17</y>
+       <width>61</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.002</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QLabel" name="lbl_zheader_name_2">
+    <property name="geometry">
+     <rect>
+      <x>552</x>
+      <y>408</y>
+      <width>81</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>X-ray Eye</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_Less">
+    <property name="geometry">
+     <rect>
+      <x>670</x>
+      <y>532</y>
+      <width>51</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(50, 255, 50);</string>
+    </property>
+    <property name="text">
+     <string>Less</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pb_ztrans_plus">
+    <property name="geometry">
+     <rect>
+      <x>325</x>
+      <y>460</y>
+      <width>31</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>&gt;&gt;</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pb_ztrans_minus">
+    <property name="geometry">
+     <rect>
+      <x>235</x>
+      <y>460</y>
+      <width>31</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>&lt;&lt;</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lbl_rb_ztrans">
+    <property name="geometry">
+     <rect>
+      <x>111</x>
+      <y>461</y>
+      <width>71</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>0.0000</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="ed_mv_ztrans">
+    <property name="geometry">
+     <rect>
+      <x>180</x>
+      <y>460</y>
+      <width>51</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="toolTip">
+     <string>Hit enter to move.</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="ed_ztrans_step">
+    <property name="geometry">
+     <rect>
+      <x>270</x>
+      <y>460</y>
+      <width>51</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>0.01</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lbl_name_ztrans">
+    <property name="geometry">
+     <rect>
+      <x>15</x>
+      <y>461</y>
+      <width>91</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>BSZP_Ztrans</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>732</width>
-     <height>21</height>
+     <width>733</width>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -2724,6 +2662,7 @@ QSlider::add-page:horizontal {
     <addaction name="separator"/>
     <addaction name="actionExportPositions"/>
     <addaction name="actionImportPositions"/>
+    <addaction name="actionOpen_user_GUI"/>
    </widget>
    <widget class="QMenu" name="menuEdit">
     <property name="title">
@@ -2764,7 +2703,7 @@ QSlider::add-page:horizontal {
   </action>
   <action name="actionRedefineMotor">
    <property name="text">
-    <string>Redefine motor...</string>
+    <string>Redefine motor position...</string>
    </property>
   </action>
   <action name="actionSAXSbs_in_all">
@@ -2789,6 +2728,11 @@ QSlider::add-page:horizontal {
   <action name="actionOut">
    <property name="text">
     <string>Out</string>
+   </property>
+  </action>
+  <action name="actionOpen_user_GUI">
+   <property name="text">
+    <string>Open user GUI</string>
    </property>
   </action>
  </widget>

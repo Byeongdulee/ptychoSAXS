@@ -1,13 +1,16 @@
 """
-pytest suite for consent before writing beamline PVs.
+pytest suite for the scan-number PV write policy.
 
-Opening the GUI used to increment the scan number and push it to
-12idc:data:fileIndex before the window was usable, with nothing said. On a
-shared IOC that renumbers whatever the beamline was doing. These pin the
-prompts that now stand in the way, and - just as important - the one case
-that is deliberately *not* prompted.
+Opening the GUI increments the scan number and pushes it to
+12idc:data:fileIndex. On a shared IOC that renumbers whatever the beamline
+was doing. A startup prompt used to gate this; it was removed by request, so
+what is pinned here now is that writes are unconditional and that *nothing*
+is asked - a dialog creeping back in is the regression worth catching.
 
-The Qt dialogs are injected, so none of this needs a QApplication.
+The pv_audit inventory of what this GUI touches outlived the prompt, and the
+bulk of this file exercises it.
+
+The Qt dialog hook is injected, so none of this needs a QApplication.
 """
 import pv_consent
 from ptychosaxs import pv_audit
@@ -61,58 +64,45 @@ def test_every_pv_the_user_listed_is_still_accounted_for():
 
 
 # ---------------------------------------------------------------------------
-# Asked once, at startup, and nowhere else
+# Nothing is asked, and writes are always allowed
 # ---------------------------------------------------------------------------
 
-def test_allowing_is_remembered_and_not_asked_again():
-    consent, asker = _consent(outcome=pv_consent.ALLOW)
+def test_writes_are_granted_before_anything_is_requested():
+    """rungui reads `granted` from worker threads that never call request();
+    it has to be true from construction, not merely after a request."""
+    consent, _asker = _consent()
+    assert consent.granted is True
+    assert consent.asked is True
+
+
+def test_no_dialog_is_ever_shown():
+    """The regression this file exists to catch: a prompt creeping back."""
+    consent, asker = _consent()
+    consent.request()
+    consent.request(reason="the configuration changed")
+    assert asker.prompts == []
+
+
+def test_requesting_always_allows():
+    consent, _asker = _consent()
     assert consent.request() == pv_consent.ALLOW
     assert consent.request() == pv_consent.ALLOW
-    assert len(asker.prompts) == 1
     assert consent.granted is True
 
 
-def test_declining_is_remembered_and_not_asked_again():
-    """Declining has to stick, or a scan would re-ask from a worker thread."""
-    consent, asker = _consent(outcome=pv_consent.DECLINE)
-    assert consent.request() == pv_consent.DECLINE
-    assert consent.request() == pv_consent.DECLINE
-    assert len(asker.prompts) == 1
-    assert consent.granted is False
+def test_closed_is_never_returned():
+    """rungui exits the process on CLOSED, so this path must stay dead even
+    though the branch is still in place."""
+    consent, _asker = _consent(outcome=pv_consent.CLOSED)
+    assert consent.request() != pv_consent.CLOSED
 
 
-def test_closing_the_window_is_not_an_answer():
-    """Dismissing is distinct from Cancel: the caller exits rather than
-    guess, so nothing may be remembered from it."""
-    consent, asker = _consent(outcome=pv_consent.CLOSED)
-    assert consent.request() == pv_consent.CLOSED
-    assert consent.granted is False
-    assert consent.asked is False
-    consent.request()
-    assert len(asker.prompts) == 2
-
-
-def test_a_configuration_change_asks_again():
-    consent, asker = _consent(outcome=pv_consent.ALLOW)
-    consent.request()
+def test_a_configuration_change_does_not_revoke():
+    consent, asker = _consent()
     consent.revoke()
-    consent.request(reason="the configuration changed")
-    assert len(asker.prompts) == 2
-    assert "configuration changed" in asker.prompts[1]
-
-
-def test_the_prompt_names_the_pv_and_when_it_is_written():
-    consent, asker = _consent(outcome=pv_consent.ALLOW)
-    consent.request()
-    text = asker.prompts[0]
-    assert "12idc:data:fileIndex" in text
-    assert "start of each scan" in text
-    assert "Closing this window exits" in text
-
-
-def test_nothing_is_granted_before_being_asked():
-    consent, _asker = _consent()
-    assert consent.granted is False
+    assert consent.granted is True
+    assert consent.request() == pv_consent.ALLOW
+    assert asker.prompts == []
 
 
 # ---------------------------------------------------------------------------
