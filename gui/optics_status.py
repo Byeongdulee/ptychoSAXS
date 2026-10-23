@@ -10,8 +10,7 @@ pre-scan check can never disagree about what "In" means.
 
 Deliberately Qt-free and hardware-free: it imports neither PyQt5 nor
 ptychosaxs, so rungui and handlers/ can use it without pulling in the panel's
-hardware imports or its sys.path mutation, and so tests/test_optics_status.py
-runs headlessly. Same split as alignment_flow.py and pv_consent.py.
+hardware imports, and so tests/test_optics_status.py runs headlessly. Same split as alignment_flow.py and pv_consent.py.
 """
 
 import configparser

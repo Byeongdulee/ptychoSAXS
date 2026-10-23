@@ -18,10 +18,7 @@ case phi on exactly that shape, so this class keeps it.
 
 import time
 
-try:
-    from .epics_motor import EpicsMotorController
-except ImportError:
-    from epics_motor import EpicsMotorController
+from .epics_motor import EpicsMotorController
 
 # ---------------------------------------------------------------------
 # EDIT THESE FOR YOUR SETUP

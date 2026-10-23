@@ -21,7 +21,7 @@ import math
 
 import pytest
 
-from direct_gonio import GONIO_AXES, GONIO_UNITS, SmaractGonioController
+from ptychosaxs.direct_gonio import GONIO_AXES, GONIO_UNITS, SmaractGonioController
 
 
 class _FakeCtl:

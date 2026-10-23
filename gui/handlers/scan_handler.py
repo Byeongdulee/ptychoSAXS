@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import QMessageBox, QInputDialog, QLabel, QLineEdit, QFileD
 
 # The upstream-optics motor/PV table, shared with the optics panel and
 # rungui's Check Upstream Optics report so the three cannot disagree.
-import optics_status as _optics_status
+from gui import optics_status as _optics_status
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
 import pyqtgraph as pg
 
@@ -58,14 +58,14 @@ if _DEBUG_DEVICES:
     class SOFTGLUE_Setup_Error(Exception):
         pass
 else:
-    from tools.detectors import DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
-    from tools.softglue import SOFTGLUE_Setup_Error
+    from ptychosaxs.tools.detectors import DET_MIN_READOUT_Error, DET_OVER_READOUT_SPEED_Error
+    from ptychosaxs.tools.softglue import SOFTGLUE_Setup_Error
 
 if _DEBUG_DG645:
     class DG645_Error(Exception):
         pass
 else:
-    from tools.dg645 import DG645_Error
+    from ptychosaxs.tools.dg645 import DG645_Error
 
 
 
@@ -442,7 +442,7 @@ class ScanHandler:
             return True
 
         try:
-            import optics_status
+            from gui import optics_status
 
             status = self.w.optics_status_report()
             ok, problems = optics_status.check_good_for_ptycho(status)
@@ -487,7 +487,7 @@ class ScanHandler:
             # Reuse the same report window the Check Upstream Optics button
             # opens, modally, then come back to this question.
             try:
-                from optics_status_dialog import OpticsStatusDialog
+                from gui.optics_status_dialog import OpticsStatusDialog
 
                 report = OpticsStatusDialog(
                     self.w.ui,
@@ -2648,7 +2648,7 @@ class ScanHandler:
         a missing one: an unmatched ZP gives ("unknown_optic", "", 1).
         Never raises -- a scan must not fail over a metadata lookup.
         """
-        import optics_status
+        from gui import optics_status
 
         try:
             status = self.w.optics_status_report()
@@ -3487,14 +3487,14 @@ class ScanHandler:
             if value:
                 self.ui.actionSAXS.setChecked(True)
                 if self.w.DEBUG_DEVICES:
-                    from debug_stubs import PilatusStub
+                    from ptychosaxs.debug.debug_stubs import PilatusStub
 
                     self.w.detector[0] = PilatusStub()
                 elif not self.detector_is_online(basename, "SAXS Pilatus",
                                                  self.ui.actionSAXS):
                     self.w.detector[0] = None
                 else:
-                    from tools.detectors import pilatus
+                    from ptychosaxs.tools.detectors import pilatus
 
                     self.w.detector[0] = pilatus(basename)
             else:
@@ -3508,14 +3508,14 @@ class ScanHandler:
             if value:
                 self.ui.actionWAXS.setChecked(True)
                 if self.w.DEBUG_DEVICES:
-                    from debug_stubs import PilatusStub
+                    from ptychosaxs.debug.debug_stubs import PilatusStub
 
                     self.w.detector[1] = PilatusStub()
                 elif not self.detector_is_online(basename, "WAXS Pilatus",
                                                  self.ui.actionWAXS):
                     self.w.detector[1] = None
                 else:
-                    from tools.detectors import pilatus
+                    from ptychosaxs.tools.detectors import pilatus
 
                     self.w.detector[1] = pilatus(basename)
             else:
@@ -3527,11 +3527,11 @@ class ScanHandler:
             if value:
                 self.w.switch_MCS(True)
                 if self.w.DEBUG_DEVICES:
-                    from debug_stubs import StruckStub
+                    from ptychosaxs.debug.debug_stubs import StruckStub
 
                     self.w.detector[2] = StruckStub()
                 else:
-                    from tools.struck import struck
+                    from ptychosaxs.tools.struck import struck
 
                     self.w.detector[2] = struck("12idc:")
             else:
@@ -3551,11 +3551,11 @@ class ScanHandler:
                 self.ui.actionDante.setChecked(True)
                 self.ui.actionXSP3.setChecked(False)
                 if self.w.DEBUG_DEVICES:
-                    from debug_stubs import PilatusStub
+                    from ptychosaxs.debug.debug_stubs import PilatusStub
 
                     self.w.detector[4] = PilatusStub()
                 else:
-                    from tools.detectors import dante
+                    from ptychosaxs.tools.detectors import dante
 
                     self.w.detector[4] = dante(basename)
             else:
@@ -3569,11 +3569,11 @@ class ScanHandler:
                 self.ui.actionXSP3.setChecked(True)
                 self.ui.actionDante.setChecked(False)
                 if self.w.DEBUG_DEVICES:
-                    from debug_stubs import PilatusStub
+                    from ptychosaxs.debug.debug_stubs import PilatusStub
 
                     self.w.detector[4] = PilatusStub()
                 else:
-                    from tools.detectors import XSP
+                    from ptychosaxs.tools.detectors import XSP
 
                     self.w.detector[4] = XSP(basename)
             else:
@@ -3622,14 +3622,14 @@ class ScanHandler:
         if status:
             self.ui.actionSG.setChecked(True)
             if self.w.DEBUG_DEVICES:
-                from debug_stubs import SGStreamStub
+                from ptychosaxs.debug.debug_stubs import SGStreamStub
 
                 self.w.detector[3] = SGStreamStub()
             elif not self.detector_is_online(basename, "Softglue stream",
                                              self.ui.actionSG):
                 self.w.detector[3] = None
             else:
-                from tools.detectors import SGstream
+                from ptychosaxs.tools.detectors import SGstream
 
                 self.w.detector[3] = SGstream(basename, self.w.s12softglue)
             if self.ui.actionCapture_multi_frames_fly.isChecked():
@@ -7388,9 +7388,6 @@ class ScanHandler:
         elif cmd == "stepscan2d":
             self.w.stepscan2d(xmotor=xmotor, ymotor=ymotor)
 
-        elif cmd == "none":
-            self.runRequested.emit(0)
-
         elif cmd == "toggle":
             try:
                 val = data["controllerfly"]
@@ -7427,10 +7424,3 @@ class ScanHandler:
             return self.w.messages["recent error message"]
         else:
             print(f"Invalid command {cmd} is recieved.")
-
-    def run_cmd(self, n):
-        pass  # body was commented out / empty in original rungui.py
-
-    def set_mv(self, axis, pos):
-        motornumber = self.w.motornames.index(axis)
-        self.w.mv(motornumber=motornumber, val=pos)

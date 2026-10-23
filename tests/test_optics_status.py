@@ -1,7 +1,7 @@
 """Unit tests for gui/optics_status.py.
 
 No Qt, no EPICS, no hardware -- live positions are injected, and the ini is
-written to a tmp_path. conftest.py already puts gui/ on sys.path.
+written to a tmp_path.
 """
 
 import json
@@ -9,8 +9,8 @@ import textwrap
 
 import pytest
 
-import optics_status as os_mod
-from optics_status import (
+from gui import optics_status as os_mod
+from gui.optics_status import (
     BETWEEN, IN, OUT, UNDEFINED, BLOCKS, classify_block, classify_optic,
     check_good_for_ptycho, read_definitions, read_status,
 )

@@ -28,8 +28,8 @@ os.environ["PTYCHOSAXS_DEBUG_GONIO"] = "1"
 
 import pytest
 
-from debug_stubs import FakeMotorPV
-import motions_ver2
+from ptychosaxs.debug.debug_stubs import FakeMotorPV
+from ptychosaxs import motions_ver2
 
 
 @pytest.fixture
@@ -142,7 +142,7 @@ def test_mv_xy_falls_back_when_the_controller_cannot_coordinate(pts):
 def test_mv_xy_reaches_the_hexapod_deferred_move(pts):
     """End to end through the real controller: the coordinated path has to
     arrive at the IOC's deferred-moves handshake, not at two plain puts."""
-    from epics_hexapod import DEFER_OFF, DEFER_ON, DEFER_PV
+    from ptychosaxs.epics_hexapod import DEFER_OFF, DEFER_ON, DEFER_PV
 
     FakeMotorPV.reset()
     assert pts.mv_xy("X", 1.0, "Z", 2.0) is True

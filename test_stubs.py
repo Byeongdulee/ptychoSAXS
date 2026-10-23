@@ -2,12 +2,8 @@
 """Quick test to verify debug stubs have necessary methods."""
 
 import sys
-import os
 
-# Add debug path for stub imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'debug'))
-
-from debug_stubs import _HexapodInfo, PilatusStub, SGStreamStub, InstrumentsStub
+from ptychosaxs.debug.debug_stubs import _HexapodInfo, PilatusStub, SGStreamStub, InstrumentsStub
 
 def test_hexapod_stubs():
     """Test that _HexapodInfo has all required methods."""

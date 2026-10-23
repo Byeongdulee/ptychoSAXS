@@ -5,8 +5,7 @@ file -- MOTORS, AXIS_BLOCKS and SINGLE_ROWS. Remapping which physical axis a
 dpad or a row drives is a one-line edit there; no widget name, .ini key or
 signal connection needs to change with it.
 
-The full-featured original panel is kept alongside as optics_motors_full.py.
-Layout for both lives in gui/ui/.
+Layout lives in gui/ui/.
 """
 
 from PyQt5 import uic, QtCore
@@ -40,11 +39,11 @@ import json
 import os
 import sys
 
-from font_scaling import FontScaler
-from font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
-from ini_utils import INI_DIR, ensure_ini_defaults
-from optics_modes import fmt_seconds, OpticsModes
-from optics_status import (
+from gui.font_scaling import FontScaler
+from gui.font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
+from gui.ini_utils import INI_DIR, ensure_ini_defaults
+from gui.optics_modes import fmt_seconds, OpticsModes
+from gui.optics_status import (
     BLOCKS as _STATUS_BLOCKS,
     MOTORS,
     PV_BASES,
@@ -53,10 +52,10 @@ from optics_status import (
     IN as _IN,
     OUT as _OUT,
 )
-from pv_lineedit import MemoryPV, PVLineEdit
-from resize_utils import ProportionalResizer
-from ui_levels import LevelSwitcher
-from xray_eye import EYE_CMD_PV, EYE_EXPOSURE_PV, EYE_EXPOSURE_RBV_PV, XrayEye
+from gui.pv_lineedit import MemoryPV, PVLineEdit
+from gui.resize_utils import ProportionalResizer
+from gui.ui_levels import LevelSwitcher
+from gui.xray_eye import EYE_CMD_PV, EYE_EXPOSURE_PV, EYE_EXPOSURE_RBV_PV, XrayEye
 
 _GUI_DIR = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(_GUI_DIR, "ui")
@@ -90,11 +89,6 @@ try:
     from epics import PV
 except ImportError:
     PV = None  # replaced by FakePV in debug mode
-
-_repo_root = os.path.dirname(_GUI_DIR)
-sys.path.append(os.path.join(_repo_root, "debug"))
-if _repo_root not in sys.path:
-    sys.path.append(_repo_root)
 
 try:
     from ptychosaxs.optics import opticsbox, OSA, saxs_z, beamstop
@@ -715,7 +709,7 @@ class motor_control(QMainWindow):
         self._pv_cache = {}
 
         if debug_mode:
-            from debug_stubs import FakePV as _PV
+            from ptychosaxs.debug.debug_stubs import FakePV as _PV
         else:
             _PV = PV
         self.xray_eye = XrayEye(_PV, debug=debug_mode)
@@ -863,7 +857,7 @@ class motor_control(QMainWindow):
 
     def _build_controllers(self):
         if self.debug_mode:
-            from debug_stubs import (
+            from ptychosaxs.debug.debug_stubs import (
                 DebugBeamstop, DebugOpticsbox, DebugOSA, DebugSaxsZ)
             return {"opticsbox": DebugOpticsbox(), "OSA": DebugOSA(),
                     "saxs_z": DebugSaxsZ(), "beamstop": DebugBeamstop()}

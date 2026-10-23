@@ -17,9 +17,6 @@ async def create_server(loop):
     )
 
 class UDPserver(QtCore.QObject):
-    rangeChanged = QtCore.pyqtSignal(str, float, float, float, float)
-    runRequested = QtCore.pyqtSignal(int)
-    mvRequested = QtCore.pyqtSignal(str, float)
     jsonReceived = QtCore.pyqtSignal(dict)
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -40,8 +37,19 @@ class UDPserver(QtCore.QObject):
 
         try:
             json_message = json.loads(data)
-            print("JSON message received: " + str(json_message))
+        except (ValueError, UnicodeDecodeError) as exc:
+            # Report `data`, not `json_message`: on a parse failure the latter
+            # was never bound, so the old handler raised UnboundLocalError
+            # inside its own error path and lost the bad datagram entirely.
+            print(f"Invalid message from {addr}: {exc}; {bytes(data)[:200]!r}")
+            return
+
+        print("JSON message received: " + str(json_message))
+        try:
             self.jsonReceived.emit(json_message)
-        except:
-            print("Invalid message: ", json_message)
-            return_message = "Invalid message"
+        except Exception:
+            # A failure in the scan dispatch downstream must not kill the
+            # datagram handler, but it must not vanish either -- the old bare
+            # `except` swallowed these and then tripped over json_message.
+            import traceback
+            print("Error dispatching message:\n" + traceback.format_exc())

@@ -24,7 +24,7 @@ if DEBUG_QDS:
     qds = _QDSDebug()
 else:
     from qds.qds import ptycho_qudis, plot_position
-    from tools.softglue import sgz_pty
+    from ptychosaxs.tools.softglue import sgz_pty
     try:
         qds = ptycho_qudis()
         qds.get_position()

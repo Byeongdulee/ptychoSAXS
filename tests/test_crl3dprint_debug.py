@@ -27,11 +27,11 @@ import json
 
 import pytest
 
-import CRL_3dprint as crl
-from debug_stubs import FakeMotorPV, FakePV
-from epics_crl3dprint import MOTOR_SLOTS
-from epics_motor import FIELDS, EpicsMotorController
-from CRL_3dprint import DEFAULT_FONT_SIZE, _ensure_default_ini, _near
+from gui import CRL_3dprint as crl
+from ptychosaxs.debug.debug_stubs import FakeMotorPV, FakePV
+from ptychosaxs.epics_crl3dprint import MOTOR_SLOTS
+from ptychosaxs.epics_motor import FIELDS, EpicsMotorController
+from gui.CRL_3dprint import DEFAULT_FONT_SIZE, _ensure_default_ini, _near
 
 
 @pytest.fixture

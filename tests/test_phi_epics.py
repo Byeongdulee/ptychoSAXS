@@ -20,8 +20,8 @@ import math
 
 import pytest
 
-from debug_stubs import FakeMotorPV
-from epics_phi import (
+from ptychosaxs.debug.debug_stubs import FakeMotorPV
+from ptychosaxs.epics_phi import (
     MOTOR_SLOTS,
     SET_MODE_USE,
     PhiAxisController,

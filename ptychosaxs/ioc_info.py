@@ -17,10 +17,7 @@ an exception on the GUI thread.
 
 import time
 
-try:
-    from .epics_hexapod import ASYN_CNCT_PV, ASYN_CONNECTED
-except ImportError:
-    from epics_hexapod import ASYN_CNCT_PV, ASYN_CONNECTED
+from .epics_hexapod import ASYN_CNCT_PV, ASYN_CONNECTED
 
 # devIocStats fields, where the IOC loads it. iocAdminSoft.db publishes these
 # under the IOC's own prefix.

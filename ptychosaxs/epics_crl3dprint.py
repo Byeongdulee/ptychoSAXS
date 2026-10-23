@@ -12,10 +12,7 @@ Built on the generic, reusable driver in epics_motor.py - this file only
 adds the name<->record mapping for this specific rig.
 """
 
-try:
-    from .epics_motor import EpicsMotorController
-except ImportError:
-    from epics_motor import EpicsMotorController
+from .epics_motor import EpicsMotorController
 
 # ---------------------------------------------------------------------
 # EDIT THESE FOR YOUR SETUP

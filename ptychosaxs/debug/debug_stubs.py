@@ -24,10 +24,7 @@ DEBUG_MODE check.
 import time as _time
 import random as _random
 
-try:
-    from ptychosaxs.hexapod_traj import SimulatedTrajectory
-except ImportError:  # running with ptychosaxs/ itself on sys.path
-    from hexapod_traj import SimulatedTrajectory
+from ptychosaxs.hexapod_traj import SimulatedTrajectory
 
 
 # ---------------------------------------------------------------------------

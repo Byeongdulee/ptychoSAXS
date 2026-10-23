@@ -20,20 +20,12 @@ on GCS; see hexapod_traj.py.
 
 import time
 
-try:
-    from .epics_motor import (
-        CONNECT_TIMEOUT_S,
-        MOVE_TIMEOUT_S,
-        READ_TIMEOUT_S,
-        EpicsMotorController,
-    )
-except ImportError:
-    from epics_motor import (
-        CONNECT_TIMEOUT_S,
-        MOVE_TIMEOUT_S,
-        READ_TIMEOUT_S,
-        EpicsMotorController,
-    )
+from .epics_motor import (
+    CONNECT_TIMEOUT_S,
+    MOVE_TIMEOUT_S,
+    READ_TIMEOUT_S,
+    EpicsMotorController,
+)
 
 # ---------------------------------------------------------------------
 # EDIT THESE FOR YOUR SETUP

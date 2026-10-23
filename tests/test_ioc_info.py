@@ -11,7 +11,7 @@ Out of scope: real Channel Access. Every PV here is a fake.
 """
 import pytest
 
-import ioc_info
+from ptychosaxs import ioc_info
 
 
 class _FakePV:
@@ -100,7 +100,7 @@ def test_the_real_table_covers_the_motor_iocs():
 
 
 def test_hexapod_link_reports_up_down_and_unknown(fake_pv):
-    from epics_hexapod import ASYN_CNCT_PV, ASYN_CONNECTED
+    from ptychosaxs.epics_hexapod import ASYN_CNCT_PV, ASYN_CONNECTED
 
     assert ioc_info.hexapod_link_status(pv_class=fake_pv) is None  # IOC absent
     fake_pv.values = {ASYN_CNCT_PV: ASYN_CONNECTED}

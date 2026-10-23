@@ -5,10 +5,7 @@ from epics import caget, caput, PV
 
 beamlinePV = '12idc:'
 
-try:
-	from .ad_pilatus import AD_SG
-except:
-	from ad_pilatus import AD_SG
+from .ad_pilatus import AD_SG
 
 
 class SOFTGLUE_Setup_Error(Exception):

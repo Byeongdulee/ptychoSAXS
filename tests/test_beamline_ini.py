@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from beamline_ini import (
+from gui.beamline_ini import (
     Ini,
     SafeIni,
     ensure_default_ini,

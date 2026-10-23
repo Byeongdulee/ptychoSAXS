@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from handlers.scan_handler import ScanHandler
+from gui.handlers.scan_handler import ScanHandler
 
 
 # Real paths from the 12ID-C console and workstation.

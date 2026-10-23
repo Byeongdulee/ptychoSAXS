@@ -229,15 +229,10 @@ if _debug_on:
         print("         phi is simulated, so it reports as not connected; "
               "every other stage still scans.")
 
-# Path setup must come before any hardware import (including debug stubs)
 _gui_dir = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(_gui_dir, "ui")
-_repo_root = os.path.dirname(_gui_dir)
-if _repo_root not in sys.path:
-    sys.path.append(_repo_root)
-sys.path.append(os.path.join(_repo_root, "debug"))
 
-import pv_consent
+from gui import pv_consent
 from ptychosaxs import pv_audit
 
 if DEBUG_MODE:
@@ -251,7 +246,7 @@ if DEBUG_MODE:
 # Only the stubs this module instantiates are imported; the rest were dead
 # names that an import error would have hidden.
 if DEBUG_MOTORS or DEBUG_DEVICES or DEBUG_DG645:
-    from debug_stubs import (
+    from ptychosaxs.debug.debug_stubs import (
         ShutterStub,
         DG645Stub,
         SGZStub,
@@ -298,9 +293,9 @@ from PyQt5.QtCore import (
 )
 from asyncqt import QEventLoop
 
-from font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
-from ini_utils import INI_DIR
-from resize_utils import ProportionalResizer
+from gui.font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
+from gui.ini_utils import INI_DIR
+from gui.resize_utils import ProportionalResizer
 
 import pyqtgraph as pg
 
@@ -314,7 +309,7 @@ except ImportError:
 # which was imported behind a try/except that fell back to a no-op stub: on any
 # machine without it installed the GUI silently stopped remembering the working
 # folder, log filename, data basepaths, scan name and scan number.
-from beamline_ini import (
+from gui.beamline_ini import (
     SafeIni as _IniClass,
     ensure_default_ini as _ensure_default_ini,
     quote_list as _ini_quote_list,
@@ -333,8 +328,8 @@ if not DEBUG_MOTORS:
 # not, so it gets its own guard: an environment without that package can
 # still run everything else for real.
 if not DEBUG_DG645:
-    import tools.dg645 as dg645
-    from tools.dg645 import DG645_Error
+    import ptychosaxs.tools.dg645 as dg645
+    from ptychosaxs.tools.dg645 import DG645_Error
 else:
     class DG645_Error(Exception):
         """Stand-in for tools.dg645's, so the handlers' except clauses still
@@ -342,10 +337,10 @@ else:
 
 if not DEBUG_DEVICES:
     import epics
-    from tools.softglue import sgz_pty, SOFTGLUE_Setup_Error
-    from tools.struck import struck
-    from tools.shutter import shutter
-    from tools.detectors import (
+    from ptychosaxs.tools.softglue import sgz_pty, SOFTGLUE_Setup_Error
+    from ptychosaxs.tools.struck import struck
+    from ptychosaxs.tools.shutter import shutter
+    from ptychosaxs.tools.detectors import (
         pilatus,
         dante,
         SGstream,
@@ -356,9 +351,9 @@ if not DEBUG_DEVICES:
 
 # Infrastructure — only in fully non-debug mode (level 0/1/2 all skip this)
 if not DEBUG_MODE:
-    from network.server import UDPserver, create_server
+    from gui.network.server import create_server
     try:
-        from tools.files import scp
+        from ptychosaxs.tools.files import scp
     except ImportError:
         scp = None
 
@@ -687,9 +682,9 @@ class ptyco_main_control(QObject):
 
         # Handlers must be created immediately after the UI is loaded so that
         # any __init__ call to a delegated method (e.g. update_scannumber) works.
-        from handlers.motor_handler import MotorHandler
-        from handlers.scan_handler import ScanHandler
-        from handlers.status_handler import StatusHandler
+        from gui.handlers.motor_handler import MotorHandler
+        from gui.handlers.scan_handler import ScanHandler
+        from gui.handlers.status_handler import StatusHandler
 
         self.motor_handler = MotorHandler(self)
         self.scan_handler = ScanHandler(self)
@@ -2395,14 +2390,14 @@ class ptyco_main_control(QObject):
         One place both the Check Upstream Optics window and the pre-scan
         guard read from, so they can never disagree.
         """
-        import optics_status
+        from gui import optics_status
 
         return optics_status.read_status(caget=self._optics_caget())
 
     def _open_optics_status_window(self):
         """Show the upstream optics report. Non-modal, so it can stay open
         while motors are nudged from the optics GUI's separate process."""
-        from optics_status_dialog import OpticsStatusDialog
+        from gui.optics_status_dialog import OpticsStatusDialog
 
         window = getattr(self, "optics_status_window", None)
         if window is None:
@@ -2419,7 +2414,7 @@ class ptyco_main_control(QObject):
     def _open_macro_window(self):
         """Open (or raise) the non-modal scan macro window."""
         if getattr(self, "macro_window", None) is None:
-            from macro_window import MacroWindow
+            from gui.macro_window import MacroWindow
 
             self.macro_window = MacroWindow(self)
             apply_saved_font_size(self.macro_window)
@@ -2439,10 +2434,10 @@ class ptyco_main_control(QObject):
     # alignment window through the command PV's readback -- see gui/xray_eye.py.
 
     def _wire_xray_eye_menu(self):
-        from xray_eye import XrayEye
+        from gui.xray_eye import XrayEye
 
         if DEBUG_DEVICES:
-            from debug_stubs import FakePV as _PV
+            from ptychosaxs.debug.debug_stubs import FakePV as _PV
         else:
             _PV = epics.PV
         self.xray_eye = XrayEye(_PV, debug=DEBUG_DEVICES)
@@ -2472,7 +2467,7 @@ class ptyco_main_control(QObject):
     def _open_sample_alignment_window(self):
         """Open (or raise) the non-modal guided sample alignment window."""
         if getattr(self, "sample_alignment_window", None) is None:
-            from sample_alignment import SampleAlignmentWindow
+            from gui.sample_alignment import SampleAlignmentWindow
 
             self.sample_alignment_window = SampleAlignmentWindow(self)
         # SampleAlignmentWindow.show() also raises, activates, restarts the
@@ -2632,7 +2627,7 @@ class ptyco_main_control(QObject):
         # scan .ini because it is a per-operator UI preference, not a scan
         # parameter, and it is mirrored by the "Expert User" checkbox on the
         # alignment window's first page -- both are views of the one setting.
-        from sample_alignment import EXPERT_KEY, confirm_beamline_staff
+        from gui.sample_alignment import EXPERT_KEY, confirm_beamline_staff
 
         dlg.checkBox_expertMode.setChecked(
             QSettings("ptychoSAXS", "ptychoSAXS").value(
@@ -2941,29 +2936,11 @@ class ptyco_main_control(QObject):
         lbl.setToolTip("")
 
     # ── Qt signal slots ────────────────────────────────────────────────────
-    # Received from the UDP server (server_json.py) when running with --server.
-
-    @QtCore.pyqtSlot(str, float, float, float, float)
-    def set_data(self, axis, L, R, step, rt):
-        #        print(axis, L, R, rt, step)
-        motornumber = self.motornames.index(axis)
-        n = motornumber + 1
-        self.ui.findChild(QLineEdit, "ed_lup_%i_L" % n).setText(str(L))
-        self.ui.findChild(QLineEdit, "ed_lup_%i_R" % n).setText(str(R))
-        self.ui.findChild(QLineEdit, "ed_lup_%i_t" % n).setText(str(rt))
-        self.ui.findChild(QLineEdit, "ed_lup_%i_N" % n).setText(str(step))
+    # Received from the UDP server (gui/network/server.py).
 
     @QtCore.pyqtSlot(dict)
     def run_json(self, json_message):
         return self.scan_handler.run_json(json_message)
-
-    @QtCore.pyqtSlot(int)
-    def run_cmd(self, n):
-        return self.scan_handler.run_cmd(n)
-
-    @QtCore.pyqtSlot(str, float)
-    def set_mv(self, axis, pos):
-        return self.scan_handler.set_mv(axis, pos)
 
 
 # ==========================================================================
@@ -2998,18 +2975,8 @@ def main():
     with loop:
         if not DEBUG_MODE:
             _, protocol = loop.run_until_complete(create_server(loop))
-            protocol.rangeChanged.connect(main_panel.set_data)
-            protocol.runRequested.connect(main_panel.run_cmd)
-            protocol.mvRequested.connect(main_panel.set_mv)
             protocol.jsonReceived.connect(main_panel.run_json)
         loop.run_forever()
-
-
-def main_no_server():
-    # Non-server option
-    app = QApplication(sys.argv)
-    a = ptyco_main_control()
-    sys.exit(app.exec_())
 
 
 if __name__ == "__main__":

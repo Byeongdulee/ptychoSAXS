@@ -15,10 +15,7 @@ list, ismoving, a two-element get_speed), so motions_ver2.py, rungui.py and
 scan_handler.py reach them exactly as before.
 """
 
-try:
-    from .epics_motor import EpicsMotorController
-except ImportError:
-    from epics_motor import EpicsMotorController
+from .epics_motor import EpicsMotorController
 
 # ---------------------------------------------------------------------
 # EDIT THESE FOR YOUR SETUP

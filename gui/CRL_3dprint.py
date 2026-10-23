@@ -31,26 +31,21 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from font_utils import DEFAULT_FONT_SIZE, apply_font_size_to_tree
-from ini_utils import INI_DIR, ensure_ini_defaults
-from resize_utils import ProportionalResizer
-from handlers.scalar_scan import INI_DEFAULTS as SCALAR_SCAN_INI_DEFAULTS
-from handlers.scalar_scan import ScalarScanWindow
+from gui.font_utils import DEFAULT_FONT_SIZE, apply_font_size_to_tree
+from gui.ini_utils import INI_DIR, ensure_ini_defaults
+from gui.resize_utils import ProportionalResizer
+from gui.handlers.scalar_scan import INI_DEFAULTS as SCALAR_SCAN_INI_DEFAULTS
+from gui.handlers.scalar_scan import ScalarScanWindow
 
 _GUI_DIR = os.path.dirname(os.path.abspath(__file__))
 _UI_DIR = os.path.join(_GUI_DIR, "ui")
-_REPO_ROOT = os.path.dirname(_GUI_DIR)
-for _p in (os.path.join(_REPO_ROOT, "debug"), os.path.join(_REPO_ROOT, "ptychosaxs"), _REPO_ROOT):
-    if _p not in sys.path:
-        sys.path.append(_p)
-
 try:
     from epics import PV
 except ImportError:
     PV = None  # replaced by FakePV in debug mode
 
-from epics_crl3dprint import MOTOR_SLOTS as _RAW_MOTOR_SLOTS
-from epics_crl3dprint import CRLAxisController
+from ptychosaxs.epics_crl3dprint import MOTOR_SLOTS as _RAW_MOTOR_SLOTS
+from ptychosaxs.epics_crl3dprint import CRLAxisController
 
 _CRL_INI = os.path.join(INI_DIR, "CRL_3dprint.ini")
 
@@ -582,7 +577,7 @@ class CRL3DPrintControl(QObject):
         debug mode this is a purely in-memory fake, so no Channel Access
         traffic is generated and pyepics need not be installed."""
         if self.debug_mode:
-            from debug_stubs import FakeMotorPV
+            from ptychosaxs.debug.debug_stubs import FakeMotorPV
 
             return FakeMotorPV
         return PV
@@ -737,7 +732,7 @@ class CRL3DPrintControl(QObject):
 
     def _pv_class(self):
         if self.debug_mode:
-            from debug_stubs import FakePV
+            from ptychosaxs.debug.debug_stubs import FakePV
 
             return FakePV
         return PV
@@ -747,7 +742,7 @@ class CRL3DPrintControl(QObject):
         # window through the command PV's readback -- see gui/xray_eye.py.
         # This used to read the status PV with the opposite polarity to
         # optics_motors, so the two GUIs showed contradictory states.
-        from xray_eye import XrayEye
+        from gui.xray_eye import XrayEye
 
         self.xray_eye = XrayEye(self._pv_class(), debug=self.debug_mode)
         self._refresh_xrayeye_buttons()

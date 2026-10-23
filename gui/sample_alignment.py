@@ -26,7 +26,7 @@ from PyQt5.QtCore import QObject, QSettings, QTimer
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import QMessageBox
 
-from alignment_flow import (
+from gui.alignment_flow import (
     CLOSE,
     PHI_HIGH_DEFAULT,
     PHI_LOW_DEFAULT,
@@ -37,10 +37,10 @@ from alignment_flow import (
     iterative_script_lines,
     window_title,
 )
-from font_utils import apply_saved_font_size
-from ini_utils import INI_DIR
-from motor_rows import MotorRow, MotorRowTable
-from xray_eye import XrayEye
+from gui.font_utils import apply_saved_font_size
+from gui.ini_utils import INI_DIR
+from gui.motor_rows import MotorRow, MotorRowTable
+from gui.xray_eye import XrayEye
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _UI_PATH = os.path.join(_MODULE_DIR, "ui", "sample_alignment.ui")
@@ -311,7 +311,7 @@ class SampleAlignmentWindow(QObject):
 
     def _pv_class(self):
         if self._debug_devices():
-            from debug_stubs import FakePV
+            from ptychosaxs.debug.debug_stubs import FakePV
 
             return FakePV
         from epics import PV

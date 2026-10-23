@@ -24,8 +24,8 @@ import math
 
 import pytest
 
-from debug_stubs import FakeMotorPV
-from epics_hexapod import (
+from ptychosaxs.debug.debug_stubs import FakeMotorPV
+from ptychosaxs.epics_hexapod import (
     ASYN_CNCT_PV,
     DEFER_OFF,
     DEFER_ON,

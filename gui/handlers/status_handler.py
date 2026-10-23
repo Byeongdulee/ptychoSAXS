@@ -521,7 +521,7 @@ class StatusHandler:
         )
 
     def fitdata(self, filename="", datacolumn=2, xd=[], yd=[], dtype="wobble"):
-        import analysis.planeeqn as eqn
+        import ptychosaxs.analysis.planeeqn as eqn
 
         if self.w.parameters._qds_unit == QDS_UNIT_MM:
             eqn.POSITION_UNIT = eqn.POSITION_UNIT_MM

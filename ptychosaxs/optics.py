@@ -1,7 +1,4 @@
-try:
-    from .epicsmotor import epicsmotor, epicsslit
-except:
-    from epicsmotor import epicsmotor, epicsslit
+from .epicsmotor import epicsmotor, epicsslit
 
 ALL_MOTORS = ["12idcUC8:m2", "12idc:m14", "12idc:m10", "12idc:m11", "12idc:m12", "12idc:m13", "12ideSFT:m4", "12ideSFT:m5", "12idc:m5", "12idc:m6"]
 class ptyoptics(epicsmotor): # all motors

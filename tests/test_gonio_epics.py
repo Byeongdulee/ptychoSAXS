@@ -21,8 +21,8 @@ import math
 
 import pytest
 
-from debug_stubs import FakeMotorPV
-from epics_gonio import (
+from ptychosaxs.debug.debug_stubs import FakeMotorPV
+from ptychosaxs.epics_gonio import (
     MOTOR_SLOTS,
     SET_MODE_SET,
     SET_MODE_USE,

@@ -23,9 +23,9 @@ Out of scope:
 """
 import pytest
 
-from debug_stubs import FakeMotorPV
-from hexapod import HexapodFacade
-from hexapod_traj import (
+from ptychosaxs.debug.debug_stubs import FakeMotorPV
+from ptychosaxs.hexapod import HexapodFacade
+from ptychosaxs.hexapod_traj import (
     STATE_ABSENT,
     STATE_INCOMPATIBLE,
     STATE_PIHEXAPOD,
@@ -272,7 +272,7 @@ def test_the_transport_is_resolved_once():
     h = HexapodFacade(pv_class=FakeMotorPV, connect=True)
     h._traj = None
     h._traj_preference = "direct"
-    import hexapod_traj
+    from ptychosaxs import hexapod_traj
 
     original = hexapod_traj.make_trajectory_backend
     try:
@@ -281,7 +281,7 @@ def test_the_transport_is_resolved_once():
             importer=_module(_CountingHexapod, _WAVE_GEN_ID),
             prefer="direct", log=_QUIET,
         )
-        import hexapod as hexapod_module
+        from ptychosaxs import hexapod as hexapod_module
 
         hexapod_module.make_trajectory_backend = hexapod_traj.make_trajectory_backend
         assert h.can_fly is True
@@ -290,7 +290,7 @@ def test_the_transport_is_resolved_once():
         assert calls == ["10.0.0.1"]
     finally:
         hexapod_traj.make_trajectory_backend = original
-        import hexapod as hexapod_module
+        from ptychosaxs import hexapod as hexapod_module
 
         hexapod_module.make_trajectory_backend = original
 
@@ -298,7 +298,7 @@ def test_the_transport_is_resolved_once():
 def test_facade_forwards_trajectory_calls_verbatim():
     FakeMotorPV.reset()
     device = _CompleteHexapod("10.0.0.1")
-    from hexapod_traj import PiHexapodTrajectory
+    from ptychosaxs.hexapod_traj import PiHexapodTrajectory
 
     h = HexapodFacade(
         pv_class=FakeMotorPV,
@@ -363,7 +363,7 @@ def test_get_records_is_refused_over_the_epics_transport():
     """Draining DRR? through asyn_1 is one CA transaction per scan point;
     a 3000-point attempt took the IOC down. The fly scan does not need it,
     so the transport stays available and only this call refuses."""
-    from hexapod_traj import PiHexapodTrajectory, TrajectoryUnavailable
+    from ptychosaxs.hexapod_traj import PiHexapodTrajectory, TrajectoryUnavailable
 
     backend = PiHexapodTrajectory(_CompleteHexapod("12idbHXP"), _WAVE_GEN_ID,
                                   transport="epics", address="12idbHXP")
@@ -374,7 +374,7 @@ def test_get_records_is_refused_over_the_epics_transport():
 
 
 def test_get_records_still_works_over_the_direct_transport():
-    from hexapod_traj import PiHexapodTrajectory
+    from ptychosaxs.hexapod_traj import PiHexapodTrajectory
 
     device = _CompleteHexapod("10.0.0.1")
     backend = PiHexapodTrajectory(device, _WAVE_GEN_ID, transport="direct",

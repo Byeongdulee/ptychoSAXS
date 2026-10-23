@@ -26,8 +26,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import QSettings
 
-import optics_status
-from font_utils import apply_saved_font_size
+from gui import optics_status
+from gui.font_utils import apply_saved_font_size
 
 # Same hexes the optics panel's status pills use, so the two windows agree on
 # sight. UNDEFINED is the one state the panel has no colour for.

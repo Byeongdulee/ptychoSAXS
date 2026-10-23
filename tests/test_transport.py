@@ -139,7 +139,7 @@ def test_a_missing_library_falls_back_instead_of_raising(monkeypatch, capsys):
     and the GUI still starts - that is the whole design."""
     _all_simulated(monkeypatch)
     monkeypatch.setenv(t.ENV_PHI_ACS, "1")
-    import motions_ver2
+    from ptychosaxs import motions_ver2
 
     def _explode(driver):
         if driver == t.DIRECT:
@@ -155,7 +155,7 @@ def test_a_missing_library_falls_back_instead_of_raising(monkeypatch, capsys):
 def test_a_mistyped_switch_reason_reaches_the_operator(monkeypatch, capsys):
     _all_simulated(monkeypatch)
     monkeypatch.setenv(t.ENV_HEXAPOD_TRANSPORT, "epcis")
-    import motions_ver2
+    from ptychosaxs import motions_ver2
 
     monkeypatch.setitem(motions_ver2._BUILDERS, "hexapod", lambda d: d)
     _controller, got = motions_ver2.build_controller("hexapod", simulated=False)
@@ -166,6 +166,6 @@ def test_a_mistyped_switch_reason_reaches_the_operator(monkeypatch, capsys):
 def test_builders_and_choices_cover_the_same_stages():
     """A stage in one and not the other is either a switch with nothing
     behind it, or a driver nobody can select."""
-    import motions_ver2
+    from ptychosaxs import motions_ver2
 
     assert set(motions_ver2._BUILDERS) == set(t.CHOICES) == set(t.STAGES)

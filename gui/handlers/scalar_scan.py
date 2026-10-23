@@ -32,7 +32,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from font_utils import DEFAULT_FONT_SIZE, apply_font_size_to_tree
+from gui.font_utils import DEFAULT_FONT_SIZE, apply_font_size_to_tree
 
 # Scaler channels this codebase already treats as "the scalars" for NeXus
 # master files (see gui/handlers/nexus_metadata_config.py SHARED_METADATA_MAP).

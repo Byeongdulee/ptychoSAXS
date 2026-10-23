@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import QLabel, QLineEdit, QMenu
 from PyQt5.QtCore import Qt, QPoint
 
 if TYPE_CHECKING:
-    from rungui import ptyco_main_control  # avoid circular import at runtime
+    from gui.rungui import ptyco_main_control  # avoid circular import at runtime
 
 
 class MotorHandler:
@@ -154,7 +154,7 @@ class MotorHandler:
         self.w.pts.set_speed(self.w.pts.hexapod.axes[0], 5, None)
 
     def mv(self, motornumber=-1, val=None):
-        from rungui import move
+        from gui.rungui import move
         if motornumber < 0:
             pb = self.w.sender()
             objname = pb.objectName()
@@ -169,7 +169,7 @@ class MotorHandler:
             try:
                 val = float(val_text)
             except:
-                from rungui import showerror
+                from gui.rungui import showerror
                 showerror('Text box is empty.')
                 return
         w = move(self.w.pts, axis, val)
@@ -177,7 +177,7 @@ class MotorHandler:
         self.updatepos(axis)
 
     def mvr(self, motornumber=-1, sign=1, val=0):
-        from rungui import mover
+        from gui.rungui import mover
         if motornumber == -1:
             pb = self.w.sender()
             objname = pb.objectName()

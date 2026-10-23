@@ -20,30 +20,17 @@ need to know in advance - the GUI, deciding whether to offer a fly scan - ask
 can_fly, which answers without connecting.
 """
 
-try:
-    from .epics_hexapod import HexapodAxisController
-    from .gcs_hexapod import GcsAxisController
-    from .transport import DIRECT, EPICS, SIMULATED, TransportUnavailable
-    from .hexapod_traj import (
-        PiHexapodTrajectory,
-        TRAJ_ATTRS,
-        TRAJ_METHODS,
-        SimulatedTrajectory,
-        TrajectoryUnavailable,
-        make_trajectory_backend,
-    )
-except ImportError:  # imported as a bare module, not as part of the package
-    from epics_hexapod import HexapodAxisController
-    from gcs_hexapod import GcsAxisController
-    from transport import DIRECT, EPICS, SIMULATED, TransportUnavailable
-    from hexapod_traj import (
-        PiHexapodTrajectory,
-        TRAJ_ATTRS,
-        TRAJ_METHODS,
-        SimulatedTrajectory,
-        TrajectoryUnavailable,
-        make_trajectory_backend,
-    )
+from .epics_hexapod import HexapodAxisController
+from .gcs_hexapod import GcsAxisController
+from .transport import DIRECT, EPICS, SIMULATED, TransportUnavailable
+from .hexapod_traj import (
+    PiHexapodTrajectory,
+    TRAJ_ATTRS,
+    TRAJ_METHODS,
+    SimulatedTrajectory,
+    TrajectoryUnavailable,
+    make_trajectory_backend,
+)
 
 # The C-887's own address, for the direct GCS connection. pihexapod carries a
 # default too, but it has been wrong before; this is the verified one.
@@ -294,7 +281,7 @@ def make_hexapod(transport=EPICS, pv_class=None, address=HEXAPOD_IP,
     """
     if transport == SIMULATED:
         if pv_class is None:
-            from debug_stubs import FakeMotorPV  # debug/ is on sys.path in debug mode
+            from ptychosaxs.debug.debug_stubs import FakeMotorPV
             pv_class = FakeMotorPV
         return HexapodFacade(pv_class=pv_class, traj=SimulatedTrajectory(),
                              connect=connect)

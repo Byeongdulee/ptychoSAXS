@@ -34,9 +34,9 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-import optics_status
-from pv_lineedit import PVLineEdit
-from xray_eye import EYE_EXPOSURE_PV, EYE_EXPOSURE_RBV_PV
+from gui import optics_status
+from gui.pv_lineedit import PVLineEdit
+from gui.xray_eye import EYE_EXPOSURE_PV, EYE_EXPOSURE_RBV_PV
 
 # Below this the optics can be retracted with the beam on the detector; at or
 # above it the SAXS beamstop goes in first. keV, read from PHOTON_ENERGY_PV.

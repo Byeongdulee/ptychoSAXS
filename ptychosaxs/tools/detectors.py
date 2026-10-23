@@ -2,10 +2,7 @@ from epics import caget, caput, PV
 import time
 beamlinePV = '12idc:'
 
-try:
-	from .ad_pilatus import AD_Pilatus, AD_Dante, AD_XSP, AD_SG, EIGERMODE, PILATUSMODE
-except:
-	from ad_pilatus import AD_Pilatus, AD_Dante, AD_XSP, AD_SG, EIGERMODE, PILATUSMODE
+from .ad_pilatus import AD_Pilatus, AD_Dante, AD_XSP, AD_SG, EIGERMODE, PILATUSMODE
 #pil = AD_Pilatus('12idcPIL:')
 
 class DET_MIN_READOUT_Error(Exception):
