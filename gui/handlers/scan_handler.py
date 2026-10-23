@@ -25,6 +25,7 @@ from gui import optics_status as _optics_status
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
 import pyqtgraph as pg
 
+from ptychosaxs.api import guards as guard_checks
 from ptychosaxs.api import scanplan
 from ptychosaxs.hexapod_traj import TrajectoryUnavailable
 
@@ -146,7 +147,7 @@ class ScanHandler:
     # occasionally need longer than that to be ready for the next slice's trigger.
     OVERHEAD_FLY3D_PHI = 4.0  # seconds
     # Show a confirmation dialog before starting scans larger than this.
-    LARGE_SCAN_THRESHOLD = 250  # positions
+    LARGE_SCAN_THRESHOLD = guard_checks.LARGE_SCAN_THRESHOLD
     # 1-indexed motor numbers whose positions are saved/restored by the
     # Save Current / Go To Saved buttons.  Adjust this list as needed.
     SAVED_POSITION_MOTORS = [1, 2, 3, 7, 8, 9]
@@ -159,20 +160,12 @@ class ScanHandler:
     # exceeding the hardware's own limit otherwise makes the motion controller
     # (the hexapod) reject the move command outright mid-scan.
     # Edit these values directly to change the limit.
-    MAX_VELOCITY = {
-        "X": 0.2,     # mm/s
-        "Z": 0.2,     # mm/s
-        "phi": 37.0,  # deg/s
-    }
-    # Minimum allowed fly velocity per axis (same units/keys as MAX_VELOCITY).
-    # Enforced alongside MAX_VELOCITY by _check_velocity_limits.
-    # Edit these values directly to change the limit.
-    MIN_VELOCITY = {
-        "X": 0.00024,    # mm/s
-        "Z": 0.00024,    # mm/s
-
-        "phi": 0.01,  # deg/s
-    }
+    # The numbers themselves are in ptychosaxs/api/guards.py. They stop the
+    # hexapod being commanded past what it will accept, and having them as
+    # attributes of a Qt handler meant they could only be read by importing
+    # a GUI. Aliased here because this file names them in several places.
+    MAX_VELOCITY = guard_checks.MAX_VELOCITY
+    MIN_VELOCITY = guard_checks.MIN_VELOCITY
 
     def __init__(self, window) -> None:
         self.w = window
@@ -274,70 +267,48 @@ class ScanHandler:
         """See ptychosaxs.api.scanplan.format_duration."""
         return scanplan.format_duration(t)
 
-    def _confirm_large_scan(self, Ntot, tm, overhead):
-        """Return True to proceed, False to abort.
+    def _ask(self, guard) -> bool:
+        """Put one Guard to the operator. True if the scan may start.
 
-        When Ntot > LARGE_SCAN_THRESHOLD, shows a dialog with the position
-        count and estimated time (same formula as label_estT).
+        The single place this file turns a decision into a dialog. The
+        decision itself is made by a pure function in
+        ptychosaxs/api/guards.py, so the same check can be run by a macro,
+        the CLI or a test, none of which have a screen.
         """
-        Ntot = int(round(Ntot))
-        if Ntot <= self.LARGE_SCAN_THRESHOLD:
+        if guard is None:
             return True
-        if getattr(self.w, "macro_running", False):
-            # A macro is driving scans unattended -- proceed without
-            # blocking on a Proceed/Cancel dialog nobody is there to click.
-            return True
-        est = Ntot * (tm + overhead)
-        msg = (
-            f"This scan has {Ntot} positions.\n"
-            f"Estimated time: {self._fmt_time(est)}\n\n"
-            "Proceed with scan?"
-        )
         dlg = QMessageBox(self.w.ui)
-        dlg.setWindowTitle("Large Scan")
-        dlg.setText(msg)
-        dlg.setIcon(QMessageBox.Question)
-        ok_btn = dlg.addButton("Proceed", QMessageBox.AcceptRole)
-        dlg.addButton(QMessageBox.Cancel)
+        dlg.setWindowTitle(guard.title)
+        dlg.setText(guard.text)
+        dlg.setIcon(QMessageBox.Question if guard.kind == guard_checks.CONFIRM
+                    else QMessageBox.Warning)
+        buttons = {dlg.addButton(choice, QMessageBox.AcceptRole): choice
+                   for choice in guard.choices}
         dlg.exec_()
-        return dlg.clickedButton() is ok_btn
+        return guard.allows(buttons.get(dlg.clickedButton(), guard.default))
+
+    def _confirm_large_scan(self, Ntot, tm, overhead):
+        """Return True to proceed, False to abort."""
+        return self._ask(guard_checks.large_scan(
+            Ntot, tm, overhead,
+            threshold=self.LARGE_SCAN_THRESHOLD,
+            # A macro drives scans with nobody there to click Proceed.
+            unattended=bool(getattr(self.w, "macro_running", False))))
 
     # ------------------------------------------------------------------
     # Shared helpers used by all scan entry points and executors
     # ------------------------------------------------------------------
 
     def _check_hdf_for_multi_pulse(self) -> bool:
-        """Return False (and show a warning) if multi-pulse mode is on but the HDF5
-        plugin is disabled.  The HDF5 plugin is required to aggregate multiple frames
-        per motor position into a single file.  Returns True when safe to proceed.
-        """
-        if self.w.parameters._pulses_per_step > 1 and not self.w.use_hdf_plugin:
-            dlg = QMessageBox(self.w.ui)
-            dlg.setWindowTitle("Check HDF Plugin")
-            dlg.setText(
-                f"Pulses per step is set to {self.w.parameters._pulses_per_step}.\n"
-                "HDF5 plugin must be enabled for multi-pulse per step scans."
-            )
-            dlg.setIcon(QMessageBox.Warning)
-            dlg.addButton(QMessageBox.Ok)
-            dlg.exec_()
-            return False
-        return True
+        """False when multi-pulse is on without the HDF5 plugin to aggregate
+        the frames. See ptychosaxs.api.guards.multi_pulse_needs_hdf."""
+        return self._ask(guard_checks.multi_pulse_needs_hdf(
+            self.w.parameters._pulses_per_step, self.w.use_hdf_plugin))
 
     def _check_saxs_det_mode(self) -> bool:
-        """Return False (and show a warning) if SAXS detector is not in scan mode.
-        Returns True when safe to proceed.
-        """
-        mode = self.get_saxs_det_mode()
-        if mode != "scan":
-            dlg = QMessageBox(self.w.ui)
-            dlg.setWindowTitle("Check SAXS Detector")
-            dlg.setText("Set SAXS detector to scan mode")
-            dlg.setIcon(QMessageBox.Warning)
-            dlg.addButton(QMessageBox.Ok)
-            dlg.exec_()
-            return False
-        return True
+        """False unless the SAXS detector is in scan mode."""
+        return self._ask(guard_checks.saxs_detector_mode(
+            self.get_saxs_det_mode()))
 
     def _confirm_scan_name(self) -> bool:
         """Prompt user to confirm/edit the scan name before a scan starts.
@@ -552,39 +523,14 @@ class ScanHandler:
         return True
 
     def _check_velocity_limits(self, velocities: dict) -> bool:
-        """Return False (and show a warning) if any axis in *velocities* is outside
-        [MIN_VELOCITY, MAX_VELOCITY] for that axis. Returns True when all axes are
-        within limits or have no configured limit.
+        """False if any axis would fly outside its configured limits.
+
+        Checked before anything moves: the controller rejecting a move
+        command mid-scan leaves a half-collected dataset and a stage
+        somewhere nobody chose. See ptychosaxs.api.guards.velocity_limits.
         """
-        for axis, vel in velocities.items():
-            speed = abs(vel)
-            max_limit = self.MAX_VELOCITY.get(axis)
-            min_limit = self.MIN_VELOCITY.get(axis)
-            if max_limit is not None and speed > max_limit:
-                dlg = QMessageBox(self.w.ui)
-                dlg.setWindowTitle("Velocity Limit Exceeded")
-                dlg.setText(
-                    f"{axis} velocity would be {speed:.4f}, exceeding the "
-                    f"configured maximum of {max_limit:.4f}.\n"
-                    "Reduce the scan range or increase the exposure time."
-                )
-                dlg.setIcon(QMessageBox.Warning)
-                dlg.addButton(QMessageBox.Ok)
-                dlg.exec_()
-                return False
-            if min_limit is not None and speed < min_limit:
-                dlg = QMessageBox(self.w.ui)
-                dlg.setWindowTitle("Velocity Limit Exceeded")
-                dlg.setText(
-                    f"{axis} velocity would be {speed:.4f}, below the "
-                    f"configured minimum of {min_limit:.4f}.\n"
-                    "Increase the scan range or reduce the exposure time."
-                )
-                dlg.setIcon(QMessageBox.Warning)
-                dlg.addButton(QMessageBox.Ok)
-                dlg.exec_()
-                return False
-        return True
+        return self._ask(guard_checks.velocity_limits(
+            velocities, self.MAX_VELOCITY, self.MIN_VELOCITY))
 
     def _read_motor_params(self, motor_index: int) -> dict:
         """Read scan parameters for one motor from the UI and return them as a dict.
