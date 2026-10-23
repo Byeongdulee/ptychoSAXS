@@ -43,6 +43,7 @@ class BeamlineClient:
         self.optics = facades.OpticsFacade(self)
         self.pv = facades.PvFacade(self)
         self.crl = facades.CrlFacade(self)
+        self.scans = facades.ScanFacade(self)
 
     # -- connection ----------------------------------------------------------
 

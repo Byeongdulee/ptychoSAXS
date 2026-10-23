@@ -139,7 +139,32 @@ class CrlFacade(_Facade):
         return self._c.call("crl.set_position", {"axis": axis, "value": value})
 
 
-ALL_FACADES = (SystemFacade, MotionFacade, OpticsFacade, PvFacade, CrlFacade)
+class ScanFacade(_Facade):
+    """Long operations. start returns a job id; progress arrives as events."""
+
+    METHODS = ("scan.plan", "scan.check", "scan.start", "scan.stop",
+               "scan.active")
+
+    def plan(self, kind, axes, **kw):
+        """axes: [(n_points, exposure_s), ...]."""
+        return self._c.call("scan.plan",
+                            {"kind": kind, "axes": list(axes), **kw})
+
+    def check(self, plan, **kw):
+        return self._c.call("scan.check", {"plan": plan, **kw})["guards"]
+
+    def start(self, kind, **kw):
+        return self._c.call("scan.start", {"kind": kind, **kw})["job"]
+
+    def stop(self, job=None):
+        return self._c.call("scan.stop", {"job": job}, timeout_s=10.0)
+
+    def active(self):
+        return self._c.call("scan.active")["jobs"]
+
+
+ALL_FACADES = (SystemFacade, MotionFacade, OpticsFacade, PvFacade, CrlFacade,
+               ScanFacade)
 
 
 def facade_methods():

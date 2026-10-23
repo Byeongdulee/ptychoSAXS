@@ -390,3 +390,85 @@ def _crl_set_position(ctx, params):
     axis = _axis(params)
     _device_call(_crl(ctx).set_pos, axis, float(params.get("value", 0.0)))
     return {"axis": axis}
+
+
+# ---------------------------------------------------------------------------
+# scans
+# ---------------------------------------------------------------------------
+
+def _scans(ctx):
+    return ctx.daemon.session.scans
+
+
+def _request(params):
+    from ptychosaxs.api.scans import ScanRequest
+    kind = params.get("kind")
+    if not kind:
+        raise Rejected(errors.ERR_BAD_PARAMS, "kind is required")
+    known = {f.name for f in __import__("dataclasses").fields(ScanRequest)}
+    return ScanRequest(**{k: v for k, v in params.items() if k in known})
+
+
+@method("scan.plan")
+def _scan_plan(ctx, params):
+    """Pure: counts points and estimates time, runs nothing."""
+    import numpy as np
+    axes = [(np.zeros(int(n)), float(t))
+            for n, t in params.get("axes", [])]
+    return _scans(ctx).plan(_request(params), axes,
+                            overhead_s=params.get("overhead_s"))
+
+
+@method("scan.check")
+def _scan_check(ctx, params):
+    plan = params.get("plan")
+    if not isinstance(plan, dict):
+        raise Rejected(errors.ERR_BAD_PARAMS, "plan is required")
+    found = _scans(ctx).check(
+        plan,
+        velocities=params.get("velocities") or {},
+        pulses_per_step=params.get("pulses_per_step", 1),
+        hdf_plugin_enabled=params.get("hdf_plugin_enabled", True),
+        saxs_mode=params.get("saxs_mode"),
+        unattended=bool(params.get("unattended", False)))
+    return {"guards": [g.describe() for g in found]}
+
+
+@method("scan.start")
+def _scan_start(ctx, params):
+    """Returns a job id immediately; progress arrives as events."""
+    scans = _scans(ctx)
+    if scans.runner is None:
+        raise Rejected(
+            errors.ERR_NOT_READY,
+            "no scan runner is attached to this server, so it cannot "
+            "execute scans")
+    if ctx.daemon.session.jobs.any_active():
+        raise Rejected(errors.ERR_BUSY,
+                       "a scan is already running",
+                       {"jobs": ctx.daemon.session.jobs.snapshot()})
+    try:
+        job_id = scans.start(_request(params),
+                             origin=ctx.conn.info.label if ctx.conn.info else "")
+    except KeyError as exc:
+        raise Rejected(errors.ERR_BAD_PARAMS, str(exc))
+    except Exception as exc:
+        raise Rejected(errors.ERR_DEVICE, f"{type(exc).__name__}: {exc}")
+    return {"job": job_id}
+
+
+@method("scan.stop")
+def _scan_stop(ctx, params):
+    result = _scans(ctx).stop(params.get("job"))
+    if result["fly_in_progress"] and not result["asked"]:
+        raise Rejected(
+            errors.ERR_FLY_IN_PROGRESS,
+            "a fly scan is in progress and cannot be interrupted; "
+            "please wait for it to finish",
+            {"jobs": ctx.daemon.session.jobs.snapshot()})
+    return result
+
+
+@method("scan.active")
+def _scan_active(ctx, params):
+    return {"jobs": _scans(ctx).active()}

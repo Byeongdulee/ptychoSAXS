@@ -72,6 +72,10 @@ class QtBeamlineClient(QtCore.QObject):
         return self._client.crl
 
     @property
+    def scans(self):
+        return self._client.scans
+
+    @property
     def pv(self):
         return self._client.pv
 

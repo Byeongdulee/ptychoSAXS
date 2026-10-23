@@ -24,6 +24,7 @@ from ptychosaxs.api.jobs import JobManager
 from ptychosaxs.api.optics import OpticsService
 from ptychosaxs.api.profile import Profile
 from ptychosaxs.api.pvs import PVCache
+from ptychosaxs.api.scans import ScanService
 
 PHASE_NEW = "new"
 PHASE_DEVICES = "building devices"
@@ -55,6 +56,7 @@ class BeamlineSession:
         self.jobs = JobManager(self.bus, self.log)
         self.pvs = PVCache(self.profile, self.log)
         self.optics = OpticsService(self.devices, self.pvs, self.log)
+        self.scans = ScanService(self, self.log)
 
         # Phase 5 moves these off the GUI window and onto the session:
         #   parameters  -- SafeIni over gui/ini/pty-co-saxs.ini (124 refs)

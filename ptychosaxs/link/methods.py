@@ -70,11 +70,25 @@ CRL = {
     "crl.set_position":    "Redefine a CRL axis's position without moving.",
 }
 
-ALL = {**SYSTEM, **MOTION, **OPTICS, **PV, **CRL}
+# --- scans ------------------------------------------------------------------
+# Long operations. start returns a job id immediately and progress is
+# broadcast to every client, so a second panel can watch a scan the first
+# one began.
+SCAN = {
+    "scan.plan":   "Point count and time estimate for a scan. Pure; runs nothing.",
+    "scan.check":  "The guards that apply to a planned scan, as data.",
+    "scan.start":  "Submit a scan. Returns a job id immediately.",
+    "scan.stop":   "Ask a running step scan to stop. A fly scan cannot be asked.",
+    "scan.active": "Scans currently running.",
+}
+
+ALL = {**SYSTEM, **MOTION, **OPTICS, **PV, **CRL, **SCAN}
 NAMES = frozenset(ALL)
 
 # Methods that may take longer than a few milliseconds and are therefore run
 # as jobs rather than inline. Empty in Phase 1: everything here is a read.
+# scan.start is submitted as a job rather than run inline, so it is not
+# listed here -- it returns a job id in milliseconds like any other method.
 BLOCKING = frozenset()
 
 # Methods answerable before BeamlineSession has finished building devices.
@@ -90,6 +104,7 @@ MUTATING = frozenset({
     "optics.move", "optics.move_rel", "optics.set_position", "pv.put",
     "crl.move", "crl.tweak", "crl.set_tweak_step", "crl.set_speed",
     "crl.set_position",
+    "scan.start", "scan.stop",
 })
 
 
