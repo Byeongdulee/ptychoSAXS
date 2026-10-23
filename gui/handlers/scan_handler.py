@@ -26,6 +26,8 @@ from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
 import pyqtgraph as pg
 
 from ptychosaxs.api import guards as guard_checks
+from ptychosaxs.api.scan_exec import ScanExecutorsMixin
+from ptychosaxs.api.scans import ScanContext
 from ptychosaxs.api import scanplan
 from ptychosaxs.hexapod_traj import TrajectoryUnavailable
 
@@ -131,7 +133,7 @@ class _QdsScatterWorker(QObject):
                 self.data_ready.emit(arr)
 
 
-class ScanHandler:
+class ScanHandler(ScanExecutorsMixin):
     # Per-point overhead added to exposure time when estimating scan duration.
     # Fly scan overhead accounts for detector readout + SoftGlue latency.
     # Step scan overhead accounts for motor settle + readout.
@@ -165,6 +167,10 @@ class ScanHandler:
     def __init__(self, window) -> None:
         self.w = window
         self.ui = window.ui
+        # What the moved executors read instead of self.w. Session first,
+        # window second, so a name can migrate to BeamlineSession without
+        # any executor being edited again.
+        self.ctx = ScanContext(window=window)
         self._saved_positions = {}  # {n: float} keyed by 1-indexed motor number
         self._connect_signals()
 
@@ -5080,80 +5086,8 @@ class ScanHandler:
         # Return motor to its home position (where it was before the scan started).
         self._scan_mv(axis, pos0, update_status=update_status)
 
-    def _scaler_oneshot_begin(self, exp_time):
-        """Put the scaler into OneShot mode with `exp_time` as its preset,
-        mirroring ScalarScanWindow._start_scan.
 
-        Returns True if the scaler is ours for the rest of the scan, in which
-        case _scaler_oneshot_restore must run on every exit path.
-        """
-        try:
-            import epics
-        except ImportError:
-            print("Warning: pyepics not available, scaler counts not collected")
-            return False
-        try:
-            epics.caput(SCALER_CONT_PV, 0)  # OneShot, for the duration of this scan only
-            epics.caput(SCALER_TP_PV, exp_time)
-        except Exception as e:
-            print(f"Warning: could not put scaler into OneShot mode: {e}")
-            return False
-        return True
 
-    def _scaler_oneshot_restore(self):
-        """Put the scaler back into AutoCount - the counterpart to
-        _scaler_oneshot_begin, so a stopped or errored scan never leaves the
-        scaler stuck out of free-running for other clients."""
-        try:
-            import epics
-
-            epics.caput(SCALER_CONT_PV, 1)
-        except Exception as e:
-            print(f"Warning: could not restore scaler to free-running: {e}")
-
-    def _scaler_oneshot_count(self, exp_time):
-        """Trigger one OneShot count, block until the scaler reports it done,
-        then read the channels once.
-
-        Mirrors _ScanWorker._wait_for_count_done / _read_scalars_into in
-        scalar_scan.py. Returns one row of floats in SCAN_SCALAR_PVS order,
-        using nan for anything that could not be read so the csv keeps one row
-        per scan position even when the scaler misbehaves.
-        """
-        nan_row = [float("nan")] * len(SCAN_SCALAR_PVS)
-        timeout = exp_time + COUNT_DONE_TIMEOUT_MARGIN_S
-        try:
-            import epics
-
-            # Put-completion: the scaler record acknowledges .CNT only once the
-            # count has finished, so this blocks for the whole exposure. A plain
-            # non-blocking put would return before the IOC had even started
-            # counting, and since the record zeroes .S1-.SN at count start, the
-            # read below would then return 0 for every channel.
-            epics.caput(SCALER_CNT_PV, 1, wait=True, timeout=timeout)
-
-            # Backstop in case this IOC does not honour put-completion on .CNT.
-            # use_monitor=False forces a fresh CA get rather than a possibly
-            # stale monitor-cached value.
-            deadline = time.monotonic() + timeout
-            while epics.caget(SCALER_CNT_PV, use_monitor=False):
-                if time.monotonic() > deadline:
-                    print("Warning: timed out waiting for scaler count to finish")
-                    return nan_row
-                time.sleep(COUNT_POLL_INTERVAL_S)
-        except Exception as e:
-            print(f"Warning: scaler count failed: {e}")
-            return nan_row
-
-        row = []
-        for name, pv_name in SCAN_SCALAR_PVS.items():
-            try:
-                value = epics.caget(pv_name, use_monitor=False)
-            except Exception as e:
-                print(f"Warning: could not read {name} ({pv_name}): {e}")
-                value = None
-            row.append(float("nan") if value is None else float(value))
-        return row
 
     def get_detectors_armed(self):
         TIMEOUT = 10
