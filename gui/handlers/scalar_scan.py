@@ -35,7 +35,7 @@ from PyQt5.QtWidgets import (
 from gui.font_utils import DEFAULT_FONT_SIZE, apply_font_size_to_tree
 
 # Scaler channels this codebase already treats as "the scalars" for NeXus
-# master files (see gui/handlers/nexus_metadata_config.py SHARED_METADATA_MAP).
+# master files (see ptychosaxs/api/nexus_metadata.py SHARED_METADATA_MAP).
 SCALAR_PVS = {
     "IC": "12idc:3820:scaler1.S2",
     "BS2": "12idc:3820:scaler1.S3",

@@ -267,7 +267,7 @@ class ScanExecutorsMixin:
         Returns:
             Configuration dictionary with PVs, constants, and metadata mapping
         """
-        from .nexus_metadata_config import DETECTOR_CONFIGS
+        from ptychosaxs.api.nexus_metadata import DETECTOR_CONFIGS
 
         if detector_type not in DETECTOR_CONFIGS:
             raise ValueError(f"Unknown detector type: {detector_type}")
@@ -583,7 +583,7 @@ class ScanExecutorsMixin:
             Dictionary {nexus_path: value} for all PVs that succeeded.
             Skips any PV that returns None.
         """
-        from .nexus_metadata_config import SHARED_METADATA_MAP, SLITS_METADATA_MAP, ZONE_PLATE_METADATA_MAP
+        from ptychosaxs.api.nexus_metadata import SHARED_METADATA_MAP, SLITS_METADATA_MAP, ZONE_PLATE_METADATA_MAP
 
         try:
             import epics
@@ -911,7 +911,7 @@ class ScanExecutorsMixin:
             shared_meta: Shared metadata dict (contains sth, stv, theta, trans1, trans2)
             scan_positions_dict: {motor_name: np.ndarray} from _compute_scan_positions
         """
-        from .nexus_metadata_config import SHARED_METADATA_MAP
+        from ptychosaxs.api.nexus_metadata import SHARED_METADATA_MAP
 
         sample = entry.create_group('sample')
         sample.attrs['NX_class'] = b'NXsample'
@@ -982,7 +982,7 @@ class ScanExecutorsMixin:
             detector_config: Detector configuration dict
         """
         import h5py
-        from .nexus_metadata_config import SHARED_METADATA_MAP, SLITS_METADATA_MAP, ZONE_PLATE_METADATA_MAP
+        from ptychosaxs.api.nexus_metadata import SHARED_METADATA_MAP, SLITS_METADATA_MAP, ZONE_PLATE_METADATA_MAP
 
         inst = entry.create_group('instrument')
         inst.attrs['NX_class'] = b'NXinstrument'

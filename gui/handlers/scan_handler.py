@@ -1991,7 +1991,7 @@ class ScanHandler(ScanExecutorsMixin):
             Dictionary {nexus_path: value} for zone plate PVs that succeeded.
             Returns empty dict if PV query fails.
         """
-        from .nexus_metadata_config import ZONE_PLATE_METADATA_MAP
+        from ptychosaxs.api.nexus_metadata import ZONE_PLATE_METADATA_MAP
 
         try:
             import epics

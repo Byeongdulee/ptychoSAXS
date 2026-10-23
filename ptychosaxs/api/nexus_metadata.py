@@ -4,7 +4,7 @@ NeXus Master File Configuration
 Maps EPICS PVs to NeXus dataset locations and units for master file creation.
 """
 
-from gui import optics_status as _optics_status
+from ptychosaxs.api import optics_status as _optics_status
 
 # Shared metadata queried once per scan (same for all detectors)
 SHARED_METADATA_MAP = {

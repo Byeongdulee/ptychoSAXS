@@ -196,3 +196,37 @@ def test_no_moved_method_reaches_for_a_widget_class():
         assert widget not in src, (
             f"{widget} is used in scan_exec; that method belongs in the "
             f"Qt handler until its widget access becomes an argument")
+
+
+def test_relocated_code_uses_no_relative_imports():
+    """A relative import silently changes meaning when a file moves.
+
+    This is a real bug, not a hypothetical: four methods moved out of
+    gui/handlers/ carrying `from .nexus_metadata_config import ...`, which
+    kept resolving at import time and only failed when a scan actually
+    reached it -- "No module named 'ptychosaxs.api.nexus_metadata_config'"
+    mid-scan, after the shutter was already open.
+
+    Scoped to ptychosaxs/api/, which is where moved code lands. The rest
+    of the device layer uses relative imports legitimately -- those
+    modules are not going anywhere, and `from .epics_motor import ...` in
+    a stable package is fine. It is relocation that makes them a trap.
+
+    Package __init__ files are exempt: re-exporting a sibling is what
+    they are for.
+    """
+    import ast as _ast
+
+    offenders = []
+    for path in sorted((PKG / "api").rglob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        tree = _ast.parse(path.read_text())
+        for node in _ast.walk(tree):
+            if isinstance(node, _ast.ImportFrom) and node.level:
+                offenders.append(
+                    f"{path.relative_to(PKG)}:{node.lineno} "
+                    f"from {'.' * node.level}{node.module or ''}")
+    assert offenders == [], (
+        "relative imports found; they break when a method is relocated:\n  "
+        + "\n  ".join(offenders))
