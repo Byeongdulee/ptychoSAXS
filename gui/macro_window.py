@@ -52,6 +52,43 @@ SCAN_ESTIMATE_SLOTS = {"x": 1, "z": 3, "phi": 7}
 # Static (non-per-motor) commands, keyed by a short token used in
 # COMMAND_ORDER below. pb_timeSeries is intentionally not offered here: it
 # opens a modal setup dialog and can't run unattended in a macro.
+# What each scan button on the main panel actually does, so the macro can
+# call it instead of synthesising a click on it.
+#
+# Clicking was never the intent -- it was the only way in. The per-motor
+# scan entry points took motornumber=-1, meaning "work out which motor
+# from self.sender()", so a direct call had no sender to read. They now
+# take the index explicitly (see rungui's per-motor button wiring), which
+# is what makes this table possible.
+#
+# Keyed by button name because that is what saved macros in
+# macro_commands.json already store; nothing about those files changes.
+def _scan_action(main, button_name):
+    """The call `button_name` stands for, or None if it is not a scan."""
+    import re as _re
+
+    fixed = {
+        "pb_lup_step2d": lambda: main.stepscan2d(),
+        "pb_SAXSscan_fly2d": lambda: main.fly2d(snake=True),
+        "pb_lup_step3d": lambda: main.stepscan3d(*main._scan_axis_indices()),
+        "pb_SAXSscan_fly3d": lambda: main.fly3d(snake=True),
+        "pb_takeshot": lambda: main.scan_handler.takeshot(),
+    }
+    if button_name in fixed:
+        return fixed[button_name]
+
+    # The per-motor 1-D buttons: pb_lup_<n> steps, pb_SAXSscan_<n> flies.
+    # <n> is the 1-based UI slot, the same number _motor_from_sender used
+    # to parse back out of the object name.
+    match = _re.fullmatch(r"pb_(lup|SAXSscan)_(\d+)", button_name or "")
+    if match:
+        kind, slot = match.group(1), int(match.group(2))
+        if kind == "lup":
+            return lambda: main.stepscan(slot - 1)
+        return lambda: main.fly(slot - 1)
+    return None
+
+
 STATIC_COMMANDS = {
     "wait": {
         "display": "Wait",
@@ -341,6 +378,18 @@ class MacroExecutionEngine(QObject):
         kind = cmd.get("kind")
         if kind == "click":
             button_name = cmd.get("button_name")
+            action = _scan_action(self.main, button_name)
+            if action is not None:
+                # Call what the button calls. No widget is touched, so the
+                # button can stay disabled -- which is what it is for while
+                # this window is open, to stop a second scan being started
+                # by hand.
+                action()
+                return
+
+            # Anything this table does not know about still goes the old
+            # way. Kept so a saved macro naming a button added since cannot
+            # silently do nothing.
             btn = (
                 self.main.ui.findChild(QPushButton, button_name)
                 if button_name
@@ -349,11 +398,7 @@ class MacroExecutionEngine(QObject):
             if btn is None:
                 print(f"Macro: button '{button_name}' not found")
                 return
-            # QAbstractButton.click() is a no-op while the button is disabled
-            # -- and MacroWindow disables every scan button on the main panel
-            # while it's open (see showEvent/hideEvent), to keep the user
-            # from starting a conflicting scan by hand. Flip it on just long
-            # enough to fire the click, then restore whatever state it had.
+            print(f"Macro: '{button_name}' has no direct action; clicking it")
             was_enabled = btn.isEnabled()
             btn.setEnabled(True)
             btn.click()

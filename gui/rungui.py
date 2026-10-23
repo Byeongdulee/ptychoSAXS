@@ -885,11 +885,17 @@ class ptyco_main_control(QObject):
                 lambda: self.mv(-1, None)
             )
             if n in (1, 2, 3, 7, 8, 9):
+                # Pass the motor explicitly rather than -1, which means
+                # "work it out from self.sender()". Deriving it from the
+                # clicked button is why the macro runner had to synthesise
+                # a click to start a scan -- a direct call has no sender.
+                # The n=n default binds this iteration's value; _c takes
+                # the `checked` bool that clicked() supplies.
                 self.ui.findChild(QPushButton, "pb_lup_%i" % n).clicked.connect(
-                    lambda: self.stepscan(-1)
+                    lambda _c=False, n=n: self.stepscan(n - 1)
                 )
                 self.ui.findChild(QPushButton, "pb_SAXSscan_%i" % n).clicked.connect(
-                    lambda: self.fly(-1)
+                    lambda _c=False, n=n: self.fly(n - 1)
                 )
             enable = pts is not None and self.motorconnected[i]
             self._set_motor_widgets_enabled(n, enable)
