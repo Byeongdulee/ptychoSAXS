@@ -13,11 +13,17 @@ from PyQt5.QtCore import QObject, pyqtSignal
 # a flag is on, that controller's hardware library is never imported and a
 # simulated stand-in is used instead, so nothing is connected to.
 #
-#   PTYCHOSAXS_DEBUG_HEXAPOD   pihexapod.gcs   axes: X, Y, Z, U, V, W
-#   PTYCHOSAXS_DEBUG_ACS       epics_phi/acspy axes: phi
-#   PTYCHOSAXS_DEBUG_GONIO     epics_gonio     axes: trans1, trans2, tilt1, tilt2
+#   PTYCHOSAXS_DEBUG_HEXAPOD    pihexapod.gcs   axes: X, Y, Z, U, V, W
+#   PTYCHOSAXS_DEBUG_TOMO_PHI   epics_phi/acspy axes: phi
+#   PTYCHOSAXS_DEBUG_GONIO      epics_gonio     axes: trans1, trans2, tilt1, tilt2
 DEBUG_HEXAPOD = os.environ.get("PTYCHOSAXS_DEBUG_HEXAPOD") == "1"
-DEBUG_ACS = os.environ.get("PTYCHOSAXS_DEBUG_ACS") == "1"
+# The phi flag means "simulate the phi stage", whichever driver is selected,
+# so it is not named after one of them. It was read here as DEBUG_ACS while
+# rungui exported DEBUG_TOMO_PHI, so setting it in the GUI never had any
+# effect and phi was built for real in debug mode. The old name is still
+# accepted so an existing shell or script does not change behaviour silently.
+DEBUG_TOMO_PHI = (os.environ.get("PTYCHOSAXS_DEBUG_TOMO_PHI") == "1"
+                  or os.environ.get("PTYCHOSAXS_DEBUG_ACS") == "1")
 DEBUG_GONIO = os.environ.get("PTYCHOSAXS_DEBUG_GONIO") == "1"
 
 # The hexapod's axes and units live with the rig config in
@@ -358,7 +364,7 @@ class motors(object):
         self.transports = {}
         for name, simulated in (
             ("hexapod", DEBUG_HEXAPOD),
-            ("phi", DEBUG_ACS),
+            ("phi", DEBUG_TOMO_PHI),
             ("gonio", DEBUG_GONIO),
         ):
             controller, transport = build_controller(name, simulated=simulated)

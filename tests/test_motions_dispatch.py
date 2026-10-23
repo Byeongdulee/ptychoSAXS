@@ -23,7 +23,7 @@ import os
 # Must precede the import below: motions_ver2 reads these at module scope and
 # connects to the ACS controller at import time when they are not set.
 os.environ["PTYCHOSAXS_DEBUG_HEXAPOD"] = "1"
-os.environ["PTYCHOSAXS_DEBUG_ACS"] = "1"
+os.environ["PTYCHOSAXS_DEBUG_TOMO_PHI"] = "1"
 os.environ["PTYCHOSAXS_DEBUG_GONIO"] = "1"
 
 import pytest
