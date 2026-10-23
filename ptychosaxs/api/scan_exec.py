@@ -2880,3 +2880,318 @@ class ScanExecutorsMixin:
         self.ctx.write_scaninfo_to_logfile(scaninfo)
 
         return 1
+
+    def fly2d0(
+        self, xmotor=0, ymotor=1, update_progress=None, update_status=None
+    ):
+        """2-D fly scan: step the slow (Y) axis, fire fly0 along X for each Y line.
+
+        This is the non-snake variant.  Each X line is an independent 1-D hexapod
+        trajectory.  Works for any motor combination where X is a hexapod axis.
+
+        Contrast with fly2d0_SNAKE, which programs the entire 2-D path as a single
+        hexapod trajectory (requires both axes to be hexapod axes, but is faster
+        and more precise).
+        """
+
+        axis = self.ctx.motornames[ymotor]
+        self.ctx.signalmotor2 = axis
+        self.ctx.signalmotorunit2 = self.ctx.motorunits[ymotor]
+        self.ctx.isfly2 = False
+
+        # Re-read Y and X parameters from the UI.  This executor may be called
+        # repeatedly from fly3d0 while the user has access to the UI, so re-reading
+        # here picks up any edits made between phi slices.
+        _fy = self._scan_fields(ymotor)
+        y_p0 = float(_fy["p0_text"])
+        y_st = _fy["st"]
+        y_fe = _fy["fe"]
+        y_step = _fy["step"]
+        self.fly2d_p0 = y_p0
+        self.fly2d_st = y_st
+        self.fly2d_fe = y_fe
+
+        _fx = self._scan_fields(xmotor)
+        x_p0 = float(_fx["p0_text"])
+        x_st = _fx["st"]
+        x_fe = _fx["fe"]
+        self.fly1d_p0 = x_p0
+        self.fly1d_st = x_st
+        self.fly1d_fe = x_fe
+
+        # Build the Y position array.
+        y_positions = self._make_positions(y_p0, y_st, y_fe, y_step)
+        Nline = len(y_positions)
+
+        t0 = time.time()
+        isreshreshed = 1
+        for i, yval in enumerate(y_positions):
+            if self.isStopScanIssued:
+                break
+
+            print(f"\nY position: {yval:.4f}")
+            self.ctx.write_scaninfo_to_logfile(["#I Y = ", yval])
+
+            # Step the slow axis to this Y position and wait for it to stop.
+            self._scan_mv(axis, yval, update_status=update_status)
+            while self.ctx.pts.ismoving(axis):
+                time.sleep(0.02)
+
+            # Optional: update per-line HDF file number for multi-line HDF capture.
+            # This ensures each X-line lands in a separate HDF entry.
+            if self.ctx.use_hdf_plugin and (self.ctx.hdf_plugin_savemode_fly > 0):
+                for det in self.ctx.detector:
+                    if det is not None and hasattr(det, "filePut"):
+                        if any(
+                            s in det._prefix.lower()
+                            for s in ("cam", "sg", "dante", "xsp3")
+                        ):
+                            det.filePut("FileNumber", i + 1)
+
+            # Run the 1-D fly scan along X for this Y line.
+            # fly0 returns 1 on success, DETECTOR_NOT_STARTED_ERROR on failure.
+            # On failure, refresh_detectors() attempts an IOC reset before retrying.
+            status = 0
+            while status < 1:
+                status = self.fly0(
+                    xmotor, update_progress=update_progress, update_status=update_status
+                )
+                if status is DETECTOR_NOT_STARTED_ERROR:
+                    isreshreshed = self.refresh_detectors(update_status=update_status)
+                if isreshreshed == 0:
+                    print("Detector refresh failed. Stopping scan.")
+                    if update_status:
+                        update_status(f"Detector refresh failed. {time.ctime()}")
+                    return DETECTOR_NOT_STARTED_ERROR
+
+            # Advance the scan number log entry for this completed X line.
+            # return_motor=False keeps the motor at the end of the X trajectory
+            # (the next line starts from wherever fly0 left off, or goto_start_pos
+            # handles repositioning internally). direct_gui_updates=False because
+            # this runs on the worker thread, once per Y line -- touching Qt
+            # widgets directly here (rather than via a queued signal) is what
+            # was corrupting the backing store and crashing the GUI.
+            self.ctx.flydone(return_motor=False, reset_scannumber=False, direct_gui_updates=False)
+
+            # Inter-line idle time (configurable). Reuses the step-scan acquisition
+            # time parameter for the per-line wait in this fly scan.
+            t1 = time.time()
+            while time.time() - t1 < self.ctx.parameters._step_acq_time:
+                time.sleep(0.01)
+
+            # Progress: fly3d_p0 is non-None when called from fly3d0.
+            self._emit_progress(
+                t0,
+                i,
+                Nline,
+                update_progress,
+                update_status,
+                t_scanstart=self.time_scanstart,
+                progress_3d=self.progress_3d if self.fly3d_p0 is not None else None,
+            )
+
+        self._advance_scan_number_thread_safe()
+        return 1
+
+    def stepscan2d0(self, xmotor=0, ymotor=1, update_progress=None, update_status=None):
+        # print(ymotor, " this is ymortor")
+        yaxis = self.ctx.motornames[ymotor]
+        xaxis = self.ctx.motornames[xmotor]
+        self.ctx.signalmotor2 = yaxis
+        self.ctx.signalmotorunit2 = self.ctx.motorunits[ymotor]
+        # pos = self.ctx.pts.get_pos(yaxis)
+        self.ctx.isfly2 = False
+
+        # Just in case when the user update edit box (during 3d scan)
+        # Will need to update the positions.
+        _fy = self._scan_fields(ymotor)
+        p0 = float(_fy["p0_text"])
+        st = _fy["st"]
+        fe = _fy["fe"]
+        step = _fy["step"]
+        self.stepscan2d_p0 = p0
+        self.stepscan2d_st = st
+        self.stepscan2d_fe = fe
+        self.stepscan2d_step = step
+
+        # _scan_fields falls back to the shared ed_lup_1_t for slots with
+        # no exposure widget of their own (trans1/trans2 at 7/8), the same
+        # way _read_motor_params does.
+        _fx = self._scan_fields(xmotor)
+        p0 = float(_fx["p0_text"])
+        st = _fx["st"]
+        fe = _fx["fe"]
+        expt = float(_fx["t_widget"].text())
+        step = _fx["step"]
+        self.stepscan1d_p0 = p0
+        self.stepscan1d_st = st
+        self.stepscan1d_fe = fe
+        self.stepscan1d_step = step
+
+        yst = self.stepscan2d_st + self.stepscan2d_p0
+        yfe = self.stepscan2d_fe + self.stepscan2d_p0
+        ystep = self.stepscan2d_step
+
+        xst = self.stepscan1d_st + self.stepscan1d_p0
+        xfe = self.stepscan1d_fe + self.stepscan1d_p0
+        xstep = self.stepscan1d_step
+
+        x_coords = self._make_positions(0, xst - 0, xfe - 0, xstep)
+        y_coords = self._make_positions(0, yst - 0, yfe - 0, ystep)
+
+        # Nx2 numpy array of (x, y) in snake (boustrophedon) order
+        pos = self._snake_positions(x_coords, y_coords)
+        Nline = len(pos)
+        # keep for later use if needed
+        self.stepscan2d_positions = pos
+
+        # trans1/trans2 (the SmarAct MCS2 'piezo' stages) are closed-loop but not
+        # pulse-exact like the hexapod's fly trajectory, so for a piezo scan we
+        # read back the actual settled position after each move (see below) and
+        # write it to the master file as /entry/sample/piezo_positions.
+        is_piezo_scan = xaxis in self.ctx.pts.gonio.motornames and yaxis in self.ctx.pts.gonio.motornames
+        piezo_pos_actual = [] if is_piezo_scan else None
+        # self.ctx.dg645_12ID.set_pilatus(expt, trigger_source=5, DGNimage=1)
+        # each time it will send a pulse
+
+        # scaninfo = []
+        # scaninfo.append('#H')
+        # if self.ctx.detector[2] is not None:
+        #     scaninfo.append(xaxis)
+        #     scaninfo.append(yaxis)
+        #     scaninfo.append(self.ctx.detector[2].scaler.NM2)
+        #     scaninfo.append(self.ctx.detector[2].scaler.NM3)
+        #     scaninfo.append(self.ctx.detector[2].scaler.NM4)
+        # else:
+        #     scaninfo.append(xaxis)
+        #     scaninfo.append(yaxis)
+        #     scaninfo.append('QDS1')
+        #     scaninfo.append('QDS2')
+        #     scaninfo.append('QDS3')
+        # self.ctx.write_scaninfo_to_logfile(scaninfo)
+
+        if self.ctx.DEBUG_MOTORS:
+            # --- Debug 2-D step scan (motor stubs) ---
+            mpos_data = []
+            Nline = len(pos)
+            self.isStopScanIssued = False
+            for i, (xp, yp) in enumerate(pos):
+                if self.isStopScanIssued:
+                    break
+                self._scan_mv_xy(xaxis, xp, yaxis, yp, update_status=update_status)
+                time.sleep(min(expt, 0.05))
+                xy_readback = [self.ctx.pts.get_pos(xaxis), self.ctx.pts.get_pos(yaxis)]
+                mpos_data.append(xy_readback)
+                if is_piezo_scan:
+                    piezo_pos_actual.append(xy_readback)
+                if update_progress is not None:
+                    update_progress(int(100 * (i + 1) / Nline))
+            self.ctx.mpos = mpos_data
+            if is_piezo_scan:
+                self._write_piezo_positions_to_master(piezo_pos_actual, (xaxis, yaxis))
+            return
+
+        if self.ctx.parameters._pulses_per_step == 1:
+            period = 0
+        else:
+            period = round(max(expt + 0.020, 0.03), 6)
+        self.ctx.dg645_12ID.set_pilatus(
+            expt,
+            trigger_source=5,
+            DGNimage=int(self.ctx.parameters._pulses_per_step),
+            Cycperiod=period,
+        )
+        det_period = self._step_detector_period(expt)
+
+        ## prepre detectors ............
+        # Exposure time, exposure period and frame count are all programmed
+        # here, once, before the point loop starts.
+        for detN, det in enumerate(self.ctx.detector):  # JD
+            if det is not None:  # JD
+                # Skip Struck detector which doesn't support HDF5 file templates
+                if "3820" in det._prefix:
+                    continue
+                det.setFileTemplate('%s%s_%5.5d.h5')
+                det.step_ready(
+                    expt,
+                    Nline,
+                    pulsespershot=self.ctx.parameters._pulses_per_step,
+                    fn=self.ctx.hdf_plugin_name[detN],
+                    period=det_period,
+                )  # Arm detector for multiple data.
+                print(f"step _ready, detector {detN}'s status: {det.Armed}")  # JD
+
+        t0 = time.time()
+        self.isStopScanIssued = False
+
+        # make sure detectors get armed.
+        self.ctx.get_detectors_armed()
+
+        self.ctx.messages["recent error message"] = ""
+        self.ctx.messages["current status"] = ""
+        self.ctx.messages["progress"] = ""
+
+        print("Starting 2D step scan now...........................")
+        for i, (xp, yp) in enumerate(pos):
+            if self.isStopScanIssued:
+                break
+
+            self._scan_mv_xy(xaxis, xp, yaxis, yp, update_status=update_status)
+
+            if is_piezo_scan:
+                # Read back the actual settled position from the SmarAct
+                # controllers rather than trusting the commanded (xp, yp).
+                piezo_pos_actual.append(
+                    [self.ctx.pts.get_pos(xaxis), self.ctx.pts.get_pos(yaxis)]
+                )
+
+            # Configurable idle time between exposures.
+            time.sleep(self.ctx.parameters._step_acq_time)
+
+            # Confirm detector armed before each trigger (may fall out of arm
+            # state after a previous timeout or transient IOC error).
+            timeout_occurred, TIMEOUT = self.is_arming_detecotors_timedout()
+            if timeout_occurred:
+                self.ctx.messages["recent error message"] = (
+                    f"Detector arm timeout ({TIMEOUT}s) at point {i + 1}. {time.ctime()}"
+                )
+                print(self.ctx.messages["recent error message"])
+                return DETECTOR_NOT_STARTED_ERROR
+
+            # Fire DG645 trigger — causes _pulses_per_step detector exposures.
+            self.ctx.dg645_12ID.trigger()
+            print(
+                f"Trigger sent for point {i + 1} ({xp:.4f}, {yp:.4f}). {time.ctime()}"
+            )
+
+            # Block until the expected frame count is reached.
+            timeout_occurred, TIMEOUT = self.is_waiting_detectors_timedout(expt, i)
+            if timeout_occurred:
+                self.ctx.messages["recent error message"] = (
+                    f"Detector frame timeout ({TIMEOUT}s) at point {i + 1}. {time.ctime()}"
+                )
+                print(self.ctx.messages["recent error message"])
+                return DETECTOR_NOT_STARTED_ERROR
+
+            # Record position and emit progress.
+            self.ctx.mpos.append([xp, yp])
+
+            # stepscan3d_p0 is None when this is a standalone 2-D scan.
+            # When non-None, this executor is a slice inside stepscan3d0 and we
+            # report progress as a fraction of the total 3-D scan.
+            self._emit_progress(
+                t0,
+                i,
+                Nline,
+                update_progress,
+                update_status,
+                t_scanstart=self.time_scanstart,
+                progress_3d=self.progress_3d
+                if self.stepscan3d_p0 is not None
+                else None,
+            )
+
+        if is_piezo_scan:
+            self._write_piezo_positions_to_master(piezo_pos_actual, (xaxis, yaxis))
+
+        return 1
