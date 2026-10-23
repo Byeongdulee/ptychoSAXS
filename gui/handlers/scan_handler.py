@@ -25,6 +25,7 @@ from gui import optics_status as _optics_status
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
 import pyqtgraph as pg
 
+from ptychosaxs.api import scanplan
 from ptychosaxs.hexapod_traj import TrajectoryUnavailable
 
 # tools.detectors / tools.dg645 / tools.softglue each import `epics` at module
@@ -270,8 +271,8 @@ class ScanHandler:
 
     @staticmethod
     def _fmt_time(t):
-        """Format seconds into a human-readable string (mirrors the label_estT formatter)."""
-        return "%.1f min" % (t / 60) if t > 300 else "%.1f s" % t
+        """See ptychosaxs.api.scanplan.format_duration."""
+        return scanplan.format_duration(t)
 
     def _confirm_large_scan(self, Ntot, tm, overhead):
         """Return True to proceed, False to abort.
@@ -621,31 +622,14 @@ class ScanHandler:
 
     @staticmethod
     def _signed_step(ast: float, afe: float, step: float) -> float:
-        """Correct *step*'s sign to match the ast→afe direction.
-
-        If step==0 it is replaced by (afe-ast) so a two-element array can
-        still be produced. Shared by _make_positions and any caller that
-        needs the exact same step _make_positions would use internally
-        (e.g. to extrapolate an extra point past a single-element array).
-        """
-        if step == 0:
-            step = (afe - ast) if (afe != ast) else 1.0
-        return -abs(step) if ast > afe else abs(step)
+        """See ptychosaxs.api.scanplan.signed_step."""
+        return scanplan.signed_step(ast, afe, step)
 
     def _make_positions(
         self, p0: float, st: float, fe: float, step: float
     ) -> np.ndarray:
-        """Return absolute scan positions as a 1-D numpy array.
-
-        p0+st is the scan start; p0+fe is the scan end.  The sign of *step* is
-        corrected automatically so the direction matches st→fe.  If step==0 it is
-        replaced by (fe-st) so a two-element array is still produced.
-        """
-        ast = p0 + st
-        afe = p0 + fe
-        step = self._signed_step(ast, afe, step)
-        pos = np.arange(ast, afe + step / 2, step)
-        return pos
+        """See ptychosaxs.api.scanplan.make_positions."""
+        return scanplan.make_positions(p0, st, fe, step)
 
     def _pre_scan(self, scan_label: str, scan_kind: str = "step", xmotor: int = 0, ymotor: int = 2) -> None:
         """Common setup called at the start of every scan entry point (GUI thread).
@@ -967,66 +951,16 @@ class ScanHandler:
         return ",".join(det_names)
 
     def _adjust_axis_length(self, n: int, axis_index: int, scan_kind: str) -> int:
-        """Single source of truth for scan_kind-specific position-count adjustments.
-
-        axis_index is the position of this axis within the ordered axis list
-        (0 = fast/X, 1 = slow/Y). Used by both _compute_n_positions (counts)
-        and _extend_axis_positions (arrays), so the two can never diverge.
-
-        "fly_snake": +1 phantom trigger at the end of each X line (axis 0);
-          Y lines (axis 1) rounded up to nearest even (hardware constraint).
-          These reflect real hexapod hardware: the trajectory generator fires
-          one extra trigger per X line (a "phantom" trigger at the scan line's
-          end to facilitate pixel timing), and the trajectory table requires
-          the Y line count to be even (padded if odd). Independent of user
-          input and always applied.
-        "fly_phi": interval count on axis 0 (no +1). Constant-velocity phi
-          motion triggers at regular time intervals, not at discrete rest
-          points, so the count is (fe-st)/step without +1.
-        Anything else: unchanged.
-        """
-        if scan_kind == "fly_snake":
-            if axis_index == 0:
-                return n + 1  # phantom trigger at end of each X line
-            if axis_index == 1:
-                return n + (n % 2)  # round up to nearest even
-        elif scan_kind == "fly_phi" and axis_index == 0:
-            return max(n - 1, 0)  # phi flies at fixed intervals, not inclusive endpoints
-        return n
+        """See ptychosaxs.api.scanplan.adjust_axis_length."""
+        return scanplan.adjust_axis_length(n, axis_index, scan_kind)
 
     def _extend_axis_positions(self, coords: np.ndarray, step: float, axis_index: int, scan_kind: str) -> np.ndarray:
-        """Extend a position array to match _adjust_axis_length's target length.
-
-        Appends extra points extrapolated by *step* from the last point, so
-        arrays built this way have exactly the length _compute_n_positions
-        would predict for the same axis/scan_kind.
-        """
-        target_len = self._adjust_axis_length(len(coords), axis_index, scan_kind)
-        extra = target_len - len(coords)
-        if extra > 0:
-            last = coords[-1] if len(coords) else 0.0
-            coords = np.append(coords, last + step * np.arange(1, extra + 1))
-        return coords
+        """See ptychosaxs.api.scanplan.extend_axis_positions."""
+        return scanplan.extend_axis_positions(coords, step, axis_index, scan_kind)
 
     def _compute_n_positions(self, position_arrays, scan_kind="step"):
-        """Return the total number of collected data positions for any scan type.
-
-        scan_kind determines the position-counting convention:
-          "step": grid product (Nx * Ny * ...). Always inclusive endpoints.
-          "fly_snake": grid product with hexapod adjustments for snake fly scans
-            (see _adjust_axis_length).
-          "fly_hexapod_1d": grid product (same as step; used for 1-D fly consistency).
-          "fly_phi": interval count on first axis (no +1), then product
-            (see _adjust_axis_length).
-
-        Note: "helix" scans do not use this function's plain grid-product path —
-        callers compute the helix count via a single-axis "fly_phi" call instead
-        (see _log_scan_header), since phi alone determines the trigger count.
-        """
-        n_pos = 1
-        for i, pos in enumerate(position_arrays):
-            n_pos *= self._adjust_axis_length(len(pos), i, scan_kind)
-        return n_pos
+        """See ptychosaxs.api.scanplan.count_positions."""
+        return scanplan.count_positions(position_arrays, scan_kind)
 
     def _compute_helix_total_time(self, phi_st: float, phi_fe: float, phi_step: float, phi_tm: float) -> tuple:
         """Return (total_time, Nsteps, step_time) for a helix fly scan's phi axis.
@@ -1623,17 +1557,8 @@ class ScanHandler:
 
     @staticmethod
     def _snake_positions(x_positions, y_positions):
-        """Return Nx2 array of (x, y) scan positions in snake (boustrophedon) order.
-
-        y_positions is the slow axis (outer loop).
-        Even rows run x left-to-right; odd rows run right-to-left.
-        """
-        coords = []
-        for j, y in enumerate(y_positions):
-            row = x_positions if j % 2 == 0 else x_positions[::-1]
-            for x in row:
-                coords.append((x, y))
-        return np.asarray(coords)
+        """See ptychosaxs.api.scanplan.snake_positions."""
+        return scanplan.snake_positions(x_positions, y_positions)
 
     # ------------------------------------------------------------------
     # Extracted methods
