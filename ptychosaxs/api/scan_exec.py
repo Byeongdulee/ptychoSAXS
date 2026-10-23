@@ -30,10 +30,21 @@ import traceback
 
 import numpy as np
 
+import math  # noqa: F401  (used by moved executors)
+
 from ptychosaxs.api import optics_status as _optics_status
+from ptychosaxs.api.scan_errors import (  # noqa: F401
+    DET_MIN_READOUT_Error,
+    DET_OVER_READOUT_SPEED_Error,
+    DG645_Error,
+    SOFTGLUE_Setup_Error,
+)
+from ptychosaxs.hexapod_traj import TrajectoryUnavailable  # noqa: F401
 from ptychosaxs.api import scanplan  # noqa: F401  (used by moved methods)
-from ptychosaxs.api.scan_config import (
+from ptychosaxs.api.scan_config import (  # noqa: F401
     COUNT_DONE_TIMEOUT_MARGIN_S,
+    HEXAPOD_FLYMODE_STANDARD,
+    HEXAPOD_FLYMODE_WAVELET,
     COUNT_POLL_INTERVAL_S,
     DETECTOR_NOT_STARTED_ERROR,
     DETECTOR_READOUTTIME,
@@ -1486,3 +1497,1386 @@ class ScanExecutorsMixin:
         position_arrays = [self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"]) for ax in modified_axes]
         n_pos = self._compute_n_positions(position_arrays, scan_kind=scan_kind)
         self._write_scan_summary_line(scan_label, modified_axes, n_pos)
+
+    def stepscan0(self, motornumber=-1, update_progress=None, update_status=None):
+        axis = self.ctx.motornames[motornumber]
+        self.ctx.signalmotor = axis
+        self.ctx.signalmotorunit = self.ctx.motorunits[motornumber]
+        self.ctx.rpos = []
+        self.ctx.mpos = []
+        self.ctx.scan_scalars = []
+        pos = self.ctx.pts.get_pos(axis)
+        pos0 = pos
+        self.ctx.isfly = False
+        n = motornumber + 1
+
+        if not self.ctx.ui.chk_keep_prev_scan.isChecked():
+            self.ctx.clearplot()
+
+        st = self.stepscan_st + self.stepscan_p0
+        fe = self.stepscan_fe + self.stepscan_p0
+        expt = self.stepscan_expt
+        step = self.stepscan_step
+        # disable fit menu
+        self.ctx.ui.actionFit_QDS_phi.setEnabled(False)
+        # enable fit menu
+        if axis == "phi":
+            self.ctx.ui.actionFit_QDS_phi.setEnabled(True)
+        if self.ctx.ui.chk_reverse_scan_dir.isChecked():
+            if abs(st - pos) > abs(fe - pos):
+                t = fe
+                fe = st
+                st = t
+
+        self._scan_mv(axis, st, update_status=update_status)
+        pos = self._make_positions(0, st - 0, fe - 0, step)
+        if len(pos) == 1:
+            pos = np.array([st, fe])
+
+        # scaninfo = []
+        # scaninfo.append('#H')
+        # if self.ctx.detector[2] is not None:
+        #     scaninfo.append(axis)
+        #     scaninfo.append(self.ctx.detector[2].scaler.NM2)
+        #     scaninfo.append(self.ctx.detector[2].scaler.NM3)
+        #     scaninfo.append(self.ctx.detector[2].scaler.NM4)
+        # else:
+        #     scaninfo.append(axis)
+        #     scaninfo.append('QDS1')
+        #     scaninfo.append('QDS2')
+        #     scaninfo.append('QDS3')
+        # self.ctx.write_scaninfo_to_logfile(scaninfo)
+
+        # prepare to collect Detector images
+        isDET_selected = False
+
+        if self.ctx.DEBUG_MOTORS:
+            # --- Debug 1-D step scan (motor stubs) ---
+            mpos_data = []
+            N = len(pos)
+            self.isStopScanIssued = False
+            for i, p in enumerate(pos):
+                if self.isStopScanIssued:
+                    break
+                self._scan_mv(axis, p, update_status=update_status)
+                time.sleep(min(expt, 0.05))
+                mpos_data.append(self.ctx.pts.get_pos(axis))
+                if update_progress is not None:
+                    update_progress(int(100 * (i + 1) / N))
+            self.ctx.mpos = mpos_data
+            return
+
+        # ── REAL MODE ─────────────────────────────────────────────────────────
+        # Set up the DG645 delay generator for step-scan triggering.
+        # For single-pulse steps: trigger_source=5 means software trigger,
+        # period=0 means "fire once per trigger call" (no auto-repeat).
+        # For multi-pulse steps: DGNimage pulses fire per trigger at Cycperiod spacing.
+        if self.ctx.parameters._pulses_per_step == 1:
+            period = 0
+        else:
+            period = round(max(expt + 0.020, 0.03), 6)
+        self.ctx.dg645_12ID.set_pilatus(
+            expt,
+            trigger_source=5,
+            DGNimage=int(self.ctx.parameters._pulses_per_step),
+            Cycperiod=period,
+        )
+        det_period = self._step_detector_period(expt)
+
+        # Arm all selected detectors for the full scan length.
+        # step_ready() puts each detector in external-trigger mode, programs
+        # the exposure time and period, and sets the total frame count it
+        # should expect (len(pos) * pulses_per_step). Once, here -- not per
+        # point.
+        isDET_selected = False
+        for detN, det in enumerate(self.ctx.detector):
+            if det is not None:
+                # Skip Struck detector which doesn't support HDF5 file templates
+                if "3820" in det._prefix:
+                    continue
+                isDET_selected = True
+                print(
+                    f"Arming detector {detN} ({det._prefix}) for {len(pos)} positions."
+                )
+                try:
+                    det.setFileTemplate('%s%s_%5.5d.h5')
+                    det.step_ready(
+                        expt,
+                        len(pos),
+                        pulsespershot=self.ctx.parameters._pulses_per_step,
+                        fn=self.ctx.hdf_plugin_name[detN],
+                        period=det_period,
+                    )
+                except TimeoutError:
+                    self.ctx.messages["recent error message"] = (
+                        f"Detector {det._prefix} timed out during step_ready."
+                    )
+                    print(self.ctx.messages["recent error message"])
+                    return
+
+        # Count the scalars one position at a time, the way scalar_scan.py's
+        # OneShot mode does. Only when Struck is on, so every other scan leaves
+        # the scaler free-running and undisturbed for its other clients.
+        scaler_oneshot = self.ctx.isStruckCountNeeded and self._scaler_oneshot_begin(expt)
+
+        t0 = time.time()
+        try:
+            for i, value in enumerate(pos):
+                if self.isStopScanIssued:
+                    break
+
+                # Move motor to this scan position and wait for motor to settle.
+                self._scan_mv(axis, value, update_status=update_status)
+
+                # Configurable idle time between exposures (avoids vibration artefacts).
+                time.sleep(self.ctx.parameters._step_acq_time)
+
+                # One OneShot count at this position for the scaler csv, taken
+                # after the settle above so the scalers and the detector frame
+                # both see the same stopped stage, and before the trigger.
+                if scaler_oneshot:
+                    self.ctx.scan_scalars.append(self._scaler_oneshot_count(expt))
+
+                # Re-confirm detector is armed before each trigger.
+                # The detector can fall out of armed state after a timeout or IOC error.
+                timeout_occurred, TIMEOUT = self.is_arming_detecotors_timedout()
+                if timeout_occurred:
+                    self.ctx.messages["recent error message"] = (
+                        f"Detector arm timeout ({TIMEOUT}s) at point {i + 1}. {time.ctime()}"
+                    )
+                    print(self.ctx.messages["recent error message"])
+                    return DETECTOR_NOT_STARTED_ERROR
+
+                # Fire the DG645 trigger.  This causes _pulses_per_step exposures.
+                if isDET_selected:
+                    self.ctx.dg645_12ID.trigger()
+
+                # Block until the detector has collected the expected cumulative frame count.
+                # is_waiting_detectors_timedout checks ArrayCounter_RBV >= (i+1)*pulses_per_step.
+                timeout_occurred, TIMEOUT = self.is_waiting_detectors_timedout(expt, i)
+                if timeout_occurred:
+                    self.ctx.messages["recent error message"] = (
+                        f"Detector frame timeout ({TIMEOUT}s) at point {i + 1}. {time.ctime()}"
+                    )
+                    print(self.ctx.messages["recent error message"])
+                    return DETECTOR_NOT_STARTED_ERROR
+
+                # Record the commanded position for the scan log.
+                self.ctx.mpos.append(value)
+                self._emit_progress(t0, i, len(pos), update_progress, update_status)
+        finally:
+            if scaler_oneshot:
+                self._scaler_oneshot_restore()
+
+        # Return motor to its home position (where it was before the scan started).
+        self._scan_mv(axis, pos0, update_status=update_status)
+
+    def stepscan3d0(
+        self, xmotor=0, ymotor=-1, phimotor=-1, update_progress=None, update_status=None,
+        notify_folder_advanced=None
+    ):
+        axis = self.ctx.motornames[phimotor]
+        self.ctx.signalmotor3 = axis
+        self.ctx.signalmotorunit3 = self.ctx.motorunits[phimotor]
+        self.ctx.isfly3 = False
+
+        st = self.stepscan3d_st + self.stepscan3d_p0
+        fe = self.stepscan3d_fe + self.stepscan3d_p0
+        step = self.stepscan3d_step
+
+        self._scan_mv(axis, st, update_status=update_status)
+        pos = self._make_positions(0, st - 0, fe - 0, step)
+
+        i = 0
+        Npos = len(pos)
+        retried_dueto_timeout = 0
+
+        if self.ctx.DEBUG_MOTORS:
+            phiaxis = axis
+            xaxis = self.ctx.motornames[xmotor]
+            yaxis = self.ctx.motornames[ymotor]
+
+            x_st = self.stepscan1d_st + self.stepscan1d_p0
+            x_fe = self.stepscan1d_fe + self.stepscan1d_p0
+            x_step = self.stepscan1d_step
+            x_coords = self._make_positions(0, x_st - 0, x_fe - 0, x_step)
+            if len(x_coords) == 1:
+                x_coords = np.array([x_st, x_fe])
+
+            y_st = self.stepscan2d_st + self.stepscan2d_p0
+            y_fe = self.stepscan2d_fe + self.stepscan2d_p0
+            y_step = self.stepscan2d_step
+            y_coords = self._make_positions(0, y_st - 0, y_fe - 0, y_step)
+            if len(y_coords) == 1:
+                y_coords = np.array([y_st, y_fe])
+
+            expt = self.stepscan1d_tm
+
+            xy_pos = self._snake_positions(x_coords, y_coords)
+            Nxy = len(xy_pos)
+            Ntot = Npos * Nxy
+
+            mpos_data = []
+            self.isStopScanIssued = False
+            count = 0
+            for phip in pos:
+                if self.isStopScanIssued:
+                    break
+                self._scan_mv(phiaxis, phip, update_status=update_status)
+                for xp, yp in xy_pos:
+                    if self.isStopScanIssued:
+                        break
+                    self._scan_mv(xaxis, xp, update_status=update_status)
+                    self._scan_mv(yaxis, yp, update_status=update_status)
+                    time.sleep(min(expt, 0.05))
+                    mpos_data.append(
+                        [self.ctx.pts.get_pos(xaxis), self.ctx.pts.get_pos(yaxis)]
+                    )
+                    count += 1
+                    if update_progress is not None:
+                        update_progress(int(100 * count / Ntot))
+                time.sleep(0.5)
+            self.ctx.mpos = mpos_data
+            for key, p0val in self.ctx.motor_p0.items():
+                self._scan_mv(self.ctx.motornames[key], p0val, update_status=update_status)
+            return
+
+        while i < Npos:
+            wait_long = False
+            value = pos[i]
+            if self.isStopScanIssued:
+                break
+
+            # loging phi angle information
+            print("")
+            print("*****")
+            print(f"phi position : {value:.3e}")
+            scaninfo = []
+            scaninfo.append("#I phi = ")
+            scaninfo.append(value)
+            self.ctx.write_scaninfo_to_logfile(scaninfo)
+
+            self._scan_mv(axis, value, update_status=update_status)
+            self._push_filepaths_to_detectors()
+            # Give this slice's folder its own master file, with theta reflecting
+            # the angle just settled at (worker-thread safe: no Qt widget reads).
+            self._write_slice_master_file()
+            self.progress_3d = (i, Npos)
+            scan = f"{axis}{i:03d}"
+            self._log_3d_slice_start(scan, self.stepscan3d_axes_params, value)
+            retval = self.ctx.stepscan2d0(
+                xmotor=xmotor,
+                ymotor=ymotor,
+                update_progress=update_progress,
+                update_status=update_status,
+            )
+            if retval == DETECTOR_NOT_STARTED_ERROR:
+                msg = f"Detector refresh failed ."
+                update_status(msg)
+                retried_dueto_timeout = retried_dueto_timeout + 1
+                wait_long = True
+                i = i - 1  # retry the same angle
+                if retried_dueto_timeout > 2:
+                    msg = f"Detector refresh failed 3 times. Aborting 3D scan."
+                    update_status(msg)
+                    break
+            else:
+                self._update_3d_slice_completed()
+            if update_status:
+                msg = f"Elapsed time = {time.time() - self.time_scanstart}s to finish {(i + 1) / len(pos) * 100}%."
+                update_status(msg)
+
+            # Link this slice's detector data into its own master file (not the
+            # frozen scan-start one), then advance to the next folder. Runs on
+            # the worker thread, so direct_gui_updates=False keeps this call from
+            # touching any Qt widgets directly -- label refresh is deferred to
+            # the queued scanFolderAdvanced signal via notify_folder_advanced.
+            self.ctx.scandone(
+                True, False, update_gui=False,
+                direct_gui_updates=False,
+                notify_folder_advanced=notify_folder_advanced,
+                link_scan_number=self.ctx.parameters.scan_number,
+            )
+            if wait_long:
+                wait_for_det_recovery_s = 60  # extended wait after detector timeout to allow IOC recovery before retry
+                time.sleep(wait_for_det_recovery_s)
+
+            # monitoring the station ready
+            if self.ctx.monitor_beamline_status:
+                # if beam is down, wait here
+                if self.ctx.isOK2run is not True:
+                    self.ctx.wait_for_beam(update_status, value)
+                    # retry the same angle
+                    i -= 1
+            i = i + 1
+
+    def fly3d0(
+        self,
+        xmotor=0,
+        ymotor=1,
+        phimotor=6,
+        slice_label_prefix="",
+        snake=False,
+        update_progress=None,
+        update_status=None,
+        notify_folder_advanced=None,
+    ):
+        # xmotor is for flying
+        # ymotor is for stepping
+        # phimotor is for rotation
+        axis = self.ctx.motornames[phimotor]
+        self.ctx.signalmotor3 = axis
+        self.ctx.signalmotorunit3 = self.ctx.motorunits[phimotor]
+        pos = self.ctx.pts.get_pos(axis)
+        self.ctx.isfly3 = False
+
+        # fly2d0/fly2d0_SNAKE run synchronously on this same worker thread for
+        # each phi slice below. Stash the queued-signal callback here so they can
+        # advance scan_number/refresh the GUI label the same thread-safe way
+        # stepscan3d0 does, instead of touching Qt widgets directly (see the
+        # end of fly2d0 / fly2d0_SNAKE).
+        self._notify_folder_advanced_3d = notify_folder_advanced
+
+        st = self.fly3d_st + self.fly3d_p0
+        fe = self.fly3d_fe + self.fly3d_p0
+        step = self.fly3d_step
+
+        if st > fe:
+            step = -1 * abs(step)
+        if st < fe:
+            step = abs(step)
+
+        # revsere scan disabled: always scan from start to final regardless of the initial position.
+        self._scan_mv(axis, st, update_status=update_status)
+        pos = np.arange(st, fe + step / 2, step)
+        retried_dueto_timeout = 0
+
+        if self.ctx.DEBUG_MOTORS:
+            phiaxis = axis
+            xaxis = self.ctx.motornames[xmotor]
+            yaxis = self.ctx.motornames[ymotor]
+
+            x_st = self.fly1d_st + self.fly1d_p0
+            x_fe = self.fly1d_fe + self.fly1d_p0
+            x_step = self.fly1d_step
+            x_step = -abs(x_step) if x_st > x_fe else abs(x_step)
+            x_positions = np.arange(x_st, x_fe + x_step / 2, x_step)
+            if len(x_positions) == 1:
+                x_positions = np.array([x_st, x_fe])
+
+            y_st = self.fly2d_st + self.fly2d_p0
+            y_fe = self.fly2d_fe + self.fly2d_p0
+            y_step = self.fly2d_step
+            y_step = -abs(y_step) if y_st > y_fe else abs(y_step)
+            y_positions = np.arange(y_st, y_fe + y_step / 2, y_step)
+            if len(y_positions) == 1:
+                y_positions = np.array([y_st, y_fe])
+
+            tm = self.fly1d_tm
+            xy_pos = self._snake_positions(x_positions, y_positions)
+            Ntot = len(pos) * len(xy_pos)
+
+            mpos_data = []
+            self.isStopScanIssued = False
+            count = 0
+            for phip in pos:
+                if self.isStopScanIssued:
+                    break
+                self._scan_mv(phiaxis, phip, update_status=update_status)
+                for xp, yp in xy_pos:
+                    if self.isStopScanIssued:
+                        break
+                    self._scan_mv(yaxis, yp, update_status=update_status)
+                    self._scan_mv(xaxis, xp, update_status=update_status)
+                    time.sleep(min(tm, 0.05))
+                    mpos_data.append(
+                        [self.ctx.pts.get_pos(xaxis), self.ctx.pts.get_pos(yaxis)]
+                    )
+                    count += 1
+                    if update_progress is not None:
+                        update_progress(int(100 * count / Ntot))
+                time.sleep(0.5)
+            self.ctx.mpos = mpos_data
+            return
+
+        # ── REAL MODE ─────────────────────────────────────────────────────────
+        # Build a per-slice scan label used in log entries.
+        if slice_label_prefix:
+            slice_label_prefix = f"{slice_label_prefix}{axis}"
+        else:
+            slice_label_prefix = axis
+
+        i = 0
+        retried_dueto_timeout = 0
+        while i < len(pos):
+            wait_long = False
+            value = pos[i]
+
+            if self.isStopScanIssued:
+                break
+
+            # Log this phi slice.
+            print(f"\n***** phi position: {value:.3e}")
+            self.ctx.write_scaninfo_to_logfile(["#I phi = ", value])
+
+            # Move phi to this angle.
+            self._scan_mv(axis, value, update_status=update_status)
+
+            self.progress_3d = (i, len(pos))
+            scan = f"{slice_label_prefix}{i:03d}"
+            self._log_3d_slice_start(
+                scan, self.fly3d_axes_params, value,
+                scan_kind="fly_snake" if snake else "fly_hexapod_1d",
+            )
+
+            # Give this slice its own folder's master file, with theta reflecting
+            # the angle just settled at (worker-thread safe: no Qt widget reads).
+            # Also refreshes self._current_scan_master_paths to this slice, so the
+            # hexapod-positions append below (and flydone3d's final link) target it.
+            self._write_slice_master_file()
+            # fly2d0/fly2d0_SNAKE end with their own run_stop_issued(), which
+            # advances scan_number to the *next* slice's folder before we get
+            # control back below -- so capture this slice's number now, while
+            # it's still current, for the post-sweep data-linking call.
+            slice_scan_number = self.ctx.parameters.scan_number
+
+            # Program the hexapod trajectory for this phi slice, then run the
+            # 2-D executor directly on the current worker thread (no sub-worker).
+            if snake:
+                # Disable the wave generator before reprogramming; set_traj_SNAKE2
+                # fails with GCSError 73 if the generator output is still active.
+                if i > 0:
+                    self.ctx.pts.hexapod.stop_traj()
+                self.fly_traj(xmotor, ymotor)
+                # As early as possible after pulse_number becomes known, verify
+                # the software-predicted hexapod trigger count matches it and
+                # record both. Every slice now has its own master file, so every
+                # slice writes its own hexapod_positions dataset; no try/except
+                # here — let a mismatch propagate to Worker.run()'s generic
+                # exception handler like DET_MIN_READOUT_Error and DG645_Error
+                # already do elsewhere in this file.
+                self._reconcile_hexapod_snake_positions(write_to_master=True)
+                retval = self.fly2d0_SNAKE(
+                    xmotor, ymotor,
+                    update_progress=update_progress, update_status=update_status,
+                )
+            else:
+                self.fly_traj(xmotor)
+                retval = self.fly2d0(
+                    xmotor, ymotor,
+                    update_progress=update_progress, update_status=update_status,
+                )
+            self.ctx.s12softglue.flush()
+            print(f"softglue flushed at {time.ctime()}")
+
+            # Link this slice's detector data into its own master file. The
+            # scan-number advance for the next slice's folder already happened
+            # inside fly2d0/fly2d0_SNAKE's own end-of-scan bookkeeping above.
+            self._link_slice_detector_data(slice_scan_number)
+
+            if i < len(pos) - 1:
+                self.ctx.get_detectors_ready()
+                self._push_filepaths_to_detectors()
+                # Extra settle time before the next phi slice starts arming its
+                # detectors -- some slices otherwise stall for a long time waiting
+                # on the detector IOC before the next trigger sequence begins.
+                time.sleep(self.OVERHEAD_FLY3D_PHI)
+
+            # On detector failure, retry this phi angle up to 2 extra times.
+            if retval == DETECTOR_NOT_STARTED_ERROR:
+                retried_dueto_timeout += 1
+                wait_long = True
+                i -= 1  # stay on this angle
+                msg = f"Detector timeout at phi={value:.3f}, retry {retried_dueto_timeout}."
+                if update_status:
+                    update_status(msg)
+                print(msg)
+                if retried_dueto_timeout > 2:
+                    if update_status:
+                        update_status("Detector failed 3 times. Aborting 3-D fly scan.")
+                    break
+            
+            self._update_3d_slice_completed()
+
+            if update_status:
+                elapsed = time.time() - self.time_scanstart
+                update_status(
+                    f"Elapsed {elapsed:.0f}s to finish {(i + 1) / len(pos) * 100:.1f}%."
+                )
+
+            if wait_long:
+                # Give the detector IOC 60 s to recover after a timeout.
+                time.sleep(60)
+
+            # If the beam is down, wait here and retry this angle.
+            if self.ctx.monitor_beamline_status and not self.ctx.isOK2run:
+                self.wait_for_beam(update_status, value)
+                i -= 1  # retry the same angle after beam recovery
+
+            i += 1
+
+        # Don't let a standalone 2-D fly scan started later on this handler
+        # accidentally pick up this 3-D scan's (now-finished) signal emitter.
+        self._notify_folder_advanced_3d = None
+
+    def fly2d0_SNAKE(
+        self, xmotor=0, ymotor=1, update_progress=None, update_status=None
+    ):
+        self.ctx.isfly2 = False
+        ##### ############## need to work from this........
+
+        print()
+        # scaninfo = []
+        # scaninfo.append('#I Y = ')
+        # scaninfo.append(value)
+        # self.ctx.write_scaninfo_to_logfile(scaninfo)
+        # print("In fly2d0")
+        t0 = time.time()
+
+        self.plotlabels = []
+        if self.ctx.ui.actionckTime_reset_before_scan.isChecked():
+            if self.ctx.s12softglue.isConnected:
+                self.ctx.s12softglue.ckTime_reset()
+        if self.ctx.ui.actionMemory_clear_before_scan.isChecked():
+            try:
+                if self.ctx.s12softglue.isConnected:
+                    self.ctx.s12softglue.memory_clear()
+            except TimeoutError:
+                self.ctx.messages["recent error message"] = (
+                    "softglue memory_clear timeout"
+                )
+                print(self.ctx.messages["recent error message"])
+
+        isTestRun = self.ctx.ui.actionTestFly.isChecked()
+        if isTestRun:
+            print("**** Test Run:")
+        self.ctx.isfly = True
+        self.ctx.isscan = True
+
+        # disable fit menu
+        self.ctx.ui.actionFit_QDS_phi.setEnabled(False)
+
+        if not self.ctx.ui.chk_keep_prev_scan.isChecked():
+            self.ctx.clearplot()
+
+        if self.ctx.DEBUG_MOTORS:
+            xaxis = self.ctx.motornames[xmotor]
+            yaxis = self.ctx.motornames[ymotor]
+            x_st = self.fly1d_st + self.fly1d_p0
+            x_fe = self.fly1d_fe + self.fly1d_p0
+            x_step = self.fly1d_step
+            y_st = self.fly2d_st + self.fly2d_p0
+            y_fe = self.fly2d_fe + self.fly2d_p0
+            y_step = self.fly2d_step
+            tm = self.fly1d_tm
+            x_step = -abs(x_step) if x_st > x_fe else abs(x_step)
+            y_step = -abs(y_step) if y_st > y_fe else abs(y_step)
+            x_positions = np.arange(x_st, x_fe + x_step / 2, x_step)
+            y_positions = np.arange(y_st, y_fe + y_step / 2, y_step)
+            if len(x_positions) == 1:
+                x_positions = np.array([x_st, x_fe])
+            if len(y_positions) == 1:
+                y_positions = np.array([y_st, y_fe])
+            xy_pos = self._snake_positions(x_positions, y_positions)
+            mpos_data = []
+            self.isStopScanIssued = False
+            Ntot = len(xy_pos)
+            count = 0
+            for xp, yp in xy_pos:
+                if self.isStopScanIssued:
+                    break
+                self._scan_mv(yaxis, yp, update_status=update_status)
+                self._scan_mv(xaxis, xp, update_status=update_status)
+                time.sleep(min(tm, 0.05))
+                mpos_data.append([self.ctx.pts.get_pos(xaxis), self.ctx.pts.get_pos(yaxis)])
+                count += 1
+                if update_progress is not None:
+                    update_progress(int(100 * count / Ntot))
+            self.ctx.mpos = mpos_data
+            return
+
+        # expt = np.around(self.ctx.pts.hexapod.scantime/self.ctx.pts.hexapod.pulse_number*0.75, 3)
+        period = self.ctx.pts.hexapod.pulse_step
+        print(self.ctx.pts.hexapod.pulse_number, "This is the number of pulses......")
+        # expt = period-self.det_readout_time  JD
+        expt = (
+            period * self.ctx.parameters._ratio_exp_period
+        )  # JMM, *0.2 previously for JD. -0.02 previously for BL
+        # if period-expt < DETECTOR_READOUTTIME:
+        #    raise RuntimeError("expouretime is too short to readout DET images.")
+
+        if expt <= 0:
+            self.ctx.messages["recent error message"] = (
+                f"Exposure time is ≤ 0 (period={period:.4f}, "
+                f"ratio={self.ctx.parameters._ratio_exp_period:.3f})."
+            )
+            print(self.ctx.messages["recent error message"])
+            raise DET_MIN_READOUT_Error(self.ctx.messages["recent error message"])
+
+        if abs(period) < self.OVERHEAD_FLY:
+            self.ctx.messages["recent error message"] = (
+                "Period < %d ms — Pilatus 2M maximum rate is 30 Hz."
+                % (1000 * self.OVERHEAD_FLY)
+            )
+            print(self.ctx.messages["recent error message"])
+            raise DET_OVER_READOUT_SPEED_Error(self.ctx.messages["recent error message"])
+
+        # ── REAL MODE ─────────────────────────────────────────────────────────
+        # Set delay generator for fly-scan timing.
+        if expt != self.ctx.dg645_12ID._exposuretime:
+            try:
+                self.ctx.dg645_12ID.set_pilatus_fly(expt)
+            except Exception:
+                raise DG645_Error
+
+        if isTestRun:
+            return  # dry run: timing validated but no hardware motion
+
+        # self.Xaxis and self.Yaxis are set by fly_traj() (called on the GUI thread
+        # in the fly2d entry point, before the worker was started).  fly_traj also
+        # called hexapod.set_traj_SNAKE2(), which programmed the complete 2-D snake
+        # waveform onto the hexapod controller.
+        axes = [self.Xaxis, self.Yaxis]
+
+        # Move to the start position of the entire 2-D snake trajectory.
+        self.ctx.pts.hexapod.goto_start_pos(axes)
+
+        # Arm all detectors for the TOTAL pulse count across the full 2-D snake.
+        # The hexapod fires one trigger per position; pulse_number is the total
+        # across all lines (not per line).
+        for detN, det in enumerate(self.ctx.detector):
+            if det is not None:
+                try:
+                    det.fly_ready(
+                        expt,
+                        self.ctx.pts.hexapod.pulse_number,
+                        1,
+                        period=period,
+                        isTest=isTestRun,
+                        capture=(self.ctx.use_hdf_plugin, self.ctx.hdf_plugin_savemode_fly),
+                        fn=self.ctx.hdf_plugin_name[detN],
+                    )
+                except TimeoutError:
+                    self.ctx.messages["recent error message"] = (
+                        f"Detector {det._prefix} timed out during fly_ready."
+                    )
+                    print(self.ctx.messages["recent error message"])
+                    return DETECTOR_NOT_STARTED_ERROR
+
+        timeout_occurred, TIMEOUT = self.is_arming_detecotors_timedout()
+        if timeout_occurred:
+            self.ctx.messages["recent error message"] = (
+                f"Detector arm timeout ({TIMEOUT}s). {time.ctime()}"
+            )
+            print(self.ctx.messages["recent error message"])
+            return DETECTOR_NOT_STARTED_ERROR
+
+        print("fly2d0_SNAKE: executing 2-D snake trajectory...")
+        # Execute the complete 2-D snake trajectory in a single hexapod command.
+        # The hexapod moves both X and Y axes simultaneously along the pre-programmed
+        # snake path, firing one encoder-synchronized trigger per position.
+        self.ctx.pts.hexapod.run_traj(axes)
+
+        # Wait until all expected frames have been collected.
+        Nstep = self.ctx.pts.hexapod.pulse_number
+        TIMEOUT = period * Nstep + 2  # stall window: total scan time + 2 s buffer
+        # The last frame's ArrayCounter_RBV update is delayed by HDF5 finalization,
+        # which can take many seconds. Give it a much longer stall window.
+        LAST_FRAME_TIMEOUT = max(TIMEOUT, 30)
+        N_imgcollected = 0
+        t_since_last_frame = time.time()
+        t0_scan = time.time()
+        while N_imgcollected < Nstep:
+            if self.isStopScanIssued:
+                break
+
+            # Read the current frame count from the first available camera detector.
+            val = 0
+            for ndet, det in enumerate(self.ctx.detector):
+                if ndet > 1:
+                    continue
+                if det is not None:
+                    val = det.ArrayCounter_RBV
+                    break
+
+            # Emit 3-D-aware or standalone progress.
+            self._emit_progress(
+                t0_scan,
+                val,
+                Nstep,
+                update_progress,
+                update_status,
+                t_scanstart=self.time_scanstart,
+                progress_3d=self.progress_3d if self.fly3d_p0 is not None else None,
+            )
+
+            time.sleep(0.1)
+
+            # If frame count advanced, reset the stall timer.
+            if val > N_imgcollected:
+                N_imgcollected = val
+                t_since_last_frame = time.time()
+
+            # Stall timeout: use the longer window for the last frame, since its
+            # ArrayCounter_RBV update can be delayed by HDF5 finalization. This used
+            # to also accept Armed==0 at Nstep-1 as "close enough" and break early,
+            # but Armed can drop to 0 just as easily because the last trigger was
+            # never registered at all (dropped trigger, not just a slow RBV) --
+            # that silently produced a NaN or missing final frame. Waiting out the
+            # full stall window and timing out on a genuine miss (which fly2d/fly3d
+            # already retry on DETECTOR_NOT_STARTED_ERROR) is safer than guessing.
+            # DIAGNOSTIC - a camserver error stops frames arriving, so the loop
+            # above just waits out the full stall window with nothing to say.
+            # Surface the detector's own account instead of a 30 s silence.
+            camserver_error = self._detector_camserver_error()
+            if camserver_error:
+                self.ctx.messages["recent error message"] = (
+                    f"Detector reported an error after {N_imgcollected}/{Nstep} "
+                    f"frames: {camserver_error}"
+                )
+                print(self.ctx.messages["recent error message"])
+                return DETECTOR_NOT_STARTED_ERROR
+
+            stall_limit = LAST_FRAME_TIMEOUT if N_imgcollected == Nstep - 1 else TIMEOUT
+            if time.time() - t_since_last_frame > stall_limit:
+                self.ctx.messages["recent error message"] = (
+                    f"Data collection stalled after {stall_limit:.1f}s "
+                    f"({N_imgcollected}/{Nstep} frames). {time.ctime()}"
+                )
+                print(self.ctx.messages["recent error message"])
+                return DETECTOR_NOT_STARTED_ERROR
+
+        self.ctx.pts.hexapod.wait()
+        self._advance_scan_number_thread_safe()
+        return 1
+
+    def fly0(self, motornumber=-1, update_progress=None, update_status=None):
+        t0 = time.time()
+        axis = self.ctx.motornames[motornumber]
+        self.ctx.signalmotor = axis
+        self.ctx.signalmotorunit = self.ctx.motorunits[motornumber]
+        self.plotlabels = []
+        if self.ctx.ui.actionckTime_reset_before_scan.isChecked():
+            if self.ctx.s12softglue.isConnected:
+                self.ctx.s12softglue.ckTime_reset()
+        if self.ctx.ui.actionMemory_clear_before_scan.isChecked():
+            try:
+                if self.ctx.s12softglue.isConnected:
+                    self.ctx.s12softglue.memory_clear()
+            except TimeoutError:
+                self.ctx.messages["recent error message"] = (
+                    "softglue memory_clear timeout"
+                )
+                print(self.ctx.messages["recent error message"])
+
+        print("")
+        isTestRun = self.ctx.ui.actionTestFly.isChecked()
+        if isTestRun:
+            print("**** Test Run:")
+        self.ctx.isfly = True
+        self.ctx.isscan = True
+
+        # disable fit menu
+        self.ctx.ui.actionFit_QDS_phi.setEnabled(False)
+
+        if not self.ctx.ui.chk_keep_prev_scan.isChecked():
+            self.ctx.clearplot()
+
+        st = self.fly1d_st + self.fly1d_p0
+        fe = self.fly1d_fe + self.fly1d_p0
+        step = self.fly1d_step
+        tm = self.fly1d_tm
+
+        if self.ctx.DEBUG_MOTORS:
+            mpos_data = []
+            if st > fe:
+                step = -abs(step)
+            else:
+                step = abs(step)
+            positions = np.arange(st, fe + step / 2, step)
+            if len(positions) == 1:
+                positions = np.array([st, fe])
+            N = len(positions)
+            self.isStopScanIssued = False
+            for i, p in enumerate(positions):
+                if self.isStopScanIssued:
+                    break
+                self._scan_mv(axis, p, update_status=update_status)
+                time.sleep(min(tm, 0.05))
+                mpos_data.append(self.ctx.pts.get_pos(axis))
+                if update_progress is not None:
+                    update_progress(int(100 * (i + 1) / N))
+            self.ctx.mpos = mpos_data
+            return
+
+        pos = self.ctx.pts.get_pos(axis)
+        # print("Time to finish line 2127: %0.3f" % (time.time()-t0)) very fast down to this far
+        if (axis in self.ctx.pts.hexapod.axes) and (
+            self.ctx.hexapod_flymode == HEXAPOD_FLYMODE_WAVELET
+        ):
+            if self.ctx.ui.chk_reverse_scan_dir.isChecked():
+                if abs(st - pos) > abs(fe - pos):
+                    t = fe
+                    fe = st
+                    st = t
+                    step = -step
+            direction = int(step) / abs(step)
+            if direction == 1:
+                dirv = 0
+            else:
+                dirv = 6
+            self.ctx.pts.hexapod.assign_axis2wavtable(
+                axis, self.ctx.pts.hexapod.WaveGenID[axis] + dirv
+            )
+
+            period = self.ctx.pts.hexapod.pulse_step  # pulse step time.
+            expt = (
+                period * self.ctx.parameters._ratio_exp_period
+            )  # JMM, *0.2 previously for JD. -0.02 previously for BL
+            if isTestRun:
+                print(
+                    f"{self.ctx.pts.hexapod.pulse_number} images will be collected every {period}s with exposure time of {expt}s."
+                )
+
+            if period - expt < DETECTOR_READOUTTIME:
+                self.ctx.messages["recent error message"] = (
+                    f"Exposure time {expt:.4f} and period {period:.4f} requires the readout time {period - expt}, which is too short."
+                )
+                print(self.ctx.messages["recent error message"])
+                if update_status:
+                    update_status(self.ctx.messages["recent error message"])
+                return None
+
+            if expt <= 0:
+                self.ctx.messages["recent error message"] = (
+                    f"Note that after subtracting the detector readout time {self.det_readout_time:.3e} s, the exposure time becomes equal or less than 0."
+                )
+                print(self.ctx.messages["recent error message"])
+                raise DET_MIN_READOUT_Error(self.ctx.messages["recent error message"])
+
+            if abs(period) < self.OVERHEAD_FLY:
+                self.ctx.messages["recent error message"] = (
+                    f"Note that Max speed of Pilatus2M is 30Hz."
+                )
+                print(self.ctx.messages["recent error message"])
+                raise DET_OVER_READOUT_SPEED_Error(
+                    self.ctx.messages["recent error message"]
+                )
+
+            # set the delay generator
+            if expt != self.ctx.dg645_12ID._exposuretime:
+                try:
+                    self.ctx.dg645_12ID.set_pilatus_fly(expt)
+                except:
+                    raise DG645_Error
+
+            # SoftGlue ready for recording interferometer values
+            movestep = (
+                abs(fe - st)
+                / self.ctx.pts.hexapod.pulse_number
+                * 1000
+                * self.ctx.parameters._ratio_exp_period
+            )
+            print(
+                f"Actual exposure time: {1000.*expt:0.3f} ms, during which {axis} will move {movestep:.3f} um."
+            )
+
+            # If softglue SG is not selected, use prepare for the softglue.
+            if self.ctx.detector[3] is None:
+                if self.ctx.s12softglue.isConnected:
+                    N_counts = self.ctx.s12softglue.number_acquisition(
+                        expt, self.ctx.pts.hexapod.pulse_number
+                    )
+                    self.ctx.parameters.countsperexposure = np.round(
+                        N_counts / self.ctx.pts.hexapod.pulse_number
+                    )
+                    print(
+                        f"Total {self.ctx.parameters.countsperexposure} encoder positions will be collected per a DET image."
+                    )
+                    if N_counts > 100000:
+                        self.ctx.messages["recent error message"] = (
+                            f"******** CAUTION: Number of softglue counts: {N_counts} is larger than 100E3. Slow down the clock speed."
+                        )
+                        raise SOFTGLUE_Setup_Error(
+                            self.ctx.messages["recent error message"]
+                        )
+
+            if isTestRun:
+                return
+
+            # Scan start ............................
+            self.ctx.pts.hexapod.goto_start_pos(axis)  # took 0.4 second
+            for detN, det in enumerate(self.ctx.detector):
+                if det is not None:
+                    try:
+                        det.fly_ready(
+                            expt,
+                            self.ctx.pts.hexapod.pulse_number,
+                            period=period,
+                            isTest=isTestRun,
+                            capture=(
+                                self.ctx.use_hdf_plugin,
+                                self.ctx.hdf_plugin_savemode_fly,
+                            ),
+                            fn=self.ctx.hdf_plugin_name[detN],
+                        )
+                    except TimeoutError:
+                        self.ctx.messages["recent error message"] = (
+                            f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
+                        )
+                        print(self.ctx.messages["recent error message"])
+                        if update_status:
+                            update_status(self.ctx.messages["recent error message"])
+                        return DETECTOR_NOT_STARTED_ERROR
+            print("Ready for traj")
+            pos = self.ctx.pts.get_pos(axis)
+            print(f"pos is {pos} before traj run start.")
+
+            timeout_occurred, TIMEOUT = self.ctx.is_arming_detecotors_timedout()
+            if timeout_occurred:
+                self.ctx.messages["recent error message"] = (
+                    f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to be Armed. {time.ctime()}"
+                )
+                print(self.ctx.messages["recent error message"])
+                return DETECTOR_NOT_STARTED_ERROR
+
+            istraj_running = False
+            timeout = 5
+            i = 0
+            print("Trajectory scan initiated..")
+            while not istraj_running:
+                try:
+                    self.ctx.pts.hexapod.run_traj(axis)
+                except TrajectoryUnavailable:
+                    # No point retrying, and no point waiting out the five
+                    # attempts with the detector armed and the shutter open.
+                    self.ctx.messages["recent error message"] = (
+                        "Hexapod trajectory transport is unavailable (%s): %s"
+                        % (self.ctx.pts.hexapod.traj_state,
+                           self.ctx.pts.hexapod.traj_reason)
+                    )
+                    print(self.ctx.messages["recent error message"])
+                    return DETECTOR_NOT_STARTED_ERROR
+                except Exception as exc:
+                    # A transient GCS error is worth another attempt, but it
+                    # should not vanish silently the way a bare except made it.
+                    print(f"run_traj attempt failed ({exc}); retrying.")
+                wait_for_traj_start_s = 0.05  # brief pause before checking if hexapod trajectory has started moving
+                time.sleep(wait_for_traj_start_s)
+                pos_tmp = self.ctx.pts.get_pos(axis)
+                # An unreachable record reads nan, and nan != nan is True -
+                # so without this a dropped IOC would look like a running
+                # trajectory and the scan would "finish" with no data.
+                if not math.isnan(pos_tmp) and pos_tmp != pos:
+                    istraj_running = True
+                # istraj_running = self.ctx.is_traj_running()
+                i = i + 1
+                if i > timeout:
+                    self.ctx.messages["recent error message"] = (
+                        "traj scan command is resent for 5 times to the hexapod without success."
+                    )
+                    print(self.ctx.messages["recent error message"])
+                    break
+            print("Run_traj is sent command in rungui.")
+            isattarget = False
+            timeelapsed = 0
+            t0 = time.time()
+            while not isattarget:
+                try:
+                    isattarget = self.ctx.pts.hexapod.isattarget(axis)
+                except:
+                    isattarget = False
+                wait_for_traj_at_target_s = 0.02  # poll interval while waiting for hexapod to reach trajectory end position
+                time.sleep(wait_for_traj_at_target_s)
+                # pos_tmp = self.ctx.pts.get_pos(axis)
+                timeelapsed = time.time() - t0
+                prog = float(timeelapsed) / float(tm)
+                if update_progress:
+                    update_progress(int(prog * 100))
+                msg1 = f"Elapsed time = {int(timeelapsed)}s since the start."
+                if prog > 0:
+                    remainingtime = timeelapsed / prog - timeelapsed
+                else:
+                    remainingtime = 999
+                msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime, 2)}s\n"
+                self.ctx.messages["current status"] = "%s%s" % (msg1, msg2)
+                if update_status:
+                    update_status(self.ctx.messages["current status"])
+
+                if self.isStopScanIssued:
+                    break
+
+            pos = self.ctx.pts.get_pos(axis)
+            print(f"pos is {pos:.3e} after the traj run done.")
+        # fly scan with a constant velocity of motions.
+        else:
+            print("Fly scan with phi.")
+            # fly for phi scan is unique.
+            # tm is the total time for the fly scan, which is determined by the user input.
+            # step is the angle step, which is determined by the user input.
+            Xstep = self.fly1d_step  # step angle (this was step time before)
+            # This was the total time before, but now we will use it as the exposure time
+            # a time for each step will be calculated.
+            Xtm = self.fly1d_tm
+
+            # step time calculation
+            fly_acq_time = getattr(self.ctx.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
+            step_time = max(fly_acq_time, Xtm + self.det_readout_time, self.OVERHEAD_FLY)
+            # self.ctx.parameters._ratio_exp_period = Xtm / step_time
+            # total time calculation
+            # Use the same rounding-guarded formula as _make_positions/_compute_n_positions
+            # (bare int((fe-st)/Xstep) truncation can drop the last trigger on
+            # float-rounding edge cases where the division isn't exactly integral).
+            Nsteps = self._compute_n_positions([self._make_positions(0, st, fe, Xstep)], scan_kind="fly_phi")
+            total_time = Nsteps * step_time
+            # expt = step_time*self.ctx.parameters._ratio_exp_period # JMM, *0.2 previously for JD. -0.02 previously for BL
+            expt = Xtm
+            if step_time - expt < 0.015:
+                raise DET_MIN_READOUT_Error(
+                    f"Period - Exposure Time,{step_time - expt}s, should be longer than 50 microseconds."
+                )
+
+            # set the delay generator
+            try:
+                self.ctx.dg645_12ID.set_pilatus2(
+                    expt, Nsteps, step_time
+                )  # exposuretime, number of images, and time period for fly scan.
+            except:
+                raise DG645_Error
+            print(
+                f"Exposure time: {expt:0.3e} s, number of steps: {Nsteps}, Step time: {step_time:.3e} s, Total time for the scan: {total_time:.3f} s."
+            )
+            if self.ctx.ui.chk_reverse_scan_dir.isChecked():
+                if abs(st - pos) > abs(fe - pos):
+                    t = fe
+                    fe = st
+                    st = t
+
+            if motornumber == 6:
+                # enable fit menu
+                self.ctx.ui.actionFit_QDS_phi.setEnabled(True)
+
+            self._prev_vel, self._prev_acc = self.ctx.pts.get_speed(axis)
+            self._scan_mv(axis, st, wait=True, update_status=update_status)
+            wait_for_motor_settle_s = 0.1  # brief settle time after moving phi to start position before setting fly speed
+            time.sleep(wait_for_motor_settle_s)
+            # print(f"Setting speed for fly scan. Total time: {abs(fe-st)/total_time:.3f} s, acceleration: {abs(fe-st)/total_time*10:.3f}.")
+            self.ctx.pts.set_speed(
+                axis, abs(fe - st) / total_time, abs(fe - st) / total_time * 10
+            )
+            wait_for_speed_set_s = (
+                0.02  # brief pause after setting fly scan speed before arming detectors
+            )
+            time.sleep(wait_for_speed_set_s)
+
+            # Need to make detectors ready
+            for detN, det in enumerate(self.ctx.detector):
+                if det is not None:
+                    try:
+                        det.fly_ready(
+                            expt,
+                            Nsteps,
+                            period=step_time,
+                            isTest=isTestRun,
+                            capture=(
+                                self.ctx.use_hdf_plugin,
+                                self.ctx.hdf_plugin_savemode_fly,
+                            ),
+                            fn=self.ctx.hdf_plugin_name[detN],
+                        )
+                    #            print("Time to finish line 2190: %0.3f" % (time.time()-t0)) # take 0.3 second
+                    except TimeoutError:
+                        self.ctx.messages["recent error message"] = (
+                            f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
+                        )
+                        print(self.ctx.messages["recent error message"])
+                        if update_status:
+                            update_status(self.ctx.messages["recent error message"])
+                        # showerror("Detector timeout.")
+                        return
+
+            timeout_occurred, TIMEOUT = self.ctx.is_arming_detecotors_timedout()
+            if timeout_occurred:
+                self.ctx.messages["recent error message"] = (
+                    f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to be Armed. {time.ctime()}"
+                )
+                print(self.ctx.messages["recent error message"])
+                return DETECTOR_NOT_STARTED_ERROR
+
+            scaninfo = []
+            print("")
+            print(f"{axis} scan started..")
+            scaninfo.append(f"FileIndex, {axis},    time(s)")
+            scaninfo.append(f"0,   {st},   {time.time()}")
+            self.ctx.pts.mv(axis, fe, wait=False)
+
+            print("about to send out trigger.")
+            # Start collect data while an axis is moving.
+            self.ctx.dg645_12ID.trigger()
+            print("Delay generator is triggered to start the fly scan.")
+            # Update progress bar and status message.
+            N_imgcollected = 0
+            timeelapsed = time.time() - t0
+            TIMEOUT = total_time + 5
+            if TIMEOUT < 5:
+                TIMEOUT = 5
+            timestart = time.time()
+            val = 0
+            # print(N_imgcollected, Nsteps)
+            while N_imgcollected < Nsteps:
+                for ndet, det in enumerate(self.ctx.detector):
+                    if ndet > 1:
+                        continue
+                    if det is not None:
+                        val = det.ArrayCounter_RBV
+                        break
+                prog = float(val) / float(Nsteps)
+                pos = self.ctx.pts.get_pos(axis)
+                scaninfo.append(f"{val},    {pos},  {time.time()}")
+
+                if update_progress:
+                    update_progress(int(prog * 100))
+                msg1 = f"Elapsed time = {int(timeelapsed)}s since the start."
+                if prog > 0:
+                    remainingtime = timeelapsed / prog - timeelapsed
+                else:
+                    remainingtime = 999
+                msg2 = f"; Remaining time for the current 2D scan is {np.round(remainingtime, 2)}s\n"
+                self.ctx.messages["current status"] = "%s%s" % (msg1, msg2)
+                if update_status:
+                    update_status(self.ctx.messages["current status"])
+
+                wait_for_det_progress_s = 0.1  # poll interval while monitoring phi fly-scan frame collection progress
+                time.sleep(wait_for_det_progress_s)
+                if val > N_imgcollected:
+                    N_imgcollected = val
+                    timestart = time.time()
+
+                updatetime = time.time() - timestart
+                if updatetime > TIMEOUT:
+                    self.ctx.messages["recent error message"] = (
+                        f"Detector {det._prefix} data collection timeout after {TIMEOUT} seconds."
+                    )
+                    print(self.ctx.messages["recent error message"])
+                    if update_status:
+                        update_status(self.ctx.messages["recent error message"])
+                    return DETECTOR_NOT_STARTED_ERROR
+                timeelapsed = time.time() - t0
+                if self.isStopScanIssued:
+                    break
+            self.ctx.write_scaninfo_to_logfile(scaninfo)
+
+        return 1
+
+    def helix_fly0(self, phimotor=6, zmotor=2, update_progress=None, update_status=None):
+        """Worker-thread executor for helix fly scan: phi + Z simultaneous constant-velocity fly."""
+        t0 = time.time()
+        phi_axis = self.ctx.motornames[phimotor]
+        z_axis = self.ctx.motornames[zmotor]
+        self.ctx.signalmotor = f"{phi_axis},{z_axis}"
+        self.ctx.signalmotorunit = self.ctx.motorunits[phimotor]
+
+        if self.ctx.ui.actionckTime_reset_before_scan.isChecked():
+            if self.ctx.s12softglue.isConnected:
+                self.ctx.s12softglue.ckTime_reset()
+        if self.ctx.ui.actionMemory_clear_before_scan.isChecked():
+            try:
+                if self.ctx.s12softglue.isConnected:
+                    self.ctx.s12softglue.memory_clear()
+            except TimeoutError:
+                self.ctx.messages["recent error message"] = "softglue memory_clear timeout"
+                print(self.ctx.messages["recent error message"])
+
+        print("")
+        isTestRun = self.ctx.ui.actionTestFly.isChecked()
+        if isTestRun:
+            print("**** Test Run (helix):")
+        self.ctx.isfly = True
+        self.ctx.isscan = True
+
+        self.ctx.ui.actionFit_QDS_phi.setEnabled(False)
+
+        if not self.ctx.ui.chk_keep_prev_scan.isChecked():
+            self.ctx.clearplot()
+
+        phi_st = self.helix_phi_st + self.helix_phi_p0
+        phi_fe = self.helix_phi_fe + self.helix_phi_p0
+        phi_step = self.helix_phi_step
+        phi_tm = self.helix_phi_tm
+
+        z_st = self.helix_z_st + self.helix_z_p0
+        z_fe = self.helix_z_fe + self.helix_z_p0
+
+        if self.ctx.DEBUG_MOTORS:
+            phi_mpos_data = []
+            z_mpos_data = []
+            if phi_st > phi_fe:
+                phi_step = -abs(phi_step)
+            else:
+                phi_step = abs(phi_step)
+            phi_positions = np.arange(phi_st, phi_fe + phi_step / 2, phi_step)
+            if len(phi_positions) == 1:
+                phi_positions = np.array([phi_st, phi_fe])
+            N = len(phi_positions)
+            z_step_debug = (z_fe - z_st) / (N - 1) if N > 1 else 0
+            self.isStopScanIssued = False
+            for i, p in enumerate(phi_positions):
+                if self.isStopScanIssued:
+                    break
+                z_p = z_st + i * z_step_debug
+                self._scan_mv(phi_axis, p, update_status=update_status)
+                self._scan_mv(z_axis, z_p, update_status=update_status)
+                time.sleep(min(phi_tm, 0.05))
+                phi_mpos_data.append(self.ctx.pts.get_pos(phi_axis))
+                z_mpos_data.append(self.ctx.pts.get_pos(z_axis))
+                if update_progress is not None:
+                    update_progress(int(100 * (i + 1) / N))
+            self.ctx.mpos = phi_mpos_data
+            self.ctx.zpos = z_mpos_data
+            return
+
+        phi_pos = self.ctx.pts.get_pos(phi_axis)
+        z_pos = self.ctx.pts.get_pos(z_axis)
+
+        Xstep = self.helix_phi_step
+        Xtm = self.helix_phi_tm
+
+        # Same formula used by helix_fly's pre-scan velocity guard, so the
+        # logged/guarded values and the actual DG645 arm count can never diverge.
+        total_time, Nsteps, step_time = self._compute_helix_total_time(phi_st, phi_fe, Xstep, Xtm)
+        expt = Xtm
+        if step_time - expt < 0.015:
+            raise DET_MIN_READOUT_Error(
+                f"Period - Exposure Time,{step_time - expt}s, should be longer than 50 microseconds."
+            )
+
+        try:
+            self.ctx.dg645_12ID.set_pilatus2(expt, Nsteps, step_time)
+        except:
+            raise DG645_Error
+        print(
+            f"Exposure time: {expt:0.3e} s, number of steps: {Nsteps}, Step time: {step_time:.3e} s, Total time for the scan: {total_time:.3f} s."
+        )
+
+        if self.ctx.ui.chk_reverse_scan_dir.isChecked():
+            if abs(phi_st - phi_pos) > abs(phi_fe - phi_pos):
+                t = phi_fe
+                phi_fe = phi_st
+                phi_st = t
+            if abs(z_st - z_pos) > abs(z_fe - z_pos):
+                t = z_fe
+                z_fe = z_st
+                z_st = t
+
+        self._prev_vel_z, _ = self.ctx.pts.get_speed(z_axis)
+
+        self._scan_mv(phi_axis, phi_st, wait=True, update_status=update_status)
+        self._scan_mv(z_axis, z_st, wait=True, update_status=update_status)
+        wait_for_motor_settle_s = 0.1
+        time.sleep(wait_for_motor_settle_s)
+
+        phi_vel = abs(phi_fe - phi_st) / total_time
+        z_vel = abs(z_fe - z_st) / total_time
+
+        self.ctx.pts.set_speed(phi_axis, phi_vel, phi_vel * 10)
+        self.ctx.pts.set_speed(z_axis, z_vel, None)
+        wait_for_speed_set_s = 0.02
+        time.sleep(wait_for_speed_set_s)
+
+        for detN, det in enumerate(self.ctx.detector):
+            if det is not None:
+                try:
+                    det.fly_ready(
+                        expt,
+                        Nsteps,
+                        period=step_time,
+                        isTest=isTestRun,
+                        capture=(
+                            self.ctx.use_hdf_plugin,
+                            self.ctx.hdf_plugin_savemode_fly,
+                        ),
+                        fn=self.ctx.hdf_plugin_name[detN],
+                    )
+                except TimeoutError:
+                    self.ctx.messages["recent error message"] = (
+                        f"Detector, {det._prefix}, hasnt started yet. Fly scan will not start."
+                    )
+                    print(self.ctx.messages["recent error message"])
+                    if update_status:
+                        update_status(self.ctx.messages["recent error message"])
+                    return
+
+        timeout_occurred, TIMEOUT = self.ctx.is_arming_detecotors_timedout()
+        if timeout_occurred:
+            self.ctx.messages["recent error message"] = (
+                f"Timeout occurred after {TIMEOUT} seconds while waiting for detector to be Armed. {time.ctime()}"
+            )
+            print(self.ctx.messages["recent error message"])
+            return DETECTOR_NOT_STARTED_ERROR
+
+        scaninfo = []
+        print("")
+        print(f"{phi_axis},{z_axis} helix scan started..")
+        scaninfo.append(f"FileIndex, {phi_axis}, {z_axis},    time(s)")
+        scaninfo.append(f"0,   {phi_st},   {z_st},   {time.time()}")
+
+        self.ctx.pts.mv(phi_axis, phi_fe, wait=False)
+        self.ctx.pts.mv(z_axis, z_fe, wait=False)
+
+        print("about to send out trigger.")
+        self.ctx.dg645_12ID.trigger()
+        print("Delay generator is triggered to start the helix fly scan.")
+
+        N_imgcollected = 0
+        timeelapsed = time.time() - t0
+        TIMEOUT = total_time + 5
+        if TIMEOUT < 5:
+            TIMEOUT = 5
+        timestart = time.time()
+        val = 0
+
+        while N_imgcollected < Nsteps:
+            for ndet, det in enumerate(self.ctx.detector):
+                if ndet > 1:
+                    continue
+                if det is not None:
+                    val = det.ArrayCounter_RBV
+                    break
+            prog = float(val) / float(Nsteps)
+            phi_pos = self.ctx.pts.get_pos(phi_axis)
+            z_pos = self.ctx.pts.get_pos(z_axis)
+            scaninfo.append(f"{val},    {phi_pos},   {z_pos},  {time.time()}")
+
+            if update_progress:
+                update_progress(int(prog * 100))
+            msg1 = f"Elapsed time = {int(timeelapsed)}s since the start."
+            if prog > 0:
+                remainingtime = timeelapsed / prog - timeelapsed
+            else:
+                remainingtime = 999
+            msg2 = f"; Remaining time for the current helix scan is {np.round(remainingtime, 2)}s\n"
+            self.ctx.messages["current status"] = "%s%s" % (msg1, msg2)
+            if update_status:
+                update_status(self.ctx.messages["current status"])
+
+            wait_for_det_progress_s = 0.1
+            time.sleep(wait_for_det_progress_s)
+            if val > N_imgcollected:
+                N_imgcollected = val
+                timestart = time.time()
+
+            updatetime = time.time() - timestart
+            if updatetime > TIMEOUT:
+                self.ctx.messages["recent error message"] = (
+                    f"Detector {det._prefix} data collection timeout after {TIMEOUT} seconds."
+                )
+                print(self.ctx.messages["recent error message"])
+                if update_status:
+                    update_status(self.ctx.messages["recent error message"])
+                return DETECTOR_NOT_STARTED_ERROR
+            timeelapsed = time.time() - t0
+            if self.isStopScanIssued:
+                break
+        self.ctx.write_scaninfo_to_logfile(scaninfo)
+
+        return 1

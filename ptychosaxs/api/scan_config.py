@@ -11,6 +11,11 @@ reason: configuration that governs the instrument should not live inside
 a view.
 """
 
+#: Hexapod fly modes. Mirrored from rungui, where the panel's menu sets
+#: which one a fly scan uses.
+HEXAPOD_FLYMODE_WAVELET = 0
+HEXAPOD_FLYMODE_STANDARD = 1
+
 # --- detectors --------------------------------------------------------------
 
 #: Detector readout floor, in seconds, used when working out whether a
