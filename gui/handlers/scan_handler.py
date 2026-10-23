@@ -380,6 +380,39 @@ class ScanHandler(ScanExecutorsMixin):
                 f"Could not write scan summary CSV {csv_path}: {exc}",
             )
 
+    def _scan_fields(self, motor_index: int) -> dict:
+        """p0/st/fe/step and the exposure widget for one motor slot.
+
+        The two 2-D executors each inlined these findChild lookups, which
+        was the only reason they could not move to
+        ptychosaxs/api/scan_exec.py with the other six. The reads are
+        unchanged, including falling back to the shared ed_lup_1_t for
+        slots with no exposure field of their own (trans1/trans2 at 7/8),
+        which is what _read_motor_params already did.
+
+        p0 comes back as text, not a float: stepscan2d0 reads it as a
+        string and converts separately, and keeping that split avoids
+        changing which line raises on a malformed entry.
+
+        Lives here rather than in the mixin because it touches Qt. Naming
+        it in one place also makes the thread question visible -- the
+        executors calling it run on a worker, which is how this has always
+        worked, but it is now one method to fix rather than seventeen
+        lookups buried in two 200-line functions.
+        """
+        n = motor_index + 1
+
+        def edit(name):
+            return self.ui.findChild(QLineEdit, name)
+
+        return {
+            "p0_text": edit("ed_%i" % n).text(),
+            "st": float(edit("ed_lup_%i_L" % n).text()),
+            "fe": float(edit("ed_lup_%i_R" % n).text()),
+            "step": float(edit("ed_lup_%i_N" % n).text()),
+            "t_widget": edit("ed_lup_%i_t" % n) or edit("ed_lup_1_t"),
+        }
+
     def _ask(self, guard) -> bool:
         """Put one Guard to the operator. True if the scan may start.
 
