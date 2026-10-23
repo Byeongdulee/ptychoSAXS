@@ -158,3 +158,41 @@ def test_driver_backed_modules_are_documented_as_unimportable(module, driver):
     except ImportError:
         pytest.skip(f"{driver} is not installed, as expected")
     pytest.fail(f"{driver} is now installed; add {module} to the audited set")
+
+
+# -- the relocated scan execution --------------------------------------------
+
+def test_the_moved_scan_execution_imports_without_qt():
+    """ptychosaxs/api/scan_exec.py is where scan execution is moving to,
+    one tranche at a time. It has to stay importable by a server with no
+    display, which is the whole reason for moving it -- so a method that
+    still needs a widget stays in the Qt handler until its widget reads
+    become arguments.
+    """
+    import ast as _ast
+    import pathlib as _pathlib
+
+    path = PKG / "api" / "scan_exec.py"
+    tree = _ast.parse(path.read_text())
+    offenders = []
+    for node in _ast.walk(tree):
+        mods = []
+        if isinstance(node, _ast.Import):
+            mods = [a.name for a in node.names]
+        elif isinstance(node, _ast.ImportFrom) and node.module:
+            mods = [node.module]
+        if any(m.split(".")[0].startswith(("PyQt", "PySide")) for m in mods):
+            offenders.append(node.lineno)
+    assert offenders == [], f"Qt imported in scan_exec at lines {offenders}"
+
+
+def test_no_moved_method_reaches_for_a_widget_class():
+    """A widget *class* in here means the method cannot run headless even
+    though it has moved. Reads through ctx.ui are counted separately --
+    those are the remaining coupling, and they are expected to shrink."""
+    path = PKG / "api" / "scan_exec.py"
+    src = path.read_text()
+    for widget in ("QMessageBox", "QLabel", "QLineEdit", "findChild"):
+        assert widget not in src, (
+            f"{widget} is used in scan_exec; that method belongs in the "
+            f"Qt handler until its widget access becomes an argument")

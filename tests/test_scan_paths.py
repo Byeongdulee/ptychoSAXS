@@ -54,6 +54,14 @@ class _Handler:
     def __init__(self, working_folder, on_linux):
         self.ui = _FakeUi(working_folder)
         self.w = _FakeWindow(on_linux)
+        # These helpers have moved into ptychosaxs.api.scan_exec, where they
+        # reach the window through a ScanContext rather than through self.w
+        # and self.ui directly. The double mirrors the real handler, which
+        # builds the same thing in its __init__.
+        from ptychosaxs.api.scans import ScanContext
+
+        self.ctx = ScanContext(window=self.w)
+        self.ctx.ui = self.ui
 
     _working_folder = ScanHandler._working_folder
     # staticmethod() re-applied: attribute access has already unwrapped the

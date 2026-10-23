@@ -268,6 +268,126 @@ class ScanHandler(ScanExecutorsMixin):
         """See ptychosaxs.api.scanplan.format_duration."""
         return scanplan.format_duration(t)
 
+    def _advance_scan_number_safe(self) -> int:
+        """Increment scan_number and persist it (PV put + ini write) without
+        touching any Qt widgets. Safe to call from a worker thread.
+
+        Unlike run_stop_issued()/update_scannumber(), this never reads or writes
+        a QLineEdit/QLabel; callers must refresh those on the GUI thread separately
+        (e.g. via the scanFolderAdvanced signal / on_scan_folder_advanced slot).
+
+        Returns the new scan_number.
+        """
+        self.w.parameters.scan_number = self.w.parameters.scan_number + 1
+        # Each phi slice is the start of its own sub-scan, so the IOC is
+        # pointed at it before any frames are taken.
+        self.w.write_scan_number_to_ioc()
+        self.w.parameters.writeini()
+        return self.w.parameters.scan_number
+
+    def _advance_scan_number_thread_safe(self) -> None:
+        """Advance scan_number at the end of fly2d0 / fly2d0_SNAKE.
+
+        These run on the worker thread both as standalone 2-D fly scans and,
+        synchronously, once per phi slice inside fly3d0's loop. run_stop_issued()
+        touches ui.edit_scannumber/lbl_scanname directly, which is only safe to
+        call from the GUI thread. For the standalone case that's how it's always
+        worked; but for the fly3d0 case, doing this once per slice from the worker
+        thread caused the scan-name label to stop updating reliably and, worse, let
+        a later update_scanname() call (which reads scan_number back out of the
+        QLineEdit) clobber the in-memory scan_number with a stale value -- so a
+        later slice's data would land in an already-used scan-number folder.
+        When fly3d0 is running (self._notify_folder_advanced_3d set), advance the
+        same worker-thread-safe way stepscan3d0 does instead.
+        """
+        notify = getattr(self, '_notify_folder_advanced_3d', None)
+        if notify is not None:
+            new_scan_number = self._advance_scan_number_safe()
+            notify(new_scan_number)
+        else:
+            self.w.run_stop_issued()
+
+    def _get_phi_angle(self, axes_params):
+        axis_names = [ax.get("name", "").lower() for ax in axes_params]
+        if "phi" in axis_names:
+            # If phi is in the scan axes, use its p0
+            for ax in axes_params:
+                if ax.get("name", "").lower() == "phi":
+                    return str(ax.get("p0", ""))
+        else:
+            # If not 3D and not 1D on phi axis, take from lb_7
+            # 3D would have phi in axes, 1D on phi would have only phi
+            # So if phi not in axes, it's not 3D and not 1D on phi, use lb_7
+            lb7_widget = self.ui.findChild(QLabel, "lb_7")
+            if lb7_widget:
+                return lb7_widget.text()
+        return ""
+
+    def _write_scan_summary_line(self, scan_label: str, axes_params: list, n_pos: int) -> None:
+        csv_path = self._get_scan_summary_csv_path()
+        if csv_path is None:
+            return
+        if not csv_path.parent.exists():
+            QMessageBox.warning(
+                self.ui,
+                "CSV Logging",
+                f"Scan summary directory does not exist: {csv_path.parent}",
+            )
+            return
+        write_header = not csv_path.exists()
+        if not write_header:
+            self._migrate_scan_summary_header(csv_path)
+        timestamp = datetime.datetime.now()
+        scan_id = "S%04d" % self.w.parameters.scan_number
+        # Use cached optics values if available (queried once in _pre_scan), otherwise get them now
+        if hasattr(self, '_cached_us_optics'):
+            optics_values = self._cached_us_optics
+        else:
+            optics_values = self._get_us_optics_positions() if getattr(self.w.parameters, "_save_us_optics", True) else [""] * len(self._US_OPTICS_PVS)
+        gonio_trans_values = getattr(self, '_cached_gonio_trans', None)
+        if gonio_trans_values is None:
+            gonio_trans_values = self._get_gonio_trans_positions()
+        optics_identity = getattr(self, "_cached_optics_identity", None) or {}
+        # Order must match _get_scan_summary_header exactly. These first four
+        # used to be written as date, time, "no", scan_id under a header
+        # reading scan, completed, date, time -- so every one of them was
+        # filed under the wrong name, and _update_scan_summary_completed
+        # could never find its row (it matches on the "scan" column, which
+        # held a date), leaving every scan marked incomplete.
+        row = [
+            scan_id,
+            "no",
+            timestamp.strftime("%Y-%m-%d"),
+            timestamp.strftime("%H:%M:%S"),
+            self.w.parameters.scan_name,
+            scan_label,
+            axes_params[0].get("expt", "") if axes_params else "",
+            n_pos,
+            self._get_mono_energy(),
+            self._get_phi_angle(axes_params),
+            self._get_detectors_used(),
+            self._format_scan_axis_string(axes_params, "scan_center"),
+            self._format_scan_axis_string(axes_params, "scan_negative_edge"),
+            self._format_scan_axis_string(axes_params, "scan_positive_edge"),
+            self._format_scan_axis_string(axes_params, "scan_step_size"),
+            *optics_values,
+            *gonio_trans_values,
+            optics_identity.get("optics_name", ""),
+        ]
+        self._last_scan_summary_id = scan_id
+        try:
+            with open(csv_path, "a", newline="") as f:
+                writer = csv.writer(f)
+                if write_header:
+                    writer.writerow(self._get_scan_summary_header())
+                writer.writerow(row)
+        except Exception as exc:
+            QMessageBox.warning(
+                self.ui,
+                "CSV Logging",
+                f"Could not write scan summary CSV {csv_path}: {exc}",
+            )
+
     def _ask(self, guard) -> bool:
         """Put one Guard to the operator. True if the scan may start.
 
@@ -667,21 +787,6 @@ class ScanHandler(ScanExecutorsMixin):
 
 
 
-    def _get_phi_angle(self, axes_params):
-        axis_names = [ax.get("name", "").lower() for ax in axes_params]
-        if "phi" in axis_names:
-            # If phi is in the scan axes, use its p0
-            for ax in axes_params:
-                if ax.get("name", "").lower() == "phi":
-                    return str(ax.get("p0", ""))
-        else:
-            # If not 3D and not 1D on phi axis, take from lb_7
-            # 3D would have phi in axes, 1D on phi would have only phi
-            # So if phi not in axes, it's not 3D and not 1D on phi, use lb_7
-            lb7_widget = self.ui.findChild(QLabel, "lb_7")
-            if lb7_widget:
-                return lb7_widget.text()
-        return ""
 
 
     # Derived from optics_status, which the optics panel and the Check
@@ -785,24 +890,6 @@ class ScanHandler(ScanExecutorsMixin):
         except Exception as e:
             QMessageBox.warning(self.w.ui, "Fly Blur Error", f"Error calculating fly blur: {e}")
 
-    def _get_detectors_used(self):
-        det_names = []
-        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
-            det_names.append("SAXS")
-        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
-            det_names.append("WAXS")
-        if len(self.w.detector) > 2 and self.w.detector[2] is not None:
-            det_names.append("Struck")
-        if len(self.w.detector) > 3 and self.w.detector[3] is not None:
-            det_names.append("SG")
-        if len(self.w.detector) > 4 and self.w.detector[4] is not None:
-            if self.ui.actionDante.isChecked():
-                det_names.append("Dante")
-            elif self.ui.actionXSP3.isChecked():
-                det_names.append("XSP3")
-            else:
-                det_names.append("Other")
-        return ",".join(det_names)
 
     def _adjust_axis_length(self, n: int, axis_index: int, scan_kind: str) -> int:
         """See ptychosaxs.api.scanplan.adjust_axis_length."""
@@ -811,92 +898,11 @@ class ScanHandler(ScanExecutorsMixin):
 
 
 
-    def _write_scan_summary_line(self, scan_label: str, axes_params: list, n_pos: int) -> None:
-        csv_path = self._get_scan_summary_csv_path()
-        if csv_path is None:
-            return
-        if not csv_path.parent.exists():
-            QMessageBox.warning(
-                self.w.ui,
-                "CSV Logging",
-                f"Scan summary directory does not exist: {csv_path.parent}",
-            )
-            return
-        write_header = not csv_path.exists()
-        if not write_header:
-            self._migrate_scan_summary_header(csv_path)
-        timestamp = datetime.datetime.now()
-        scan_id = "S%04d" % self.w.parameters.scan_number
-        # Use cached optics values if available (queried once in _pre_scan), otherwise get them now
-        if hasattr(self, '_cached_us_optics'):
-            optics_values = self._cached_us_optics
-        else:
-            optics_values = self._get_us_optics_positions() if getattr(self.w.parameters, "_save_us_optics", True) else [""] * len(self._US_OPTICS_PVS)
-        gonio_trans_values = getattr(self, '_cached_gonio_trans', None)
-        if gonio_trans_values is None:
-            gonio_trans_values = self._get_gonio_trans_positions()
-        optics_identity = getattr(self, "_cached_optics_identity", None) or {}
-        # Order must match _get_scan_summary_header exactly. These first four
-        # used to be written as date, time, "no", scan_id under a header
-        # reading scan, completed, date, time -- so every one of them was
-        # filed under the wrong name, and _update_scan_summary_completed
-        # could never find its row (it matches on the "scan" column, which
-        # held a date), leaving every scan marked incomplete.
-        row = [
-            scan_id,
-            "no",
-            timestamp.strftime("%Y-%m-%d"),
-            timestamp.strftime("%H:%M:%S"),
-            self.w.parameters.scan_name,
-            scan_label,
-            axes_params[0].get("expt", "") if axes_params else "",
-            n_pos,
-            self._get_mono_energy(),
-            self._get_phi_angle(axes_params),
-            self._get_detectors_used(),
-            self._format_scan_axis_string(axes_params, "scan_center"),
-            self._format_scan_axis_string(axes_params, "scan_negative_edge"),
-            self._format_scan_axis_string(axes_params, "scan_positive_edge"),
-            self._format_scan_axis_string(axes_params, "scan_step_size"),
-            *optics_values,
-            *gonio_trans_values,
-            optics_identity.get("optics_name", ""),
-        ]
-        self._last_scan_summary_id = scan_id
-        try:
-            with open(csv_path, "a", newline="") as f:
-                writer = csv.writer(f)
-                if write_header:
-                    writer.writerow(self._get_scan_summary_header())
-                writer.writerow(row)
-        except Exception as exc:
-            QMessageBox.warning(
-                self.w.ui,
-                "CSV Logging",
-                f"Could not write scan summary CSV {csv_path}: {exc}",
-            )
 
 
 
 
-    def _log_3d_slice_start(self, scan_label, axes_params, phi_value, scan_kind: str = "step"):
-        modified_axes = []
-        for ax in axes_params:
-            if ax.get("name", "").lower() == "phi":
-                modified_ax = ax.copy()
-                modified_ax["p0"] = phi_value
-                modified_ax["st"] = 0
-                modified_ax["fe"] = 0
-                modified_ax["step"] = 0
-                modified_axes.append(modified_ax)
-            else:
-                modified_axes.append(ax)
-        position_arrays = [self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"]) for ax in modified_axes]
-        n_pos = self._compute_n_positions(position_arrays, scan_kind=scan_kind)
-        self._write_scan_summary_line(scan_label, modified_axes, n_pos)
 
-    def _update_3d_slice_completed(self):
-        self._update_scan_summary_completed("yes")
 
     def _launch_worker(self, executor_fn, *args, done_signal=None, **kwargs):
         """Create, wire, and start a Worker thread for a scan executor function.
@@ -1370,45 +1376,9 @@ class ScanHandler(ScanExecutorsMixin):
     # joined the rest with backslashes.
 
 
-    def _working_folder(self) -> str:
-        """The Working folder exactly as typed on the main window.
-
-        GUI thread only. Worker threads pass the copy captured at scan start
-        (`_scan_working_folder`) into the two functions below instead.
-        """
-        return self.ui.edit_workingfolder.text()
 
 
-    def _gui_scan_folder(self, folder_type, scannumberstring, working_folder=None) -> str:
-        """The scan's output folder, as this process must open it."""
-        wf = self._working_folder() if working_folder is None else working_folder
-        if self.w.running_on_linux():
-            return self._join_posix(wf, folder_type, scannumberstring)
-        # Native separators, so this is byte-identical to what the Windows
-        # console produced before these helpers existed.
-        return os.path.join(wf, folder_type, scannumberstring)
 
-    def _epics_scan_folder(
-        self, basepath, folder_type, scannumberstring, working_folder=None
-    ) -> str:
-        """The scan's output folder, as a detector IOC must open it.
-
-        Always a Linux path. `basepath` is the IOC-side root the Working
-        folder hangs off, and is ignored entirely when the GUI is itself on
-        Linux -- there the Working folder is already the full Linux path, so
-        prepending a basepath is what produced the doubled
-        /net/micdata/data2/net/micdata/data2/... paths.
-        """
-        wf = self._working_folder() if working_folder is None else working_folder
-        if self.w.running_on_linux():
-            return self._join_posix(wf, folder_type, scannumberstring)
-        # Windows: drop the drive letter (the first path component) and hang
-        # the rest off the IOC's Linux basepath. PureWindowsPath rather than
-        # Path so the split still works when a Windows path is configured
-        # from a Linux box, where a bare Path would see no separators at all
-        # and yield a single component.
-        parts = pathlib.PureWindowsPath(wf).parts
-        return self._join_posix(basepath, *parts[1:], folder_type, scannumberstring)
 
     def _prepare_scan_files(self):
         """Create output folders and push FilePath/FileName to all detector IOCs.
@@ -1493,78 +1463,6 @@ class ScanHandler(ScanExecutorsMixin):
             det.filePut("FileName", hdfname)
             self.w.hdf_plugin_name[i] = hdfname
 
-    def _push_filepaths_to_detectors(self):
-        """Push updated FilePath and FileName to all detector IOCs.
-
-        Worker-thread-safe version of _prepare_scan_files.  Uses the Working
-        folder captured by _prepare_scan_files at scan start
-        (_scan_working_folder) together with the current scan_number /
-        scannumberstring, so it can be called from the worker thread between
-        phi slices in 3D scans without touching any Qt widgets.  Does not
-        create new top-level folders (those are created once by
-        _prepare_scan_files); only creates the per-slice scannumber
-        subdirectory.
-        """
-        scan_name = self.w.parameters.scan_name
-        scan_number = self.w.parameters.scan_number
-        txt = "%s_%0.4i" % (scan_name, scan_number)
-        scannumberstring = "S%04d" % scan_number
-        working_folder = self._scan_working_folder
-
-
-        for i, det in enumerate(self.w.detector):
-            if i == 0:
-                tp = "S"
-            elif i == 1:
-                tp = "W"
-            else:
-                tp = ""
-
-            if det is None:
-                continue
-            if "3820" in det._prefix:
-                continue
-
-            if i < 2:
-                if self.w.is_ptychomode:
-                    if self.w.detector_mode[i] == "ptycho":
-                        tp = ""
-                    basepath = det.basepath
-                    folder_type = "ptycho"
-                else:
-                    if len(tp) == 0:
-                        continue
-                    basepath = self.w.parameters.base_linux_datafolder
-                    folder_type = tp + "AXS"
-
-            if "SG" in det._prefix:
-                folder_type = "positions"
-                basepath = (
-                    det.basepath
-                    if self.w.is_ptychomode
-                    else self.w.parameters.base_linux_datafolder
-                )
-
-            if ("dante" in det._prefix) or ("XSP" in det._prefix):
-                folder_type = "DANTE"
-                basepath = (
-                    det.basepath
-                    if self.w.is_ptychomode
-                    else self.w.parameters.base_linux_datafolder
-                )
-
-            hdfname = tp + txt
-
-            self.w.make_positions_folder(
-                self._gui_scan_folder(folder_type, scannumberstring, working_folder)
-            )
-
-            hdf_path = self._epics_scan_folder(
-                basepath, folder_type, scannumberstring, working_folder
-            )
-            det.filePut("FilePath", hdf_path)
-            det.filePut("FileName", hdfname)
-            self.w.hdf_plugin_name[i] = hdfname
 
     def push_filepath_to_detectors(self):
         """Push the current working-folder path to each detector's HDF plugin FilePath PV.
@@ -2091,71 +1989,7 @@ class ScanHandler(ScanExecutorsMixin):
 
     # ==================== NeXus Master File Methods ====================
 
-    def _get_master_file_path_with_number(self, detector_type: str, sample_name: str, scan_number: int) -> str:
-        """Get the path to the master file given an explicit scan number.
 
-        Same as _get_master_file_path but takes scan_number as parameter instead of reading current.
-        Used by the background thread which may run after scan number has incremented.
-
-        Args:
-            detector_type: 'SAXS' or 'WAXS'
-            sample_name: Sample name extracted from detector filename
-            scan_number: Explicit scan number to use
-
-        Returns:
-            Full path to the master file, as this process must open it.
-        """
-        # Determine detector index and mode
-        detector_index_map = {'SAXS': 0, 'WAXS': 1}
-        det_index = detector_index_map.get(detector_type)
-        if det_index is None:
-            raise ValueError(f"Unknown detector type: {detector_type}")
-
-        # Get detector object
-        if det_index >= len(self.w.detector) or self.w.detector[det_index] is None:
-            raise ValueError(f"Detector {detector_type} not initialized")
-
-        # Determine folder structure based on mode
-        if self.w.is_ptychomode and self.w.detector_mode[det_index] == "ptycho":
-            folder_type = "ptycho"
-        else:
-            # Scattering mode
-            tp_map = {'SAXS': 'S', 'WAXS': 'W'}
-            tp = tp_map.get(detector_type)
-            folder_type = tp + "AXS"
-
-        # The master file is written by this process, so it needs the GUI-side
-        # folder -- the same one make_positions_folder created at scan start.
-        #
-        # This used to build its own path instead, by stripping leading
-        # separators off the Working folder and joining the rest with
-        # backslashes. On Windows that happened to be right. On Linux it turned
-        # an absolute path into a relative one and then produced a single
-        # directory component literally named "02_test\ptycho\S0004", so
-        # os.makedirs created a stray tree under the launch directory and h5py
-        # failed to create the file at all.
-        scannumberstring = f"S{scan_number:04d}"
-        detector_folder = self._gui_scan_folder(
-            folder_type,
-            scannumberstring,
-            getattr(self, "_scan_working_folder", None) or self._working_folder(),
-        )
-        filename = f"{sample_name}_{scan_number:04d}_master.h5"
-        return os.path.join(detector_folder, filename)
-
-    def _get_master_file_path(self, detector_type: str, sample_name: str) -> str:
-        """Get the path to the master file for a given detector and sample.
-
-        Args:
-            detector_type: 'SAXS' or 'WAXS'
-            sample_name: Sample name extracted from detector filename
-
-        Returns:
-            Full path to the master file, as this process must open it:
-            {working folder}/{ptycho|SAXS|WAXS}/{S####}/{sample}_{####}_master.h5
-        """
-        scan_num = self.w.parameters.scan_number
-        return self._get_master_file_path_with_number(detector_type, sample_name, scan_num)
 
 
     def _fetch_zone_plate_optics_metadata(self) -> dict:
@@ -2329,79 +2163,11 @@ class ScanHandler(ScanExecutorsMixin):
 
 
 
-    def _write_piezo_positions_to_master(self, piezo_pos_actual: list, axes) -> None:
-        """Convert accumulated per-point readbacks for the two scanned piezo
-        axes to an array and write them to /entry/sample/piezo_positions in the
-        scan's master file(s). No-op if the scan was stopped before any point
-        completed.
-        """
-        if not piezo_pos_actual:
-            return
-        piezo_pos = np.array(piezo_pos_actual)
-        for master_path in getattr(self, "_current_scan_master_paths", {}).values():
-            self._append_piezo_positions_to_master_file(master_path, piezo_pos, axes)
 
 
 
 
 
-    def _write_master_file_metadata(self, detector_type: str, scan_positions_dict: dict, sample_name: str) -> str:
-        """Create master file with metadata before scan starts.
-
-        Args:
-            detector_type: 'SAXS' or 'WAXS'
-            scan_positions_dict: Dict of {motor_name: np.ndarray} for scan axes
-            sample_name: Sample name string (from detector filename)
-
-        Returns:
-            Path to created master .h5 file
-        """
-        import h5py
-
-        try:
-            # Fetch metadata (use cached zone plate optics to avoid duplicate queries)
-            cached_zp = self._cached_zone_plate_optics if hasattr(self, '_cached_zone_plate_optics') else None
-            shared_metadata = self._fetch_shared_epics_metadata(cached_zone_plate_optics=cached_zp)
-            detector_config = self._get_detector_config(detector_type)
-            detector_metadata = self._fetch_detector_epics_metadata(detector_config)
-
-            # Create master file. No separator rewriting here: the path comes
-            # from _gui_scan_folder already in this platform's own form, and
-            # normalising only the directory was what let h5py be handed a
-            # path whose directory component did not exist.
-            master_path = self._get_master_file_path(detector_type, sample_name)
-            master_dir = os.path.dirname(master_path)
-            try:
-                os.makedirs(master_dir, exist_ok=True)
-            except (OSError, FileNotFoundError):
-                print(f"Warning: Could not create directory {master_dir}; assuming it exists")
-
-            with h5py.File(master_path, 'w') as f:
-                entry = f.create_group('entry')
-                entry.attrs['NX_class'] = b'NXentry'
-                entry.attrs['default'] = b'data'
-
-                # Basic metadata
-                entry.create_dataset('definition', data=b'NXmx')
-                entry['definition'].attrs['version'] = b'1.4'
-                entry.create_dataset('Detector_program_name', data=b'EPICS areaDetector')
-
-                # Build hierarchy
-                self._populate_instrument_group(entry, shared_metadata, detector_metadata, detector_config)
-                self._populate_sample_group(entry, shared_metadata, scan_positions_dict)
-                self._populate_data_group(entry, sample_name)
-                self._populate_scalars_group(entry, shared_metadata)
-
-                # Write sample name to sample group
-                entry['sample']['sample_name'][()] = sample_name.encode('utf-8')
-
-            print(f"Created master file: {master_path}")
-            return master_path
-
-        except Exception as e:
-            print(f"Error creating master file for {detector_type}: {e}")
-            traceback.print_exc()
-            return ""
 
     def _link_detector_data_delayed(self, master_paths: dict, wait_seconds: float = 10.0) -> None:
         """Wait for detector file write to complete, then link to master file.
@@ -2497,103 +2263,9 @@ class ScanHandler(ScanExecutorsMixin):
             print(f"Error linking detector data for master file {master_path}: {e}")
             traceback.print_exc()
 
-    def _write_slice_master_file(self) -> dict:
-        """(Re)write the master file for the CURRENT scan folder (one per phi slice
-        of a 3-D fly/step scan). Reuses the X/Y grid cached once in _pre_scan
-        (avoids re-reading Qt widgets) but re-fetches EPICS metadata fresh, so the
-        written 'theta' reflects the angle this slice actually settled at.
 
-        Worker-thread safe: touches no Qt widgets.
 
-        Returns {detector_type: master_path} for the files written; also updates
-        self._current_scan_master_paths so any later single-shot linking (e.g.
-        flydone3d) targets this, the most recently written, slice.
-        """
-        scan_positions_dict = getattr(self, '_cached_scan_positions_dict', {})
-        sample_name = self.w.parameters.scan_name
 
-        detectors_active = []
-        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
-            detectors_active.append('SAXS')
-        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
-            detectors_active.append('WAXS')
-
-        master_paths = {}
-        for detector_type in detectors_active:
-            path = self._write_master_file_metadata(detector_type, scan_positions_dict, sample_name)
-            if path:
-                master_paths[detector_type] = path
-
-        self._current_scan_master_paths = master_paths
-        return master_paths
-
-    def _advance_scan_number_safe(self) -> int:
-        """Increment scan_number and persist it (PV put + ini write) without
-        touching any Qt widgets. Safe to call from a worker thread.
-
-        Unlike run_stop_issued()/update_scannumber(), this never reads or writes
-        a QLineEdit/QLabel; callers must refresh those on the GUI thread separately
-        (e.g. via the scanFolderAdvanced signal / on_scan_folder_advanced slot).
-
-        Returns the new scan_number.
-        """
-        self.w.parameters.scan_number = self.w.parameters.scan_number + 1
-        # Each phi slice is the start of its own sub-scan, so the IOC is
-        # pointed at it before any frames are taken.
-        self.w.write_scan_number_to_ioc()
-        self.w.parameters.writeini()
-        return self.w.parameters.scan_number
-
-    def _advance_scan_number_thread_safe(self) -> None:
-        """Advance scan_number at the end of fly2d0 / fly2d0_SNAKE.
-
-        These run on the worker thread both as standalone 2-D fly scans and,
-        synchronously, once per phi slice inside fly3d0's loop. run_stop_issued()
-        touches ui.edit_scannumber/lbl_scanname directly, which is only safe to
-        call from the GUI thread. For the standalone case that's how it's always
-        worked; but for the fly3d0 case, doing this once per slice from the worker
-        thread caused the scan-name label to stop updating reliably and, worse, let
-        a later update_scanname() call (which reads scan_number back out of the
-        QLineEdit) clobber the in-memory scan_number with a stale value -- so a
-        later slice's data would land in an already-used scan-number folder.
-        When fly3d0 is running (self._notify_folder_advanced_3d set), advance the
-        same worker-thread-safe way stepscan3d0 does instead.
-        """
-        notify = getattr(self, '_notify_folder_advanced_3d', None)
-        if notify is not None:
-            new_scan_number = self._advance_scan_number_safe()
-            notify(new_scan_number)
-        else:
-            self.w.run_stop_issued()
-
-    def _link_slice_detector_data(self, scan_number: int) -> None:
-        """Link one phi slice's detector data into ITS OWN master file, identified
-        by the given (just-used) scan_number -- as opposed to scandone()'s default
-        of always relinking self._scan_number_at_start, which is only correct for
-        single-folder scans. Spawns the same short delayed daemon thread scandone()
-        uses. Worker-thread safe.
-        """
-        sample_name = self.w.parameters.scan_name
-        master_paths = {}
-        if len(self.w.detector) > 0 and self.w.detector[0] is not None:
-            try:
-                master_paths['SAXS'] = self._get_master_file_path_with_number('SAXS', sample_name, scan_number)
-            except Exception as e:
-                print(f"Warning: Could not compute SAXS master file path: {e}")
-        if len(self.w.detector) > 1 and self.w.detector[1] is not None:
-            try:
-                master_paths['WAXS'] = self._get_master_file_path_with_number('WAXS', sample_name, scan_number)
-            except Exception as e:
-                print(f"Warning: Could not compute WAXS master file path: {e}")
-
-        if master_paths:
-            import threading
-            thread = threading.Thread(
-                target=self._link_detector_data_delayed,
-                args=(master_paths, 6.0),
-                daemon=True
-            )
-            thread.start()
 
     def set_basepaths(self, text=""):
         if type(text) == bool:
