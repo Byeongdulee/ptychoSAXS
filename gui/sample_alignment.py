@@ -360,10 +360,11 @@ class SampleAlignmentWindow(QObject):
         """The one place any motor move leaves this window.
 
         Reuses rungui's move/mover QRunnables and the main window's threadpool
-        so motion behaves exactly as it does from the main panel. They come off
-        the main controller rather than from `import rungui`, which would
-        re-execute that module and build a second GUI -- see the note in
-        handlers/status_handler.py.
+        so motion behaves exactly as it does from the main panel. They come
+        off the main controller rather than by importing rungui -- which was
+        once necessary because that import built a second GUI, and is now
+        simply the arrangement until this window takes a client of its own
+        and a move becomes a request to the server.
         """
         axis = self._axis(key)
         if axis is None or not self._is_connected(key):

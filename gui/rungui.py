@@ -361,32 +361,58 @@ if not DEBUG_MODE:
 # ==========================================================================
 # Hardware object instantiation — split by motor vs. device
 # ==========================================================================
-# Motors
-if DEBUG_MOTORS:
-    pts = InstrumentsStub()
-else:
-    pts = instruments()
+# These used to be built here, at module scope, which meant that merely
+# importing this file opened the hexapod, the softglue, the DG645 and a
+# scan-number PV. Two modules carried comments forbidding `import rungui`
+# because of it, nothing could introspect this file, and a second copy of
+# the GUI was a second set of connections to single-client hardware.
+#
+# They are still module globals, because the window and its handlers read
+# them by name in several hundred places, but nothing fills them in until
+# build_devices() runs -- and that is called from main(), after the GUI is
+# up enough to report a failure.
+pts = None
+SCAN_NUMBER_IOC = None
+s12softglue = None
+dg645_12ID = None
 
-# Devices
-if DEBUG_DEVICES:
-    SCAN_NUMBER_IOC = None
-    s12softglue = SGZStub()
-else:
-    SCAN_NUMBER_IOC = epics.PV("12idc:data:fileIndex")
-    s12softglue = sgz_pty()
 
-if DEBUG_DG645:
-    dg645_12ID = DG645Stub()
-else:
-    try:
-        dg645_12ID = dg645.dg645_12ID.open_from_uri(dg645.ADDRESS_12IDC)
-    except Exception as exc:
-        print(
-            f"failed to connect DG645 ({exc}). Will not be able to collect "
-            "detector images. Set DEBUG_DG645 = True to run with a simulated "
-            "one instead."
-        )
-        dg645_12ID = None
+def build_devices():
+    """Open the instrument. Called from main(), never at import.
+
+    Idempotent, so a second call is harmless rather than a second set of
+    connections.
+    """
+    global pts, SCAN_NUMBER_IOC, s12softglue, dg645_12ID
+    if pts is not None:
+        return
+
+    # Motors
+    if DEBUG_MOTORS:
+        pts = InstrumentsStub()
+    else:
+        pts = instruments()
+
+    # Devices
+    if DEBUG_DEVICES:
+        SCAN_NUMBER_IOC = None
+        s12softglue = SGZStub()
+    else:
+        SCAN_NUMBER_IOC = epics.PV("12idc:data:fileIndex")
+        s12softglue = sgz_pty()
+
+    if DEBUG_DG645:
+        dg645_12ID = DG645Stub()
+    else:
+        try:
+            dg645_12ID = dg645.dg645_12ID.open_from_uri(dg645.ADDRESS_12IDC)
+        except Exception as exc:
+            print(
+                f"failed to connect DG645 ({exc}). Will not be able to collect "
+                "detector images. Set DEBUG_DG645 = True to run with a simulated "
+                "one instead."
+            )
+            dg645_12ID = None
 
 # ==========================================================================
 # Constants
@@ -1075,11 +1101,13 @@ class ptyco_main_control(QObject):
         if os.name != "nt":
             self.ui.menuQDS.setDisabled(True)
         self.threadpool = QThreadPool.globalInstance()
-        self.Worker = Worker  # expose to handlers that don't import rungui
-        # Same reason as Worker above: importing rungui from a child window
-        # re-executes this module and builds a second GUI (see the note in
-        # handlers/status_handler.py). Child windows take the move runnables
-        # from here instead.
+        # Re-exported for the child windows. The original reason -- that
+        # importing rungui re-executed this module and built a second GUI --
+        # no longer holds; nothing is built at import any more. These stay
+        # only until the child windows take a client of their own, at which
+        # point a move is a request to the server and none of this is
+        # needed.
+        self.Worker = Worker
         self.MoveRunnable = move  # absolute move
         self.MoveRelRunnable = mover  # relative move
 
@@ -2951,8 +2979,9 @@ class ptyco_main_control(QObject):
 # ==========================================================================
 # Application entry point
 # ==========================================================================
-app = QApplication(sys.argv)
-main_panel = ptyco_main_control()
+# Built in main(), not here. See build_devices() above for why.
+app = None
+main_panel = None
 
 # import pygetwindow as gw
 
@@ -2969,6 +2998,11 @@ main_panel = ptyco_main_control()
 
 def main():
     # Run gui with server option
+    global app, main_panel
+    app = QApplication(sys.argv)
+    build_devices()
+    main_panel = ptyco_main_control()
+
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
 

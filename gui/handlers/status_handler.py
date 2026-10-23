@@ -13,7 +13,9 @@ from PyQt5.QtWidgets import QLabel, QLineEdit, QFileDialog, QWidget, QInputDialo
 from PyQt5.QtCore import Qt
 import pyqtgraph as pg
 
-# QDS unit constants (mirrored from rungui.py — never import rungui directly
+# QDS unit constants, mirrored from rungui.py. Importing rungui is no
+# longer dangerous -- it builds nothing at import -- but these are plain
+# constants and duplicating them is cheaper than the import
 # since doing so re-executes the module and creates a second GUI instance)
 QDS_UNIT_NM = 0
 QDS_UNIT_UM = 1
