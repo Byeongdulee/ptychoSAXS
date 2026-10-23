@@ -79,22 +79,26 @@ def test_disconnecting_frees_the_slot(reg):
 
 
 def test_device_groups_are_the_union_of_what_clients_need(reg):
-    reg.register(info("c1", gui_type="rungui"))
+    # rungui is no longer the stand-in for "a GUI that needs motion":
+    # it still owns its own hardware, so it asks the server for no
+    # device groups. sample_alignment is the one that declares motion.
+    reg.register(info("c1", gui_type="sample_alignment"))
     reg.register(info("c2", gui_type="optics_motors"))
-    assert reg.required_groups() == set(REQUIREMENTS["rungui"])
+    assert reg.required_groups() == (set(REQUIREMENTS["sample_alignment"])
+                                     | set(REQUIREMENTS["optics_motors"]))
 
 
 def test_groups_are_given_back_when_the_client_leaves(reg):
-    reg.register(info("c1", gui_type="rungui"))
+    reg.register(info("c1", gui_type="sample_alignment"))
     assert reg.required_groups()
     reg.unregister("c1")
     assert reg.required_groups() == set()
 
 
 def test_a_group_stays_required_while_any_client_still_needs_it(reg):
-    """rungui and sample_alignment both drive the motion group."""
-    reg.register(info("c1", gui_type="rungui"))
-    reg.register(info("c2", gui_type="sample_alignment"))
+    """Two clients wanting one group: it survives the first leaving."""
+    reg.register(info("c1", gui_type="sample_alignment"))
+    reg.register(info("c2", gui_type="sample_alignment2"))
     reg.unregister("c1")
     assert "motion" in reg.required_groups()
 

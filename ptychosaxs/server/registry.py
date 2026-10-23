@@ -26,10 +26,19 @@ import time
 # GUI migrates, so that every device's construction leaves gui/rungui.py
 # module scope exactly once.
 REQUIREMENTS = {
-    "rungui": ("motion", "optics"),
+    # rungui still builds its own devices (see gui/rungui.build_devices), so
+    # it asks the server for none. Opening `motion` here while the panel
+    # also holds its own would put two clients on the C-887, which accepts
+    # one -- the exact conflict this server exists to remove. It takes them
+    # over when the scan executors move; until then it joins for the
+    # single-instance rule, the focus request and the event stream.
+    "rungui": (),
     "optics_motors": ("optics",),
     "crl_3dprint": ("crl",),
     "sample_alignment": ("motion",),
+    # Second motion client, for the shared-group tests and for
+    # whichever window needs it next.
+    "sample_alignment2": ("motion",),
 }
 
 # Kinds that may not have two live connections of the same gui_type.

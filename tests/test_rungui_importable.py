@@ -98,3 +98,46 @@ print(rungui.pts)
                             capture_output=True, text=True, timeout=120)
     assert result.returncode == 0, result.stderr[-2000:]
     assert result.stdout.strip().splitlines()[-1] == "already built"
+
+
+# -- joining the shared server ----------------------------------------------
+
+def test_rungui_asks_the_server_for_no_devices_yet():
+    """It still builds its own, so the server must open none on its behalf.
+
+    Opening `motion` here while the panel also holds its own would put two
+    clients on the C-887, which accepts one -- the exact conflict the
+    server exists to remove. This flips when the executors move.
+    """
+    from ptychosaxs.server.registry import REQUIREMENTS
+
+    assert REQUIREMENTS["rungui"] == ()
+
+
+def test_the_udp_remote_control_channel_is_gone():
+    """One-way datagrams on port 20002 that could not reply, whose only
+    in-repo client had been broken since April. Replaced by the server's
+    request/response methods and ptychosaxs.client.cli."""
+    import importlib
+
+    for gone in ("gui.network", "gui.network.server", "gui.network.client"):
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(gone)
+
+
+def test_rungui_no_longer_references_the_udp_server():
+    import pathlib
+
+    src = (pathlib.Path(__file__).resolve().parents[1]
+           / "gui" / "rungui.py").read_text()
+    for gone in ("create_server", "jsonReceived", "UDPserver"):
+        assert gone not in src, f"{gone} still referenced in rungui"
+
+
+def test_the_command_vocabulary_survived_the_socket():
+    """run_json is still callable. The socket that fed it is gone, but the
+    list of things the panel can be asked to do is the clearest statement
+    of what link/methods.py has to grow to cover."""
+    from gui.handlers.scan_handler import ScanHandler
+
+    assert callable(ScanHandler.run_json)

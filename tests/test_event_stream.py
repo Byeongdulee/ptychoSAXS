@@ -19,7 +19,7 @@ def _collect(client, pattern="motion.positions"):
 
 
 def test_position_events_arrive_without_being_asked_for(beamline_server):
-    with beamline_server.client(kind="gui", gui_type="rungui") as c:
+    with beamline_server.client(kind="gui", gui_type="sample_alignment") as c:
         got = _collect(c)
         time.sleep(1.2)
         assert got, "no position events in 1.2s"
@@ -28,7 +28,7 @@ def test_position_events_arrive_without_being_asked_for(beamline_server):
 
 def test_every_client_sees_the_same_stream(beamline_server):
     """A second panel can watch what the first one is doing."""
-    a = beamline_server.client(kind="gui", gui_type="rungui")
+    a = beamline_server.client(kind="gui", gui_type="sample_alignment")
     b = beamline_server.client(kind="gui", gui_type="optics_motors")
     try:
         ga, gb = _collect(a), _collect(b)
@@ -42,7 +42,7 @@ def test_every_client_sees_the_same_stream(beamline_server):
 
 def test_the_publisher_runs_at_about_the_configured_rate(beamline_server):
     from ptychosaxs.link import config
-    with beamline_server.client(kind="gui", gui_type="rungui") as c:
+    with beamline_server.client(kind="gui", gui_type="sample_alignment") as c:
         got = _collect(c)
         time.sleep(2.0)
         # Generous bounds: this asserts "roughly 10 Hz, not 1 Hz and not a
@@ -51,7 +51,7 @@ def test_the_publisher_runs_at_about_the_configured_rate(beamline_server):
 
 
 def test_clients_changed_is_announced(beamline_server):
-    a = beamline_server.client(kind="gui", gui_type="rungui")
+    a = beamline_server.client(kind="gui", gui_type="sample_alignment")
     try:
         seen = []
         a.on("clients.changed", lambda n, d: seen.append(d))

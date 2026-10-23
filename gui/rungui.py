@@ -352,7 +352,6 @@ if not DEBUG_DEVICES:
 
 # Infrastructure — only in fully non-debug mode (level 0/1/2 all skip this)
 if not DEBUG_MODE:
-    from gui.network.server import create_server
     try:
         from ptychosaxs.tools.files import scp
     except ImportError:
@@ -2974,8 +2973,13 @@ class ptyco_main_control(QObject):
         lbl.setStyleSheet("background-color: #fffde7; color: #000000")
         lbl.setToolTip("")
 
-    # ── Qt signal slots ────────────────────────────────────────────────────
-    # Received from the UDP server (gui/network/server.py).
+    # ── Remote command vocabulary ──────────────────────────────────────────
+    # This used to be fed by a one-way UDP socket on port 20002, which could
+    # not reply and whose only in-repo client had been broken since April.
+    # The vocabulary itself is still the clearest list of what the panel can
+    # be asked to do, and ptychosaxs/link/methods.py is growing the same set
+    # as real request/response methods. Kept callable so nothing that drives
+    # the panel in-process loses its entry point before that is finished.
 
     @QtCore.pyqtSlot(dict)
     def run_json(self, json_message):
@@ -2988,6 +2992,7 @@ class ptyco_main_control(QObject):
 # Built in main(), not here. See build_devices() above for why.
 app = None
 main_panel = None
+beamline_client = None
 
 # import pygetwindow as gw
 
@@ -3002,28 +3007,49 @@ main_panel = None
 #     #print(f"Screenshot saved: {filename}")
 
 
+GUI_TYPE = "rungui"
+
+
 def main():
-    # Run gui with server option
-    global app, main_panel
+    global app, main_panel, beamline_client
+    from ptychosaxs.client.qt import QtBeamlineClient, attach_single_instance
+    from ptychosaxs.gui_launch import request_focus_and_exit
+    from ptychosaxs.link import errors
+
     app = QApplication(sys.argv)
+
+    # Join the shared server before building anything. This panel still
+    # owns its own hardware -- see REQUIREMENTS in server/registry.py,
+    # where rungui asks for no device groups -- so the server opens
+    # nothing on its behalf and there is no second client on the C-887.
+    # What it gets today is the single-instance rule, the focus request,
+    # and the event stream. It takes its devices from the server when the
+    # scan executors move, not before.
+    beamline_client = QtBeamlineClient(GUI_TYPE, label="ptycho-SAXS main panel")
+    try:
+        beamline_client.connect_to_server()
+    except errors.DuplicateGuiError as exc:
+        print(f"{GUI_TYPE} is already running (pid {exc.pid}).")
+        print("Raising the existing window.")
+        request_focus_and_exit(GUI_TYPE)
+        return 0
+    except Exception as exc:
+        print(f"Could not reach the beamline server: {exc}", file=sys.stderr)
+        return 2
+
     build_devices()
     main_panel = ptyco_main_control()
+    attach_single_instance(main_panel.ui, beamline_client)
+    app.aboutToQuit.connect(beamline_client.close)
 
+    # qasync's loop, because the panel's own long operations still run on
+    # QRunnables and this keeps the existing behaviour exactly.
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
-
-    # # Create a timer for periodic screenshots
-    # screenshot_timer = QTimer()
-    # screenshot_timer.timeout.connect(capture_screenshot)
-    # screenshot_timer.start(30000)  # 30 seconds in milliseconds
-
     with loop:
-        if not DEBUG_MODE:
-            _, protocol = loop.run_until_complete(create_server(loop))
-            protocol.jsonReceived.connect(main_panel.run_json)
         loop.run_forever()
+    return 0
 
 
 if __name__ == "__main__":
-    # Server option included
-    main()
+    sys.exit(main())
