@@ -45,9 +45,11 @@ needs, so the CRL panel never brings the hexapod up. Whether hardware is
 real or simulated is the *server's* choice, so simulate by starting the
 server with `--simulate` rather than passing a flag to a panel.
 
-`rungui` has not migrated yet and still takes `--debug` to use the stubs in
-`ptychosaxs/debug/`. Its child windows — sample alignment and the optics
-status report — migrate with it.
+`rungui` is a client too — it holds the single-instance slot and receives
+events — but it still builds its own hardware rather than taking it from
+the server, so it keeps `--debug` for the stubs in `ptychosaxs/debug/`.
+Its child windows, sample alignment and the optics status report, migrate
+when it does.
 
 ## The beamline server
 
@@ -123,7 +125,7 @@ a machine that can reach only some of the hardware still comes up.
 python -m pytest
 ```
 
-666 tests, no hardware and no display required -- the device layer imports
+806 tests, no hardware and no display required -- the device layer imports
 without Qt and without opening a single connection, which
 `tests/test_device_layer_headless.py` enforces with an audit hook. The
 server tests start real daemons on a private socket in a tmpdir. Two
@@ -134,7 +136,7 @@ pre-existing.
 
 | | |
 |---|---|
-| `ptychosaxs/api/` | the control surface: session, devices, jobs, events |
+| `ptychosaxs/api/` | the control surface: session, devices, jobs, events, scan geometry, guards and scan execution |
 | `ptychosaxs/server/` | the shared daemon: registry, dispatch, lifecycle |
 | `ptychosaxs/client/` | client library; `client/qt.py` is the only Qt importer |
 | `ptychosaxs/link/` | the wire shared by both ends (not named "transport" -- see below) |
