@@ -662,3 +662,478 @@ class ScanExecutorsMixin:
                 )
         except Exception as e:
             print(f"Warning: Failed to write hexapod_positions to master file {master_path}: {e}")
+
+    def _scan_mv_xy(self, xaxis, xp, yaxis, yp, update_status=None):
+        """Move a scan's two grid axes to one point.
+
+        Moving them one after the other walks the stage through a corner
+        position on the way to every point and pays two settle times. Axis
+        pairs that share a controller able to start both at once take that
+        path instead; everything else falls back to two sequential moves.
+
+        Which of those applies is pts.mv_xy's decision, not this function's —
+        it knows which controller owns each axis and whether that controller
+        can start them together. That is what lets the scan axes be swapped
+        without touching the scan engine.
+
+        Like _scan_mv, any failure here is logged and the scan carries on —
+        one bad point should not lose a whole run.
+        """
+        if not self.ctx.pts.can_coordinate(xaxis, yaxis):
+            # Two independent moves, each with its own error handling: a
+            # failure on one axis must not also skip the other.
+            self._scan_mv(xaxis, xp, update_status=update_status)
+            self._scan_mv(yaxis, yp, update_status=update_status)
+            return
+        try:
+            ok = self.ctx.pts.mv_xy(
+                xaxis, xp, yaxis, yp, wait=True,
+                timeout=self.COORDINATED_MOVE_TIMEOUT_S,
+            )
+        except Exception as e:
+            print(
+                f"Move of {xaxis}/{yaxis} to ({xp}, {yp}) failed "
+                f"({e}) — continuing scan. {time.ctime()}"
+            )
+            return
+        if not ok:
+            print(
+                f"Stage motion timeout moving {xaxis}/{yaxis} to "
+                f"({xp}, {yp}) — continuing scan. {time.ctime()}"
+            )
+            return
+        # pts.mv emits these as it moves; a coordinated move bypasses it,
+        # so the position readouts would otherwise freeze for the scan.
+        self._emit_axis_positions(xaxis, yaxis)
+
+    def fly_traj(self, xmotor=0, ymotor=-1):
+        """Program the hexapod trajectory before starting a fly scan worker.
+
+        Called from the GUI thread in the fly / fly2d / fly3d entry points, before
+        the Worker thread is started.  Sets self.Xaxis (and self.Yaxis for 2-D),
+        computes the step_time from the user's exposure time and idle time, updates
+        _ratio_exp_period so fly0 / fly2d0_SNAKE can compute the actual exposure
+        from the hexapod's measured pulse_step, and programs the waveform on the
+        hexapod controller.
+
+        ymotor=-1 → 1-D fly (programs a standard trajectory along X only)
+        ymotor≥0  → 2-D SNAKE fly (programs a full 2-D snake trajectory)
+        """
+        # Read X axis parameters from the UI.
+        n = xmotor + 1
+        Xaxis = self.ctx.motornames[xmotor]
+        Xst = self.fly1d_st + self.fly1d_p0  # absolute start
+        Xfe = self.fly1d_fe + self.fly1d_p0  # absolute end
+        Xstep = self.fly1d_step  # step distance (mm)
+        Xtm = self.fly1d_tm  # user exposure time (s)
+
+        # Compute step_time from the user-set acquisition time, clamped to safe floors.
+        # The period must be at least as long as the detector readout so that
+        # the next trigger does not arrive before the previous frame is read out,
+        # and at least 33 ms (Pilatus 2M limit of 30 Hz).
+        fly_acq_time = getattr(self.ctx.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
+        step_time = max(fly_acq_time, Xtm + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
+        # The hexapod wavetable clock is 1 ms/bin. Round step_time to the nearest
+        # whole millisecond so that the pulse_period passed to make_pulse_arrays is
+        # an exact integer number of bins. Without this, floating-point accumulation
+        # in make_pulse_arrays causes int() truncation to occasionally produce a step
+        # one bin short (e.g. 32 ms instead of 33 ms), violating the Pilatus minimum.
+        step_time = round(step_time * 1000) / 1000
+
+        # Store ratio_exp_period so fly0 can recover expt from hexapod.pulse_step.
+        # (hexapod.pulse_step is measured after the trajectory starts, so we cannot
+        # compute expt exactly until then; _ratio_exp_period bridges the gap.)
+        self.ctx.parameters._ratio_exp_period = Xtm / step_time
+
+        # Store axis labels for use by fly2d0_SNAKE (which runs on the worker thread
+        # and cannot safely re-read the UI).
+        self.Xaxis = Xaxis
+        self.Xi = Xst
+        self.Xf = Xfe
+
+        if ymotor >= 0:
+            # 2-D SNAKE: read Y parameters and program the 2-D snake waveform.
+            Yaxis = self.ctx.motornames[ymotor]
+            Yst = self.fly2d_st + self.fly2d_p0
+            Yfe = self.fly2d_fe + self.fly2d_p0
+            Ystep = self.fly2d_step
+
+            self.Yaxis = Yaxis
+            self.Yi = Yst
+            self.Yf = Yfe
+
+            # set_traj_SNAKE2 programs both axes simultaneously: the hexapod
+            # will execute a boustrophedon (snake) path covering the full X×Y grid.
+            self.ctx.pts.hexapod.set_traj_SNAKE2(
+                step_time, Xst, Xfe - Xst, Xstep, Yst, Yfe, Ystep
+            )
+
+            minstep, commonstep = self.ctx.pts.hexapod.analyze_pulse_steps()
+            if minstep != commonstep:
+                binsize = 0.001  # index-to-seconds conversion
+                print(
+                    f"Warning: most pulse steps are {commonstep * binsize * 1000:.1f} ms "
+                    f"but some are as short as {minstep * binsize * 1000:.3f} ms. "
+                    "Consider adjusting the fly step size to a multiple of the "
+                    f"common step ({commonstep * binsize * 1000:.3f} ms)."
+                )
+        else:
+            # 1-D fly: program a standard single-axis trajectory.
+            # fly0 uses HEXAPOD_FLYMODE_WAVELET which calls assign_axis2wavtable
+            # and run_traj, so set_traj here primes the standard (non-wavelet) path.
+            # Use the same rounding-based formula as _make_positions to avoid
+            # truncation edge cases when step doesn't evenly divide the range.
+            positions = self._make_positions(Xst, 0, Xfe - Xst, Xstep)
+            Nsteps = len(positions)
+            total_time = Nsteps * step_time
+            self.ctx.pts.hexapod.set_traj(
+                Xaxis, total_time, Xfe - Xst, Xst, 1, abs(step_time), 50
+            )
+
+    def _compute_helix_total_time(self, phi_st: float, phi_fe: float, phi_step: float, phi_tm: float) -> tuple:
+        """Return (total_time, Nsteps, step_time) for a helix fly scan's phi axis.
+
+        Shared by helix_fly's pre-scan velocity guard (computed on the GUI thread
+        before anything moves) and helix_fly0's DG645 arming (on the worker
+        thread), so the two can never diverge.
+        """
+        fly_acq_time = getattr(self.ctx.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
+        step_time = max(fly_acq_time, phi_tm + self.det_readout_time, self.OVERHEAD_FLY)
+        Nsteps = self._compute_n_positions([self._make_positions(0, phi_st, phi_fe, phi_step)], scan_kind="fly_phi")
+        total_time = Nsteps * step_time
+        return total_time, Nsteps, step_time
+
+    def _reconcile_hexapod_snake_positions(self, write_to_master: bool) -> np.ndarray:
+        """Build the hexapod-predicted position array for the just-programmed
+        2-D snake trajectory, verify its length against hexapod.pulse_number,
+        write it into the master file(s), and record the pulse count in the CSV.
+
+        Must be called immediately after fly_traj() programs set_traj_SNAKE2
+        (the earliest point hexapod.pulse_number is known), before the
+        trajectory is actually run. Reads only the cached fly1d_*/fly2d_*
+        instance attributes fly_traj() itself relies on — no live Qt widget
+        reads — so this is safe to call from both the GUI thread (fly2d) and
+        the worker thread (fly3d0's per-phi-slice loop).
+
+        """
+        x_st = self.fly1d_st + self.fly1d_p0
+        x_fe = self.fly1d_fe + self.fly1d_p0
+        x_step = self.fly1d_step
+        y_st = self.fly2d_st + self.fly2d_p0
+        y_fe = self.fly2d_fe + self.fly2d_p0
+        y_step = self.fly2d_step
+
+        x_coords = self._make_positions(0, x_st, x_fe, x_step)
+        y_coords = self._make_positions(0, y_st, y_fe, y_step)
+        x_step_signed = self._signed_step(x_st, x_fe, x_step)
+        y_step_signed = self._signed_step(y_st, y_fe, y_step)
+        x_coords = self._extend_axis_positions(x_coords, x_step_signed, 0, "fly_snake")
+        y_coords = self._extend_axis_positions(y_coords, y_step_signed, 1, "fly_snake")
+        hexapod_pos = self._snake_positions(x_coords, y_coords)
+        if len(hexapod_pos) > 0:
+            hexapod_pos = hexapod_pos - np.mean(hexapod_pos, axis=0)  # match nominal 'positions' centering
+
+        if write_to_master:
+            for master_path in getattr(self, "_current_scan_master_paths", {}).values():
+                self._append_hexapod_positions_to_master_file(master_path, hexapod_pos)
+        return hexapod_pos
+
+    def _append_piezo_positions_to_master_file(
+        self, master_path: str, piezo_pos: np.ndarray, axes
+    ) -> None:
+        """Write the piezo-stage position array to an already-created master file.
+
+        Unlike hexapod_positions (predicted from the programmed trajectory),
+        piezo_pos holds positions actually read back from the stages after each
+        point's move settled, since step-scan moves are closed-loop but not
+        guaranteed pulse-exact like the hexapod's fly trajectory.
+
+        Reopens the master file (created earlier in _pre_scan) in append mode
+        and adds /entry/sample/piezo_positions alongside the software-nominal
+        /entry/sample/positions dataset.
+        """
+        import h5py
+
+        axes_label = ", ".join(axes)
+        try:
+            with h5py.File(master_path, 'r+') as f:
+                sample = f['/entry/sample']
+                if 'piezo_positions' in sample:
+                    del sample['piezo_positions']
+                sample.create_dataset('piezo_positions', data=piezo_pos)
+                sample['piezo_positions'].attrs['units'] = (
+                    self._piezo_axis_units(axes).encode('utf-8')
+                )
+                sample['piezo_positions'].attrs['axes'] = axes_label.encode('utf-8')
+                sample['piezo_positions'].attrs['description'] = (
+                    f'Nx2 array of ({axes_label}) positions read back from the '
+                    f'piezo stages after each scan point'
+                ).encode('utf-8')
+        except Exception as e:
+            print(f"Warning: Failed to write piezo_positions to master file {master_path}: {e}")
+
+    def _populate_data_group(self, entry, sample_name: str) -> None:
+        """Create /entry/data group structure (links added post-scan).
+
+        Args:
+            entry: HDF5 entry group
+            sample_name: Sample name to be stored
+        """
+        data = entry.create_group('data')
+        data.attrs['NX_class'] = b'NXdata'
+        data.attrs['signal'] = b'data'
+        data.attrs['axes'] = b'. .'
+
+        # Store sample name
+        data.create_dataset('sample_name', data=sample_name.encode('utf-8'))
+
+        # Constant metadata
+        data.create_dataset('local_name', data=b'APS')
+        data.create_dataset('make', data=b'Dectris')
+        data.create_dataset('model', data=b'Pilatus')
+
+    def _populate_sample_group(self, entry, shared_meta: dict, scan_positions_dict: dict) -> None:
+        """Create /entry/sample group with motor positions and scan position arrays.
+
+        Args:
+            entry: HDF5 entry group
+            shared_meta: Shared metadata dict (contains sth, stv, theta, trans1, trans2)
+            scan_positions_dict: {motor_name: np.ndarray} from _compute_scan_positions
+        """
+        from .nexus_metadata_config import SHARED_METADATA_MAP
+
+        sample = entry.create_group('sample')
+        sample.attrs['NX_class'] = b'NXsample'
+
+        # Write sample name (will be set by caller)
+        sample.create_dataset('sample_name', data=b'')
+
+        # Write constant motor positions from EPICS
+        if '/entry/sample/sth' in shared_meta:
+            val = shared_meta['/entry/sample/sth']
+            sample.create_dataset('sth', data=val)
+            sample['sth'].attrs['units'] = b'mm'
+
+        if '/entry/sample/stv' in shared_meta:
+            val = shared_meta['/entry/sample/stv']
+            sample.create_dataset('stv', data=val)
+            sample['stv'].attrs['units'] = b'mm'
+
+        if '/entry/sample/theta' in shared_meta:
+            val = shared_meta['/entry/sample/theta']
+            sample.create_dataset('theta', data=val)
+            sample['theta'].attrs['units'] = b'degree'
+
+        # Write SmarAct goniometer translation stage positions
+        if '/entry/sample/trans1' in shared_meta:
+            val = shared_meta['/entry/sample/trans1']
+            sample.create_dataset('trans1', data=val)
+            sample['trans1'].attrs['units'] = b'mm'
+
+        if '/entry/sample/trans2' in shared_meta:
+            val = shared_meta['/entry/sample/trans2']
+            sample.create_dataset('trans2', data=val)
+            sample['trans2'].attrs['units'] = b'mm'
+
+        # Write scan position array (Nx2 array of (x, y) positions in scan order)
+        if 'positions' in scan_positions_dict:
+            pos_array = scan_positions_dict['positions']
+            sample.create_dataset('positions', data=pos_array)
+            sample['positions'].attrs['units'] = b'mm'
+            sample['positions'].attrs['description'] = b'Nx2 array of (X, Z) motor positions in scan traversal order'
+
+    def _populate_scalars_group(self, entry, shared_meta: dict) -> None:
+        """Create /entry/scalars group with detector scalars.
+
+        Args:
+            entry: HDF5 entry group
+            shared_meta: Shared metadata dict (contains IC, BS, BS2, IfCRL)
+        """
+        scalars_data = {k: v for k, v in shared_meta.items() if k.startswith('/entry/scalars/')}
+
+        if scalars_data:
+            scalars = entry.create_group('scalars')
+            scalars.attrs['NX_class'] = b'NXcollection'
+
+            for nexus_path, value in scalars_data.items():
+                dataset_name = nexus_path.split('/')[-1]
+                scalars.create_dataset(dataset_name, data=value)
+                scalars[dataset_name].attrs['units'] = b'counts'
+
+    def _populate_instrument_group(self, entry, shared_meta: dict, detector_meta: dict,
+                                   detector_config: dict) -> None:
+        """Create /entry/instrument hierarchy with metadata.
+
+        Args:
+            entry: HDF5 entry group
+            shared_meta: Shared metadata dict from _fetch_shared_epics_metadata
+            detector_meta: Detector metadata dict from _fetch_detector_epics_metadata
+            detector_config: Detector configuration dict
+        """
+        import h5py
+        from .nexus_metadata_config import SHARED_METADATA_MAP, SLITS_METADATA_MAP, ZONE_PLATE_METADATA_MAP
+
+        inst = entry.create_group('instrument')
+        inst.attrs['NX_class'] = b'NXinstrument'
+        inst.create_dataset('name', data=detector_config['name'].encode('utf-8'))
+
+        # Create beam group
+        beam = inst.create_group('beam')
+        beam.attrs['NX_class'] = b'NXbeam'
+        if '/entry/instrument/beam/incident_wavelength' in shared_meta:
+            val = shared_meta['/entry/instrument/beam/incident_wavelength']
+            beam.create_dataset('incident_wavelength', data=val)
+            beam['incident_wavelength'].attrs['units'] = b'angstrom'
+
+        # Create monochromator group
+        mono = inst.create_group('monochromator')
+        mono.attrs['NX_class'] = b'NXmonochromator'
+        if '/entry/instrument/monochromator/monoE' in shared_meta:
+            val = shared_meta['/entry/instrument/monochromator/monoE']
+            mono.create_dataset('monoE', data=val)
+            mono['monoE'].attrs['units'] = b'keV'
+
+        # Create source group
+        source = inst.create_group('source')
+        source.attrs['NX_class'] = b'NXsource'
+        source.create_dataset('facility_name', data=b'APS')
+        source.create_dataset('facility_beamline', data=b'12-ID-E')
+        source.create_dataset('facility_sector', data=b'12-ID')
+        source.create_dataset('facility_station', data=b'E')
+        source.create_dataset('name', data=b'Advanced Photon Source')
+        source.create_dataset('type', data=b'Synchrotron')
+        source.create_dataset('probe', data=b'x-ray')
+
+        if '/entry/instrument/source/current' in shared_meta:
+            val = shared_meta['/entry/instrument/source/current']
+            source.create_dataset('current', data=val)
+            source['current'].attrs['units'] = b'mA'
+
+        if '/entry/instrument/source/undE' in shared_meta:
+            val = shared_meta['/entry/instrument/source/undE']
+            source.create_dataset('undE', data=val)
+            source['undE'].attrs['units'] = b'keV'
+
+        # Create detector group
+        det = inst.create_group('detector')
+        det.attrs['NX_class'] = b'NXdetector'
+        det.create_dataset('description', data=detector_config['description'].encode('utf-8'))
+        det.create_dataset('type', data=detector_config['type'].encode('utf-8'))
+        det.create_dataset('sensor_material', data=detector_config['sensor_material'].encode('utf-8'))
+
+        det.create_dataset('sensor_thickness', data=detector_config['sensor_thickness'])
+        det['sensor_thickness'].attrs['units'] = b'mm'
+
+        det.create_dataset('x_pixel_size', data=detector_config['x_pixel_size'])
+        det['x_pixel_size'].attrs['units'] = b'mm'
+
+        det.create_dataset('y_pixel_size', data=detector_config['y_pixel_size'])
+        det['y_pixel_size'].attrs['units'] = b'mm'
+
+        det.create_dataset('bit_depth_image', data=detector_config['bit_depth_image'])
+        det.create_dataset('bit_depth_readout', data=detector_config['bit_depth_readout'])
+        det.create_dataset('saturation_value', data=detector_config['saturation_value'])
+
+        det.create_dataset('detector_readout_time', data=detector_config['detector_readout_time'])
+        det['detector_readout_time'].attrs['units'] = b'ms'
+
+        # Add detector-specific metadata
+        for nexus_path, value in detector_meta.items():
+            if nexus_path.startswith('/entry/instrument/detector/'):
+                # Extract dataset name from path
+                dataset_name = nexus_path.split('/')[-1]
+                det.create_dataset(dataset_name, data=value)
+                # Find units from config
+                for path, pv_info in detector_config['detector_pvs'].items():
+                    if path == nexus_path:
+                        units = pv_info.get('units', '')
+                        if units:
+                            det[dataset_name].attrs['units'] = units.encode('utf-8')
+
+        # Create slits group (only if at least one slit PV succeeded)
+        slits_data = {k: v for k, v in shared_meta.items() if k.startswith('/entry/instrument/slits/')}
+        if slits_data:
+            slits = inst.create_group('slits')
+            slits.attrs['NX_class'] = b'NXcollection'
+            for nexus_path, value in slits_data.items():
+                dataset_name = nexus_path.split('/')[-1]
+                slits.create_dataset(dataset_name, data=value)
+                slits[dataset_name].attrs['units'] = b'mm'
+
+        # Create zone plate group (if any zone plate PV succeeded, or if we
+        # know which optic is installed). The identity is written even when
+        # "Save Upstream Optics" is off, which suppresses the positions:
+        # which optic was used is identity, not a position log, and losing it
+        # makes the data unidentifiable afterwards.
+        zp_data = {k: v for k, v in shared_meta.items() if k.startswith('/entry/instrument/zone_plate/')}
+        identity = getattr(self, '_cached_optics_identity', None) or {}
+        if zp_data or identity:
+            zp = inst.create_group('zone_plate')
+            zp.attrs['NX_class'] = b'NXcollection'
+            for nexus_path, value in zp_data.items():
+                dataset_name = nexus_path.split('/')[-1]
+                zp.create_dataset(dataset_name, data=value)
+                zp[dataset_name].attrs['units'] = b'mm'
+            if identity:
+                zp.attrs['optics_type'] = identity['optics_type'].encode('utf-8')
+                zp.attrs['optics_name'] = identity['optics_name'].encode('utf-8')
+                # A dataset, not an attribute: only a dataset can carry the
+                # units attribute NeXus wants. Created outside the loop above
+                # so it does not inherit that loop's unconditional "mm".
+                zp.create_dataset('optics_ozw', data=int(identity['optics_ozw']))
+                zp['optics_ozw'].attrs['units'] = b'nm'
+
+    def _migrate_scan_summary_header(self, csv_path) -> None:
+        """Append any columns from _get_scan_summary_header() missing from the
+        on-disk header (e.g. a column added by a newer version of this file),
+        so newly-written rows stay aligned with the header instead of
+        silently drifting on a pre-existing CSV."""
+        try:
+            with open(csv_path, newline="") as f:
+                rows = list(csv.reader(f))
+            if not rows:
+                return
+            header = rows[0]
+            missing = [col for col in self._get_scan_summary_header() if col not in header]
+            if not missing:
+                return
+            header.extend(missing)
+            rows[0] = header
+            with open(csv_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerows(rows)
+        except Exception:
+            pass
+
+    def _update_scan_summary_completed(self, status: str, scan_id: str = None) -> None:
+        csv_path = self._get_scan_summary_csv_path()
+        if csv_path is None or not csv_path.exists():
+            return
+        if scan_id is None:
+            scan_id = getattr(self, "_last_scan_summary_id", None)
+        if not scan_id:
+            scan_id = "S%04d" % self.ctx.parameters.scan_number
+        try:
+            with open(csv_path, newline="") as f:
+                rows = list(csv.reader(f))
+            if not rows:
+                return
+            header = rows[0]
+            try:
+                completed_index = header.index("completed")
+                scan_index = header.index("scan")
+            except ValueError:
+                return
+            updated = False
+            for row in rows[1:]:
+                if len(row) > completed_index and row[scan_index] == scan_id:
+                    if row[completed_index] != status:
+                        row[completed_index] = status
+                        updated = True
+                    break
+            if updated:
+                with open(csv_path, "w", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerows(rows)
+        except Exception:
+            pass
