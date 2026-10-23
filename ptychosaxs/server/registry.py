@@ -26,8 +26,8 @@ import time
 # GUI migrates, so that every device's construction leaves gui/rungui.py
 # module scope exactly once.
 REQUIREMENTS = {
-    "rungui": ("motion",),
-    "optics_motors": (),
+    "rungui": ("motion", "optics"),
+    "optics_motors": ("optics",),
     "crl_3dprint": (),
     "sample_alignment": ("motion",),
 }

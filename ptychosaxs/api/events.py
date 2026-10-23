@@ -65,6 +65,41 @@ class MotionPositions(_Payload):
 
 
 @dataclass(frozen=True, slots=True)
+class OpticsPositions(_Payload):
+    positions: dict
+    EVENT = "optics.positions"
+    CONFLATE_KEY = "optics.positions"
+
+
+@dataclass(frozen=True, slots=True)
+class OpticsStatus(_Payload):
+    """Whether each optics block is in, out, or neither.
+
+    Published less often than positions: classifying re-reads the saved
+    definitions and compares every block, and a beamstop does not move
+    between one 100 ms tick and the next.
+    """
+    blocks: dict            # block key -> in | out | between | undefined
+    good_for_ptycho: bool
+    problems: tuple = ()
+    EVENT = "optics.status"
+    CONFLATE_KEY = "optics.status"
+
+
+@dataclass(frozen=True, slots=True)
+class PvValues(_Payload):
+    """Records the panels bind line edits to.
+
+    One event for the whole subscribed set rather than one per record: a
+    panel binds a dozen fields and a dozen events per tick would be twelve
+    times the wakeups for the same information.
+    """
+    values: dict
+    EVENT = "pv.values"
+    CONFLATE_KEY = "pv.values"
+
+
+@dataclass(frozen=True, slots=True)
 class MessagePosted(_Payload):
     """What a QMessageBox used to be, when it was only telling you something.
 

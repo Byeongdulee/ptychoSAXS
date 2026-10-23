@@ -108,11 +108,16 @@ class DeviceRegistry:
             self._open_motion,
             self._close_motion,
         ))
-        # Phase 1 implements motion only. The remaining groups -- qds,
-        # softglue, dg645, shutter, scaler, detectors, scan_number, optics,
-        # xray_eye, crl -- are built in the phase that migrates the GUI
-        # owning them, so that each one's construction moves out of
-        # gui/rungui.py module scope exactly once.
+        self.register(DeviceGroup(
+            "optics",
+            "upstream optics: beamstop, zone plate, OSA, SAXS Z",
+            self._open_optics,
+            self._close_optics,
+        ))
+        # Still to come, each in the phase that migrates the GUI owning it,
+        # so a device's construction leaves gui/rungui.py module scope
+        # exactly once: qds, softglue, dg645, shutter, scaler, detectors,
+        # scan_number, crl.
 
     def register(self, group: DeviceGroup):
         with self._lock:
@@ -239,6 +244,26 @@ class DeviceRegistry:
     @property
     def motion(self):
         return self.get("motion")
+
+    # -- the optics group ----------------------------------------------------
+
+    def _open_optics(self):
+        from ptychosaxs.api import optics as optics_api
+        built = optics_api.open_controllers(self.profile, self._log)
+        missing = [g for g in ("opticsbox", "OSA", "saxs_z", "beamstop")
+                   if g not in built]
+        if missing:
+            self._log.warning("optics groups unavailable: %s",
+                              ", ".join(missing))
+        return built
+
+    def _close_optics(self, obj):
+        from ptychosaxs.api import optics as optics_api
+        optics_api.close_controllers(obj)
+
+    @property
+    def optics(self):
+        return self.get("optics")
 
     # -- locking -------------------------------------------------------------
 

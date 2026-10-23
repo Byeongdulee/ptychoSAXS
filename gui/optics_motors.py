@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PyQt5.QtCore import QObject, QSettings, QTimer
+from PyQt5.QtCore import QObject, QSettings
 from threading import Lock
 from collections import OrderedDict
 from datetime import datetime
@@ -52,7 +52,7 @@ from gui.optics_status import (
     IN as _IN,
     OUT as _OUT,
 )
-from gui.pv_lineedit import MemoryPV, PVLineEdit
+from gui.pv_lineedit import PVLineEdit
 from gui.resize_utils import ProportionalResizer
 from gui.ui_levels import LevelSwitcher
 from gui.xray_eye import EYE_CMD_PV, EYE_EXPOSURE_PV, EYE_EXPOSURE_RBV_PV, XrayEye
@@ -85,18 +85,10 @@ USER_VIEW = "optics_motors_user.ui"
 VIEW_LEVELS = [FULL_VIEW, "optics_motors_small.ui", "optics_motors_tiny.ui",
                USER_VIEW]
 
-try:
-    from epics import PV
-except ImportError:
-    PV = None  # replaced by FakePV in debug mode
-
-try:
-    from ptychosaxs.optics import opticsbox, OSA, saxs_z, beamstop
-
-    MotorControlAvailable = True
-except Exception:
-    MotorControlAvailable = False
-    print("Optics motor control is NOT available.")
+# No EPICS here any more. Motion goes through the beamline server, and the
+# records the drive/tweak boxes bind to come from the shared mirror the
+# server pushes (ptychosaxs/client/pv.py). Whether those are real records
+# or simulated ones is the server's decision, not this panel's.
 
 
 # ---------------------------------------------------------------------------
@@ -683,36 +675,39 @@ class motor_control(QMainWindow):
     UNITS_SETTINGS_KEY = "opticsMotors/unitsUm"
     MM_PER_UM = 0.001
 
-    def __init__(self, debug_mode=False):
+    def __init__(self, client, debug_mode=False):
         super(motor_control, self).__init__()
+        self.client = client
         self.debug_mode = debug_mode
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         ensure_default_ini()
         self.lock = Lock()
+
+        # Last positions and block states the server pushed. The panel used
+        # to read every motor on a 100 ms GUI-thread timer; now one server
+        # poller reads once and every connected panel is told.
+        self._positions = {}
+        self._block_states = {}
+        # False while a view is being torn down and rebuilt. See _build_view.
+        self._view_ready = False
 
         # Everything above this point, plus what follows to the end of
         # __init__, is one-time process setup: hardware, saved settings,
         # the X-ray eye. self.ui itself -- and everything built from it --
         # belongs to _build_view instead, since More/Less rebuilds that
         # from a different .ui file on every switch.
-        self.control = self._build_controllers()
         self.invert = self._load_inverts()
         self._units_um = bool(QSettings("ptychoSAXS", "ptychoSAXS")
                               .value(self.UNITS_SETTINGS_KEY, False, type=bool))
         self._saxsbs_in_all = read_saxsbs_in_all()
 
-        # Drive and tweak boxes mirror the motor records' .VAL and .TWV, so
-        # the panel has to talk channel access directly for those two fields
-        # -- the ptychosaxs controllers only expose readback and move. The
-        # cache is keyed by PV name and outlives any one view, so a
-        # More/Less switch reuses the same channels instead of reconnecting.
-        self._pv_cache = {}
-
-        if debug_mode:
-            from ptychosaxs.debug.debug_stubs import FakePV as _PV
-        else:
-            _PV = PV
-        self.xray_eye = XrayEye(_PV, debug=debug_mode)
+        # Drive and tweak boxes mirror the motor records' .VAL and .TWV,
+        # which the optics controllers do not expose -- they offer readback
+        # and move. Those two fields come from the server's record mirror
+        # instead, which also means a More/Less switch rebinds without
+        # reconnecting anything, and the main panel writing the same field
+        # shows up here.
+        self.xray_eye = XrayEye(self.client.pvs.pv, debug=debug_mode)
 
         # Carried across a view switch: a block the incoming view does not
         # show (the SAXS beamstop outside the full and user views) keeps
@@ -727,8 +722,12 @@ class motor_control(QMainWindow):
         # per-view: it holds no widgets, only a reference to this panel.
         self.modes = OpticsModes(self)
 
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.updatepos)
+        # No hardware timer. The server polls once and pushes; these
+        # arrive on the client's reader thread and Qt queues them onto this
+        # one, because this object lives on the GUI thread.
+        self.client.opticsPositionsChanged.connect(self._on_positions)
+        self.client.opticsStatusChanged.connect(self._on_optics_status)
+        self.client.pvValuesChanged.connect(self._on_pv_values)
 
         self._levels = LevelSwitcher(
             [os.path.join(UI_DIR, name) for name in VIEW_LEVELS],
@@ -768,10 +767,11 @@ class motor_control(QMainWindow):
         scaling snapshotted against *this* view's designed size.
         """
         # _show_view() below pumps the event loop (QApplication.processEvents)
-        # before the new window's blocks/bindings exist; stopping the timer
-        # for the duration keeps updatepos from running against that
-        # half-built window in between.
-        self.timer.stop()
+        # before the new window's blocks and bindings exist. That delivers
+        # queued signals, so the server's position and PV events would land
+        # on a half-built window -- the same hazard the 100 ms timer used to
+        # be stopped for, and one that queued delivery makes easier to hit.
+        self._view_ready = False
         self._snapshot_block_state()
 
         self._bindings = []
@@ -792,7 +792,6 @@ class motor_control(QMainWindow):
         self._update_units_display()
 
         self._show_view()
-        self.timer.start(100)
         return self.ui
 
     def _snapshot_block_state(self):
@@ -853,62 +852,44 @@ class motor_control(QMainWindow):
         if DYNAMIC_FONTS:
             self._font_scaler.rescale()
 
+        # The window is whole again; events may touch it.
+        self._view_ready = True
+        self.updatepos()
+
     # -- hardware ----------------------------------------------------------
 
-    def _build_controllers(self):
-        if self.debug_mode:
-            from ptychosaxs.debug.debug_stubs import (
-                DebugBeamstop, DebugOpticsbox, DebugOSA, DebugSaxsZ)
-            return {"opticsbox": DebugOpticsbox(), "OSA": DebugOSA(),
-                    "saxs_z": DebugSaxsZ(), "beamstop": DebugBeamstop()}
-        if not MotorControlAvailable:
-            raise RuntimeError(
-                "Motor control hardware (optics) is not available. "
-                "Run with --debug_mode to use stubs.")
-        return {"opticsbox": opticsbox(), "OSA": OSA(), "saxs_z": saxs_z(),
-                "beamstop": beamstop()}
-
-    def _axis(self, motor):
-        controller_name, index = MOTORS[motor]
-        controller = self.control[controller_name]
-        return controller, controller.motornames[index]
-
     def read(self, motor):
-        controller, axis = self._axis(motor)
-        with self.lock:
-            return float(controller.get_pos(axis))
+        """This motor's position now, straight from the server.
+
+        A round trip, which is fine because the display no longer uses this
+        -- positions arrive as events. What is left are the few places that
+        need a settled value at a particular moment: capturing a preset,
+        redefining a position, writing a snapshot file.
+        """
+        cached = self._positions.get(motor)
+        try:
+            return float(self.client.optics.position(motor))
+        except Exception as exc:
+            # Fall back to the last pushed value rather than raising into a
+            # dialog: one unreadable motor should not abort a capture of the
+            # other four.
+            print("Could not read %s: %s" % (motor, exc))
+            return float(cached) if cached is not None else 0.0
 
     def move_abs(self, motor, value):
-        controller, axis = self._axis(motor)
-        with self.lock:
-            controller.mv(axis, value, wait=False)
+        self.client.optics.move(motor, float(value))
 
     def move_rel(self, motor, delta):
-        controller, axis = self._axis(motor)
-        with self.lock:
-            controller.mvr(axis, delta, wait=False)
+        self.client.optics.move_rel(motor, float(delta))
 
     def _pv(self, pvname):
-        """A channel for `pvname`, cached. None when EPICS is unavailable.
+        """A record handle for PVLineEdit, served by the shared server.
 
-        A None channel is not an error: the bound boxes simply stop showing
-        the record and go back to being plain entry boxes, which is what the
-        panel did before they were bound at all.
+        Was an epics.PV this panel opened and polled itself. Now it reads
+        from the mirror the server pushes, so two panels bound to the same
+        record see each other's writes.
         """
-        if pvname in self._pv_cache:
-            return self._pv_cache[pvname]
-        if self.debug_mode:
-            channel = MemoryPV(pvname)
-        elif PV is None:
-            channel = None
-        else:
-            try:
-                channel = PV(pvname)
-            except Exception as exc:
-                print("Could not connect %s: %s" % (pvname, exc))
-                channel = None
-        self._pv_cache[pvname] = channel
-        return channel
+        return self.client.pvs.pv(pvname)
 
     # -- display units -------------------------------------------------
 
@@ -1645,31 +1626,61 @@ class motor_control(QMainWindow):
 
     # -- periodic refresh --------------------------------------------------
 
-    def updatepos(self):
-        # Every motor is read regardless of whether this view shows its row
-        # -- PresetBlock.update_status for a block this view *does* show may
-        # need any of them -- but the label write is skipped where the view
-        # has no such label (osaz/saxsz rows do not exist outside the full
-        # view).
-        readbacks = {}
+    # -- server events -------------------------------------------------
+
+    def _on_positions(self, positions):
+        """New readbacks from the server. Replaces the 100 ms poll.
+
+        Every motor arrives whether or not this view shows its row -- a
+        PresetBlock this view *does* show may depend on any of them -- but
+        the label write is skipped where the view has no such label (the
+        osaz/saxsz rows do not exist outside the full view).
+        """
+        if not self._view_ready:
+            return
+
+        self._positions.update(positions)
+        readbacks = self._positions
+
         for prefix, spec in AXIS_BLOCKS.items():
             for axis, motor in (("ver", spec.ver), ("hor", spec.hor)):
-                readbacks[motor] = self.read(motor)
+                value = readbacks.get(motor)
+                if value is None:
+                    continue
                 label = self._w(QLabel, "lbl_rb_%s_%s" % (prefix, axis))
                 if label is not None:
-                    label.setText(self._fmt_for(motor)(readbacks[motor]))
+                    label.setText(self._fmt_for(motor)(value))
         for prefix, motor in SINGLE_ROWS.items():
-            readbacks[motor] = self.read(motor)
+            value = readbacks.get(motor)
+            if value is None:
+                continue
             label = self._w(QLabel, "lbl_rb_%s" % prefix)
             if label is not None:
-                label.setText(self._fmt_for(motor)(readbacks[motor]))
+                label.setText(self._fmt_for(motor)(value))
+
         for block in self.blocks.values():
             block.update_status(readbacks)
         self._update_all_status()
-        # Drive/tweak boxes track .VAL/.TWV, so a move or a tweak-step
-        # change made anywhere else shows up here within one tick. The
-        # exposure box is in the second list for the reason given in
-        # _connect_exposure; it is polled exactly the same way.
+
+    def _on_optics_status(self, blocks, good_for_ptycho, problems):
+        """The server's own classification of each block.
+
+        Kept alongside the panel's PresetBlock.update_status rather than
+        replacing it: the blocks still own their button state, and this is
+        the shared view that rungui's pre-scan guard reads too.
+        """
+        self._block_states = dict(blocks)
+
+    def _on_pv_values(self, _values):
+        """Bound boxes track .VAL/.TWV, so a move or a tweak-step change
+        made anywhere else shows up here as soon as the server sees it.
+
+        The exposure box is in the second list for the reason given in
+        _connect_exposure; it is refreshed exactly the same way.
+        """
+        if not self._view_ready:
+            return
+
         for binding in self._bindings + self._unitless_bindings:
             binding.poll()
         self._update_exposure_rbv()
@@ -1677,22 +1688,91 @@ class motor_control(QMainWindow):
         # alignment window, which share this state through the command PV.
         self._refresh_xrayeye_ui()
 
+    def updatepos(self):
+        """Refresh everything once, now.
+
+        The panel no longer polls, but a few paths still want an immediate
+        repaint rather than waiting up to one publish interval -- rebuilding
+        the view on a More/Less switch, and finishing an in/out sequence.
+        """
+        try:
+            self._on_positions(self.client.optics.positions())
+        except Exception as exc:
+            print("Could not refresh optics positions: %s" % exc)
+        self._on_pv_values({})
+
+
+GUI_TYPE = "optics_motors"
+
+
+def _request_focus_and_exit():
+    """Ask the panel that already holds the slot to come forward.
+
+    Has to reconnect as a plain CLI client: our own connection was closed
+    with the refusal, and reconnecting as a gui would simply be refused
+    again for the same reason -- which is what made an earlier version of
+    this quietly do nothing.
+    """
+    from ptychosaxs.client.connection import BeamlineClient
+
+    try:
+        asker = BeamlineClient(kind="cli", label=f"{GUI_TYPE} relaunch")
+        asker.connect(start_server=False, timeout_s=5)
+    except Exception as exc:
+        print(f"(could not ask it to come forward: {exc})", file=sys.stderr)
+        return
+    try:
+        asker.system.request_focus(GUI_TYPE)
+    except Exception as exc:
+        print(f"(could not ask it to come forward: {exc})", file=sys.stderr)
+    finally:
+        asker.close()
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--debug_mode", action="store_true",
-        help="Run without connecting to motors or EPICS PVs")
+        help="Drive simulated optics instead of the real records")
+    parser.add_argument(
+        "--no-server-start", action="store_true",
+        help="Fail rather than starting a beamline server if none is running")
     args, _ = parser.parse_known_args()  # so Qt args pass through
 
+    from ptychosaxs.client.qt import QtBeamlineClient, attach_single_instance
+    from ptychosaxs.link import errors
+
     app = QApplication(sys.argv)
+
+    client = QtBeamlineClient(GUI_TYPE, label="optics panel")
+    try:
+        client.connect_to_server(start_server=not args.no_server_start)
+    except errors.DuplicateGuiError as exc:
+        # Already open. Bring that window forward instead of putting up a
+        # second one that would fight it for the same records and the same
+        # ini file, then leave quietly.
+        print(f"{GUI_TYPE} is already running (pid {exc.pid}).")
+        print("Raising the existing window.")
+        _request_focus_and_exit()
+        return 0
+    except Exception as exc:
+        print(f"Could not reach the beamline server: {exc}", file=sys.stderr)
+        return 2
+
+    if args.debug_mode and not client.simulated:
+        print("WARNING: --debug_mode was asked for, but the running server "
+              "is driving real hardware. The server owns that choice; "
+              "restart it with --simulate to simulate.", file=sys.stderr)
+
     # Bound to a name and kept for the app's lifetime: More/Less now
     # destroys and rebuilds windows under this object, so the window
     # staying alive only via the signal closures that happened to capture
     # `self` is no longer something to rely on.
-    panel = motor_control(debug_mode=args.debug_mode)  # noqa: F841
-    sys.exit(app.exec_())
+    panel = motor_control(client, debug_mode=client.simulated)
+    attach_single_instance(panel, client)
+    app.aboutToQuit.connect(client.close)
+    return app.exec_()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

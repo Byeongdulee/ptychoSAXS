@@ -21,7 +21,9 @@ import time
 from ptychosaxs.api.devices import DeviceRegistry
 from ptychosaxs.api.events import EventBus, MessagePosted, ServerState
 from ptychosaxs.api.jobs import JobManager
+from ptychosaxs.api.optics import OpticsService
 from ptychosaxs.api.profile import Profile
+from ptychosaxs.api.pvs import PVCache
 
 PHASE_NEW = "new"
 PHASE_DEVICES = "building devices"
@@ -51,6 +53,8 @@ class BeamlineSession:
 
         self.devices = DeviceRegistry(self.profile, self.bus, self.log)
         self.jobs = JobManager(self.bus, self.log)
+        self.pvs = PVCache(self.profile, self.log)
+        self.optics = OpticsService(self.devices, self.pvs, self.log)
 
         # Phase 5 moves these off the GUI window and onto the session:
         #   parameters  -- SafeIni over gui/ini/pty-co-saxs.ini (124 refs)
@@ -104,6 +108,10 @@ class BeamlineSession:
             self.jobs.shutdown(wait=False)
         except Exception:
             self.log.exception("job manager did not shut down cleanly")
+        try:
+            self.pvs.close_all()
+        except Exception:
+            self.log.exception("PV cache did not close cleanly")
         try:
             self.devices.close_all()
         except Exception:

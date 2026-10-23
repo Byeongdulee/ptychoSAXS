@@ -48,7 +48,59 @@ class MotionFacade(_Facade):
         return self._c.call("motion.position", {"axis": axis})["position"]
 
 
-ALL_FACADES = (SystemFacade, MotionFacade)
+class OpticsFacade(_Facade):
+    METHODS = ("optics.motors", "optics.positions", "optics.position",
+               "optics.status", "optics.move", "optics.move_rel",
+               "optics.stop", "optics.set_position")
+
+    def motors(self):
+        return self._c.call("optics.motors")["motors"]
+
+    def positions(self):
+        return self._c.call("optics.positions")["positions"]
+
+    def position(self, motor):
+        return self._c.call("optics.position", {"motor": motor})["position"]
+
+    def status(self):
+        return self._c.call("optics.status")
+
+    def move(self, motor, value, wait=False):
+        return self._c.call("optics.move",
+                            {"motor": motor, "value": value, "wait": wait})
+
+    def move_rel(self, motor, delta, wait=False):
+        return self._c.call("optics.move_rel",
+                            {"motor": motor, "delta": delta, "wait": wait})
+
+    def stop(self, motor=None):
+        # Short timeout: Stop that hangs is Stop that does not work.
+        return self._c.call("optics.stop", {"motor": motor}, timeout_s=5.0)
+
+    def set_position(self, motor, value=0.0):
+        return self._c.call("optics.set_position",
+                            {"motor": motor, "value": value})
+
+
+class PvFacade(_Facade):
+    """Records a panel binds a line edit straight to."""
+
+    METHODS = ("pv.subscribe", "pv.unsubscribe", "pv.get", "pv.put")
+
+    def subscribe(self, names):
+        return self._c.call("pv.subscribe", {"names": list(names)})["values"]
+
+    def unsubscribe(self, names=None):
+        return self._c.call("pv.unsubscribe", {"names": names})
+
+    def get(self, name):
+        return self._c.call("pv.get", {"name": name})["value"]
+
+    def put(self, name, value):
+        return self._c.call("pv.put", {"name": name, "value": value})
+
+
+ALL_FACADES = (SystemFacade, MotionFacade, OpticsFacade, PvFacade)
 
 
 def facade_methods():

@@ -26,6 +26,9 @@ class QtBeamlineClient(QtCore.QObject):
     """A BeamlineClient whose events are pyqtSignals."""
 
     positionsChanged = QtCore.pyqtSignal(dict, dict, dict)  # pos, moving, connected
+    opticsPositionsChanged = QtCore.pyqtSignal(dict)        # motor -> mm
+    opticsStatusChanged = QtCore.pyqtSignal(dict, bool, list)  # blocks, ok, problems
+    pvValuesChanged = QtCore.pyqtSignal(dict)               # pvname -> value
     serverStateChanged = QtCore.pyqtSignal(bool, str)       # ready, phase
     messagePosted = QtCore.pyqtSignal(str, str, str)        # level, text, source
     clientsChanged = QtCore.pyqtSignal(list)
@@ -46,6 +49,7 @@ class QtBeamlineClient(QtCore.QObject):
 
         self._client = client or BeamlineClient(
             kind="gui", gui_type=gui_type, label=label or gui_type)
+        self._pv_cache = None
         self._wire_events()
 
     # -- the underlying client ----------------------------------------------
@@ -57,6 +61,22 @@ class QtBeamlineClient(QtCore.QObject):
     @property
     def motion(self):
         return self._client.motion
+
+    @property
+    def optics(self):
+        return self._client.optics
+
+    @property
+    def pv(self):
+        return self._client.pv
+
+    @property
+    def pvs(self):
+        """Client-side mirror of the records this panel has bound."""
+        if self._pv_cache is None:
+            from ptychosaxs.client.pv import RemotePVCache
+            self._pv_cache = RemotePVCache(self._client)
+        return self._pv_cache
 
     @property
     def system(self):
@@ -90,6 +110,13 @@ class QtBeamlineClient(QtCore.QObject):
         c.on("motion.positions", lambda n, d: self.positionsChanged.emit(
             d.get("positions", {}), d.get("moving", {}),
             d.get("connected", {})))
+        c.on("optics.positions", lambda n, d: self.opticsPositionsChanged.emit(
+            d.get("positions", {})))
+        c.on("optics.status", lambda n, d: self.opticsStatusChanged.emit(
+            d.get("blocks", {}), bool(d.get("good_for_ptycho")),
+            list(d.get("problems", ()))))
+        c.on("pv.values", lambda n, d: self.pvValuesChanged.emit(
+            d.get("values", {})))
         c.on("server.state", lambda n, d: self.serverStateChanged.emit(
             bool(d.get("ready")), d.get("phase", "")))
         c.on("message.posted", lambda n, d: self.messagePosted.emit(

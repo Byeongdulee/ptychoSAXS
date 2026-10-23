@@ -37,9 +37,15 @@ python -m gui.optics_motors          # optics panel
 python -m gui.CRL_3dprint            # 3D-printed CRL rig
 ```
 
-Add `--debug` (`--debug_mode` for the optics and CRL panels) to run with
-simulated hardware from `debug/debug_stubs.py` — no EPICS, no network, no
-instrument connections.
+`optics_motors` is a client of the beamline server: it starts one if none is
+running, opens no EPICS channels of its own, and cannot be opened twice —
+a second launch raises the window that is already open and exits. Whether it
+drives real or simulated hardware is the *server's* choice, so simulate by
+starting the server with `--simulate` rather than passing a flag to the
+panel.
+
+`rungui` and `CRL_3dprint` have not migrated yet and still take `--debug`
+(`--debug_mode`) to use the stubs in `ptychosaxs/debug/`.
 
 ## The beamline server
 
@@ -115,7 +121,7 @@ a machine that can reach only some of the hardware still comes up.
 python -m pytest
 ```
 
-623 tests, no hardware and no display required -- the device layer imports
+648 tests, no hardware and no display required -- the device layer imports
 without Qt and without opening a single connection, which
 `tests/test_device_layer_headless.py` enforces with an audit hook. The
 server tests start real daemons on a private socket in a tmpdir. Two

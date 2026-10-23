@@ -32,7 +32,28 @@ MOTION = {
     "motion.position":   "Current position of one axis.",
 }
 
-ALL = {**SYSTEM, **MOTION}
+# --- optics -----------------------------------------------------------------
+OPTICS = {
+    "optics.motors":     "Every configured optics motor, in panel order.",
+    "optics.positions":  "Current position of every optics motor.",
+    "optics.position":   "Current position of one optics motor.",
+    "optics.status":     "IN / OUT / BETWEEN per optics block, plus the ptycho verdict.",
+    "optics.move":       "Move one optics motor to an absolute position.",
+    "optics.move_rel":   "Move one optics motor by a relative step.",
+    "optics.stop":       "Stop one optics motor, or all of them. Never queued.",
+    "optics.set_position": "Redefine a motor's current position without moving.",
+}
+
+# --- raw records ------------------------------------------------------------
+# For line edits bound directly to a field (.VAL, .TWV, the eye exposure).
+PV = {
+    "pv.subscribe":   "Start receiving these records in the pv.values event.",
+    "pv.unsubscribe": "Stop receiving them; closes any nobody else wants.",
+    "pv.get":         "Read one record now.",
+    "pv.put":         "Write one record.",
+}
+
+ALL = {**SYSTEM, **MOTION, **OPTICS, **PV}
 NAMES = frozenset(ALL)
 
 # Methods that may take longer than a few milliseconds and are therefore run
@@ -44,6 +65,12 @@ BLOCKING = frozenset()
 PRE_READY = frozenset({
     "system.hello", "system.ping", "system.status",
     "system.clients", "system.request_focus", "system.shutdown",
+})
+
+#: Methods that move hardware. Collected so a read-only client (the MCP
+#: server by default) can be refused in one place rather than per method.
+MUTATING = frozenset({
+    "optics.move", "optics.move_rel", "optics.set_position", "pv.put",
 })
 
 

@@ -160,3 +160,133 @@ def _position(ctx, params):
 def missing_handlers():
     """Names in link.methods with no handler. Used by the contract test."""
     return sorted(methods.NAMES - set(HANDLERS))
+
+
+# ---------------------------------------------------------------------------
+# optics
+# ---------------------------------------------------------------------------
+
+def _optics(ctx):
+    session = ctx.daemon.session
+    if session.devices.optics is None:
+        raise Rejected(errors.ERR_NOT_READY,
+                       "the optics group is not open; no connected client "
+                       "has asked for it")
+    return session.optics
+
+
+def _motor(params):
+    motor = params.get("motor")
+    if not motor:
+        raise Rejected(errors.ERR_BAD_PARAMS, "motor is required")
+    return motor
+
+
+def _device_call(fn, *args, **kw):
+    """Run a driver call, turning hardware failures into ERR_DEVICE."""
+    try:
+        return fn(*args, **kw)
+    except Rejected:
+        raise
+    except KeyError as exc:
+        raise Rejected(errors.ERR_BAD_PARAMS, f"unknown motor {exc}")
+    except Exception as exc:
+        raise Rejected(errors.ERR_DEVICE, f"{type(exc).__name__}: {exc}")
+
+
+@method("optics.motors")
+def _optics_motors(ctx, params):
+    return {"motors": _optics(ctx).motors()}
+
+
+@method("optics.positions")
+def _optics_positions(ctx, params):
+    return {"positions": _optics(ctx).positions()}
+
+
+@method("optics.position")
+def _optics_position(ctx, params):
+    motor = _motor(params)
+    return {"motor": motor,
+            "position": _device_call(_optics(ctx).position, motor)}
+
+
+@method("optics.status")
+def _optics_status(ctx, params):
+    return _optics(ctx).status()
+
+
+@method("optics.move")
+def _optics_move(ctx, params):
+    motor = _motor(params)
+    if "value" not in params:
+        raise Rejected(errors.ERR_BAD_PARAMS, "value is required")
+    return {"motor": motor,
+            "position": _device_call(_optics(ctx).move, motor,
+                                     params["value"],
+                                     wait=bool(params.get("wait", False)))}
+
+
+@method("optics.move_rel")
+def _optics_move_rel(ctx, params):
+    motor = _motor(params)
+    if "delta" not in params:
+        raise Rejected(errors.ERR_BAD_PARAMS, "delta is required")
+    return {"motor": motor,
+            "position": _device_call(_optics(ctx).move_rel, motor,
+                                     params["delta"],
+                                     wait=bool(params.get("wait", False)))}
+
+
+@method("optics.stop")
+def _optics_stop(ctx, params):
+    # Deliberately not a job and deliberately not validated against a motor
+    # list first: Stop must be the shortest path there is.
+    return _optics(ctx).stop(params.get("motor"))
+
+
+@method("optics.set_position")
+def _optics_set_position(ctx, params):
+    motor = _motor(params)
+    return {"motor": motor,
+            "position": _device_call(_optics(ctx).set_position, motor,
+                                     params.get("value", 0.0))}
+
+
+# ---------------------------------------------------------------------------
+# raw records
+# ---------------------------------------------------------------------------
+
+@method("pv.subscribe")
+def _pv_subscribe(ctx, params):
+    names = params.get("names") or []
+    if not isinstance(names, list):
+        raise Rejected(errors.ERR_BAD_PARAMS, "names must be a list")
+    values = ctx.daemon.session.pvs.subscribe(ctx.conn.conn_id, names)
+    return {"values": values}
+
+
+@method("pv.unsubscribe")
+def _pv_unsubscribe(ctx, params):
+    names = params.get("names")
+    closed = ctx.daemon.session.pvs.unsubscribe(ctx.conn.conn_id, names)
+    return {"closed": closed}
+
+
+@method("pv.get")
+def _pv_get(ctx, params):
+    name = params.get("name")
+    if not name:
+        raise Rejected(errors.ERR_BAD_PARAMS, "name is required")
+    return {"name": name, "value": ctx.daemon.session.pvs.get(name)}
+
+
+@method("pv.put")
+def _pv_put(ctx, params):
+    name = params.get("name")
+    if not name:
+        raise Rejected(errors.ERR_BAD_PARAMS, "name is required")
+    if "value" not in params:
+        raise Rejected(errors.ERR_BAD_PARAMS, "value is required")
+    _device_call(ctx.daemon.session.pvs.put, name, params["value"])
+    return {"name": name, "written": True}

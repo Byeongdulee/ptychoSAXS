@@ -40,6 +40,8 @@ class BeamlineClient:
         self.hello = {}
         self.motion = facades.MotionFacade(self)
         self.system = facades.SystemFacade(self)
+        self.optics = facades.OpticsFacade(self)
+        self.pv = facades.PvFacade(self)
 
     # -- connection ----------------------------------------------------------
 
