@@ -39,13 +39,10 @@ from gui.handlers.scalar_scan import ScalarScanWindow
 
 _GUI_DIR = os.path.dirname(os.path.abspath(__file__))
 _UI_DIR = os.path.join(_GUI_DIR, "ui")
-try:
-    from epics import PV
-except ImportError:
-    PV = None  # replaced by FakePV in debug mode
-
+# No EPICS here. Axes go through the beamline server, and the records the
+# X-ray eye binds come from the shared mirror the server pushes.
+from ptychosaxs.client.axes import RemoteAxisController
 from ptychosaxs.epics_crl3dprint import MOTOR_SLOTS as _RAW_MOTOR_SLOTS
-from ptychosaxs.epics_crl3dprint import CRLAxisController
 
 _CRL_INI = os.path.join(INI_DIR, "CRL_3dprint.ini")
 
@@ -510,15 +507,24 @@ class CRL3DPrintControl(QObject):
     MOTOR_PREC = "%0.4f"
     MOTOR_SLOTS = MOTOR_SLOTS
 
-    def __init__(self, debug_mode=False):
+    def __init__(self, client, debug_mode=False):
         super().__init__()
+        self.client = client
         self.debug_mode = debug_mode
+
+        # Last readbacks the server pushed. The panel used to poll every
+        # axis on a 200 ms GUI-thread timer; one server poller reads now and
+        # tells every connected client.
+        self._positions = {}
+        self._connected = {}
 
         _ensure_default_ini(_CRL_INI)
 
         self.ui = uic.loadUi(os.path.join(_UI_DIR, "CRL_3dprint.ui"))
 
-        self.controller = CRLAxisController(pv_class=self._motor_pv_class())
+        # Same surface as CRLAxisController, served over the link, so the
+        # windows below -- including the scalar scan -- did not change.
+        self.controller = RemoteAxisController(client.crl, self._positions)
         self.controller.connect()
         self._refresh_units()
 
@@ -543,10 +549,10 @@ class CRL3DPrintControl(QObject):
         self.ui.actionImportPositions.triggered.connect(self.xy_preset._import)
         self._scalar_scan_window = None
 
+        # No hardware timer: readbacks arrive as events, queued onto this
+        # thread because this object lives on it.
+        self.client.crlPositionsChanged.connect(self._on_positions)
         self.update_positions()
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_positions)
-        self.timer.start(200)
 
         self.ui.pushButton_exit.clicked.connect(self.ui.close)
         self.ui.pushButton_scalarScan.clicked.connect(self._open_scalar_scan)
@@ -571,16 +577,6 @@ class CRL3DPrintControl(QObject):
         self._main_resizer.rescale()
 
     # -- per-motor widget wiring ---------------------------------------------
-
-    def _motor_pv_class(self):
-        """The PV factory the motor controller builds its records from. In
-        debug mode this is a purely in-memory fake, so no Channel Access
-        traffic is generated and pyepics need not be installed."""
-        if self.debug_mode:
-            from ptychosaxs.debug.debug_stubs import FakeMotorPV
-
-            return FakeMotorPV
-        return PV
 
     def _refresh_units(self):
         """Take each motor's engineering unit from the IOC, leaving the
@@ -731,11 +727,9 @@ class CRL3DPrintControl(QObject):
     # -- X-ray eye ------------------------------------------------------------
 
     def _pv_class(self):
-        if self.debug_mode:
-            from ptychosaxs.debug.debug_stubs import FakePV
-
-            return FakePV
-        return PV
+        """Records come from the server's shared mirror, so the X-ray eye
+        state is the same one the optics and main panels see."""
+        return self.client.pvs.pv
 
     def _wire_xray_eye(self):
         # Shared with the optics GUI, the main panel and the sample alignment
@@ -865,13 +859,18 @@ class CRL3DPrintControl(QObject):
                 if btn:
                     btn.setEnabled(enabled)
 
+    def _on_positions(self, positions, connected):
+        """New readbacks from the server. Replaces the 200 ms poll."""
+        self._positions.update(positions)
+        self._connected.update(connected)
+        self.update_positions()
+
     def update_positions(self):
-        """Repaint from pyepics' monitor cache - each read is local, so this
-        runs on the GUI thread without any Channel Access round trip."""
-        dead = self.controller.disconnected_axes()
+        """Repaint from the last values the server pushed."""
+        dead = [n for n, ok in self._connected.items() if not ok]
         for slot in self.MOTOR_SLOTS:
             name = slot["name"]
-            val = self.controller.get_pos(name)
+            val = self._positions.get(name)
             lbl = self.ui.findChild(QLabel, f"lbl_pos_{name}")
             if lbl:
                 lbl.setText(NO_READBACK_TEXT if val is None else self.MOTOR_PREC % val)
@@ -883,19 +882,41 @@ class CRL3DPrintControl(QObject):
         self.xy_preset.update_status()
 
 
+GUI_TYPE = "crl_3dprint"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--debug_mode",
-        action="store_true",
-        help="Run with simulated motors, without connecting to any EPICS IOC or PV",
-    )
-    args, _ = parser.parse_known_args()  # parse_known_args so Qt args pass through
+        "--debug_mode", action="store_true",
+        help="Ignored; the server decides whether hardware is simulated")
+    parser.add_argument(
+        "--no-server-start", action="store_true",
+        help="Fail rather than starting a beamline server if none is running")
+    args, _ = parser.parse_known_args()  # so Qt args pass through
+
+    from ptychosaxs.client.qt import QtBeamlineClient, attach_single_instance
+    from ptychosaxs.gui_launch import request_focus_and_exit
+    from ptychosaxs.link import errors
 
     app = QApplication(sys.argv)
-    panel = CRL3DPrintControl(debug_mode=args.debug_mode)  # noqa: F841 - keeps GUI alive
-    sys.exit(app.exec_())
+    client = QtBeamlineClient(GUI_TYPE, label="CRL panel")
+    try:
+        client.connect_to_server(start_server=not args.no_server_start)
+    except errors.DuplicateGuiError as exc:
+        print(f"{GUI_TYPE} is already running (pid {exc.pid}).")
+        print("Raising the existing window.")
+        request_focus_and_exit(GUI_TYPE)
+        return 0
+    except Exception as exc:
+        print(f"Could not reach the beamline server: {exc}", file=sys.stderr)
+        return 2
+
+    panel = CRL3DPrintControl(client, debug_mode=client.simulated)
+    attach_single_instance(panel.ui, client)
+    app.aboutToQuit.connect(client.close)
+    return app.exec_()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

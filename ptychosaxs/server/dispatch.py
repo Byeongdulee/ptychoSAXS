@@ -290,3 +290,103 @@ def _pv_put(ctx, params):
         raise Rejected(errors.ERR_BAD_PARAMS, "value is required")
     _device_call(ctx.daemon.session.pvs.put, name, params["value"])
     return {"name": name, "written": True}
+
+
+# ---------------------------------------------------------------------------
+# the CRL rig
+# ---------------------------------------------------------------------------
+
+def _crl(ctx):
+    controller = ctx.daemon.session.devices.crl
+    if controller is None:
+        raise Rejected(errors.ERR_NOT_READY,
+                       "the CRL group is not open; no connected client has "
+                       "asked for it")
+    return controller
+
+
+def _axis(params):
+    axis = params.get("axis")
+    if not axis:
+        raise Rejected(errors.ERR_BAD_PARAMS, "axis is required")
+    return axis
+
+
+@method("crl.axes")
+def _crl_axes(ctx, params):
+    c = _crl(ctx)
+    return {"axes": [{"name": n, "unit": c.get_unit(n),
+                      "connected": c.is_axis_connected(n)} for n in c.names]}
+
+
+@method("crl.positions")
+def _crl_positions(ctx, params):
+    c = _crl(ctx)
+    return {"positions": {n: c.get_pos(n) for n in c.names}}
+
+
+@method("crl.position")
+def _crl_position(ctx, params):
+    c = _crl(ctx)
+    axis = _axis(params)
+    return {"axis": axis, "position": _device_call(c.get_pos, axis)}
+
+
+@method("crl.move")
+def _crl_move(ctx, params):
+    if "target" not in params:
+        raise Rejected(errors.ERR_BAD_PARAMS, "target is required")
+    _device_call(_crl(ctx).mv, _axis(params), float(params["target"]),
+                 wait=bool(params.get("wait", False)))
+    return {"axis": params["axis"], "moving": True}
+
+
+@method("crl.tweak")
+def _crl_tweak(ctx, params):
+    _device_call(_crl(ctx).tweak, _axis(params),
+                 float(params.get("step", 0.0)),
+                 forward=bool(params.get("forward", True)))
+    return {"axis": params["axis"]}
+
+
+@method("crl.set_tweak_step")
+def _crl_set_tweak_step(ctx, params):
+    _device_call(_crl(ctx).set_tweak_step, _axis(params),
+                 float(params.get("step", 0.0)))
+    return {"axis": params["axis"]}
+
+
+@method("crl.stop")
+def _crl_stop(ctx, params):
+    c = _crl(ctx)
+    targets = [params["axis"]] if params.get("axis") else list(c.names)
+    stopped, failed = [], {}
+    for name in targets:
+        try:
+            c.stop(name)
+            stopped.append(name)
+        except Exception as exc:
+            failed[name] = f"{type(exc).__name__}: {exc}"
+    return {"stopped": stopped, "failed": failed}
+
+
+@method("crl.get_speed")
+def _crl_get_speed(ctx, params):
+    axis = _axis(params)
+    return {"axis": axis, "speed": _device_call(_crl(ctx).get_speed, axis)}
+
+
+@method("crl.set_speed")
+def _crl_set_speed(ctx, params):
+    if "velocity" not in params:
+        raise Rejected(errors.ERR_BAD_PARAMS, "velocity is required")
+    _device_call(_crl(ctx).set_speed, _axis(params),
+                 float(params["velocity"]))
+    return {"axis": params["axis"]}
+
+
+@method("crl.set_position")
+def _crl_set_position(ctx, params):
+    axis = _axis(params)
+    _device_call(_crl(ctx).set_pos, axis, float(params.get("value", 0.0)))
+    return {"axis": axis}

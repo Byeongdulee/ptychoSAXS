@@ -114,6 +114,12 @@ class DeviceRegistry:
             self._open_optics,
             self._close_optics,
         ))
+        self.register(DeviceGroup(
+            "crl",
+            "the 3D-printed CRL rig: X, Y, TILT, PITCH on 12ideMCS2",
+            self._open_crl,
+            self._close_crl,
+        ))
         # Still to come, each in the phase that migrates the GUI owning it,
         # so a device's construction leaves gui/rungui.py module scope
         # exactly once: qds, softglue, dg645, shutter, scaler, detectors,
@@ -264,6 +270,31 @@ class DeviceRegistry:
     @property
     def optics(self):
         return self.get("optics")
+
+    # -- the CRL group -------------------------------------------------------
+
+    def _open_crl(self):
+        from ptychosaxs.epics_crl3dprint import CRLAxisController
+        pv_class = None
+        if self.profile.simulated:
+            from ptychosaxs.debug.debug_stubs import FakeMotorPV
+            pv_class = FakeMotorPV
+        controller = CRLAxisController(pv_class=pv_class)
+        controller.connect()
+        missing = controller.disconnected_axes()
+        if missing:
+            self._log.warning("CRL axes not answering: %s", ", ".join(missing))
+        return controller
+
+    def _close_crl(self, obj):
+        try:
+            obj.disconnect()
+        except Exception:
+            self._log.exception("CRL rig did not disconnect cleanly")
+
+    @property
+    def crl(self):
+        return self.get("crl")
 
     # -- locking -------------------------------------------------------------
 

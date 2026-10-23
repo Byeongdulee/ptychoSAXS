@@ -28,7 +28,7 @@ import time
 REQUIREMENTS = {
     "rungui": ("motion", "optics"),
     "optics_motors": ("optics",),
-    "crl_3dprint": (),
+    "crl_3dprint": ("crl",),
     "sample_alignment": ("motion",),
 }
 

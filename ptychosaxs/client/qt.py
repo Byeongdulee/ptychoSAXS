@@ -27,6 +27,7 @@ class QtBeamlineClient(QtCore.QObject):
 
     positionsChanged = QtCore.pyqtSignal(dict, dict, dict)  # pos, moving, connected
     opticsPositionsChanged = QtCore.pyqtSignal(dict)        # motor -> mm
+    crlPositionsChanged = QtCore.pyqtSignal(dict, dict)     # positions, connected
     opticsStatusChanged = QtCore.pyqtSignal(dict, bool, list)  # blocks, ok, problems
     pvValuesChanged = QtCore.pyqtSignal(dict)               # pvname -> value
     serverStateChanged = QtCore.pyqtSignal(bool, str)       # ready, phase
@@ -65,6 +66,10 @@ class QtBeamlineClient(QtCore.QObject):
     @property
     def optics(self):
         return self._client.optics
+
+    @property
+    def crl(self):
+        return self._client.crl
 
     @property
     def pv(self):
@@ -112,6 +117,8 @@ class QtBeamlineClient(QtCore.QObject):
             d.get("connected", {})))
         c.on("optics.positions", lambda n, d: self.opticsPositionsChanged.emit(
             d.get("positions", {})))
+        c.on("crl.positions", lambda n, d: self.crlPositionsChanged.emit(
+            d.get("positions", {}), d.get("connected", {})))
         c.on("optics.status", lambda n, d: self.opticsStatusChanged.emit(
             d.get("blocks", {}), bool(d.get("good_for_ptycho")),
             list(d.get("problems", ()))))

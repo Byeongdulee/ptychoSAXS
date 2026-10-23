@@ -53,7 +53,24 @@ PV = {
     "pv.put":         "Write one record.",
 }
 
-ALL = {**SYSTEM, **MOTION, **OPTICS, **PV}
+# --- the CRL rig ------------------------------------------------------------
+# A second EpicsMotorController-backed rig, addressed by axis name. Kept as
+# its own family rather than folded into motion.* because it is a separate
+# instrument on a separate IOC, opened only for the panel that drives it.
+CRL = {
+    "crl.axes":            "Every CRL axis: name, unit, connected.",
+    "crl.positions":       "Current position of every CRL axis.",
+    "crl.position":        "Current position of one CRL axis.",
+    "crl.move":            "Move one CRL axis to an absolute position.",
+    "crl.tweak":           "Step one CRL axis by its tweak value.",
+    "crl.set_tweak_step":  "Set one CRL axis's tweak step.",
+    "crl.stop":            "Stop one CRL axis, or all of them. Never queued.",
+    "crl.get_speed":       "Read one CRL axis's velocity.",
+    "crl.set_speed":       "Set one CRL axis's velocity.",
+    "crl.set_position":    "Redefine a CRL axis's position without moving.",
+}
+
+ALL = {**SYSTEM, **MOTION, **OPTICS, **PV, **CRL}
 NAMES = frozenset(ALL)
 
 # Methods that may take longer than a few milliseconds and are therefore run
@@ -71,6 +88,8 @@ PRE_READY = frozenset({
 #: server by default) can be refused in one place rather than per method.
 MUTATING = frozenset({
     "optics.move", "optics.move_rel", "optics.set_position", "pv.put",
+    "crl.move", "crl.tweak", "crl.set_tweak_step", "crl.set_speed",
+    "crl.set_position",
 })
 
 

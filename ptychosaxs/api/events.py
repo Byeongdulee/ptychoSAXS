@@ -72,6 +72,14 @@ class OpticsPositions(_Payload):
 
 
 @dataclass(frozen=True, slots=True)
+class CrlPositions(_Payload):
+    positions: dict
+    connected: dict
+    EVENT = "crl.positions"
+    CONFLATE_KEY = "crl.positions"
+
+
+@dataclass(frozen=True, slots=True)
 class OpticsStatus(_Payload):
     """Whether each optics block is in, out, or neither.
 

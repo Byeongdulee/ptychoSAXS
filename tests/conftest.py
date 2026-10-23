@@ -39,6 +39,24 @@ SIM_ENV = {
 }
 
 
+def gui_env(runtime, **extra):
+    """Environment for a GUI subprocess under test.
+
+    XDG_CONFIG_HOME matters as much as the simulation flags. QSettings is
+    where the panels keep window geometry, font size and -- the one that
+    bites -- which More/Less view level was last open. That lives in the
+    operator's real ~/.config, so without this a test both depends on
+    whatever view a human last left open and overwrites their saved
+    layout. Pointing it at the tmpdir makes each run start from the
+    designed defaults and leaves the real settings alone.
+    """
+    return {**os.environ, **SIM_ENV,
+            "PTYCHOSAXS_RUNTIME_DIR": str(runtime),
+            "XDG_CONFIG_HOME": str(runtime / "config"),
+            "QT_QPA_PLATFORM": "offscreen",
+            **extra}
+
+
 def wait_for_socket(path, timeout=25.0):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:

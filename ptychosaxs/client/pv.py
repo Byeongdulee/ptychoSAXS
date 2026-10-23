@@ -34,6 +34,18 @@ class RemotePV:
     def put(self, value):
         return self._cache.put(self.pvname, value)
 
+    def wait_for_connection(self, timeout=None):
+        """Part of the epics.PV surface that callers reach for.
+
+        There is nothing to wait for here: the server owns the channel and
+        subscribing already asked it for the current value. Answering
+        immediately is also the point -- gui/handlers/scalar_scan.py calls
+        this on the miss path of its PV cache, and a blocking wait there
+        would reintroduce exactly the stall that unreachable records used
+        to cause.
+        """
+        return self._cache.connected
+
     def __repr__(self):
         return f"<RemotePV {self.pvname}={self.get()!r}>"
 

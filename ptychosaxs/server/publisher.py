@@ -17,7 +17,7 @@ import time
 
 from ptychosaxs.link import config
 from ptychosaxs.api.events import (
-    MotionPositions, OpticsPositions, OpticsStatus, PvValues,
+    CrlPositions, MotionPositions, OpticsPositions, OpticsStatus, PvValues,
 )
 
 
@@ -78,6 +78,7 @@ class Publisher:
     def _tick(self):
         self._publish_motion()
         self._publish_optics()
+        self._publish_crl()
         self._publish_pvs()
 
     def _publish_motion(self):
@@ -111,6 +112,16 @@ class Publisher:
                 good_for_ptycho=status["good_for_ptycho"],
                 problems=tuple(status["problems"]),
             ))
+
+    def _publish_crl(self):
+        controller = self._session.devices.crl
+        if controller is None:
+            return
+        names = controller.names
+        self._session.bus.publish(CrlPositions(
+            positions={n: controller.get_pos(n) for n in names},
+            connected={n: controller.is_axis_connected(n) for n in names},
+        ))
 
     def _publish_pvs(self):
         values = self._session.pvs.snapshot()

@@ -100,7 +100,46 @@ class PvFacade(_Facade):
         return self._c.call("pv.put", {"name": name, "value": value})
 
 
-ALL_FACADES = (SystemFacade, MotionFacade, OpticsFacade, PvFacade)
+class CrlFacade(_Facade):
+    METHODS = ("crl.axes", "crl.positions", "crl.position", "crl.move",
+               "crl.tweak", "crl.set_tweak_step", "crl.stop",
+               "crl.get_speed", "crl.set_speed", "crl.set_position")
+
+    def axes(self):
+        return self._c.call("crl.axes")["axes"]
+
+    def positions(self):
+        return self._c.call("crl.positions")["positions"]
+
+    def position(self, axis):
+        return self._c.call("crl.position", {"axis": axis})["position"]
+
+    def move(self, axis, target, wait=False):
+        return self._c.call("crl.move",
+                            {"axis": axis, "target": target, "wait": wait})
+
+    def tweak(self, axis, step=0.0, forward=True):
+        return self._c.call("crl.tweak",
+                            {"axis": axis, "step": step, "forward": forward})
+
+    def set_tweak_step(self, axis, step):
+        return self._c.call("crl.set_tweak_step", {"axis": axis, "step": step})
+
+    def stop(self, axis=None):
+        return self._c.call("crl.stop", {"axis": axis}, timeout_s=5.0)
+
+    def get_speed(self, axis):
+        return self._c.call("crl.get_speed", {"axis": axis})["speed"]
+
+    def set_speed(self, axis, velocity):
+        return self._c.call("crl.set_speed",
+                            {"axis": axis, "velocity": velocity})
+
+    def set_position(self, axis, value=0.0):
+        return self._c.call("crl.set_position", {"axis": axis, "value": value})
+
+
+ALL_FACADES = (SystemFacade, MotionFacade, OpticsFacade, PvFacade, CrlFacade)
 
 
 def facade_methods():

@@ -37,15 +37,17 @@ python -m gui.optics_motors          # optics panel
 python -m gui.CRL_3dprint            # 3D-printed CRL rig
 ```
 
-`optics_motors` is a client of the beamline server: it starts one if none is
-running, opens no EPICS channels of its own, and cannot be opened twice —
-a second launch raises the window that is already open and exits. Whether it
-drives real or simulated hardware is the *server's* choice, so simulate by
-starting the server with `--simulate` rather than passing a flag to the
-panel.
+`optics_motors` and `CRL_3dprint` are clients of the beamline server: each
+starts one if none is running, opens no EPICS channels of its own, and
+cannot be opened twice — a second launch raises the window that is already
+open and exits. They share one server, and each opens only the devices it
+needs, so the CRL panel never brings the hexapod up. Whether hardware is
+real or simulated is the *server's* choice, so simulate by starting the
+server with `--simulate` rather than passing a flag to a panel.
 
-`rungui` and `CRL_3dprint` have not migrated yet and still take `--debug`
-(`--debug_mode`) to use the stubs in `ptychosaxs/debug/`.
+`rungui` has not migrated yet and still takes `--debug` to use the stubs in
+`ptychosaxs/debug/`. Its child windows — sample alignment and the optics
+status report — migrate with it.
 
 ## The beamline server
 
@@ -121,7 +123,7 @@ a machine that can reach only some of the hardware still comes up.
 python -m pytest
 ```
 
-648 tests, no hardware and no display required -- the device layer imports
+666 tests, no hardware and no display required -- the device layer imports
 without Qt and without opening a single connection, which
 `tests/test_device_layer_headless.py` enforces with an audit hook. The
 server tests start real daemons on a private socket in a tmpdir. Two

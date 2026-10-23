@@ -15,7 +15,7 @@ import time
 
 import pytest
 
-from tests.conftest import SIM_ENV, wait_for_gone, wait_for_socket
+from tests.conftest import gui_env, wait_for_gone, wait_for_socket
 
 pytestmark = pytest.mark.timeout(180)
 
@@ -50,9 +50,7 @@ def test_the_panel_builds_no_controllers_itself():
 # -- running it --------------------------------------------------------------
 
 def _env(runtime):
-    return {**os.environ, **SIM_ENV,
-            "PTYCHOSAXS_RUNTIME_DIR": str(runtime),
-            "QT_QPA_PLATFORM": "offscreen"}
+    return gui_env(runtime)
 
 
 def _launch_panel(runtime, **kw):

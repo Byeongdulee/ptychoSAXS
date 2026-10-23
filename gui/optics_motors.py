@@ -1705,30 +1705,6 @@ class motor_control(QMainWindow):
 GUI_TYPE = "optics_motors"
 
 
-def _request_focus_and_exit():
-    """Ask the panel that already holds the slot to come forward.
-
-    Has to reconnect as a plain CLI client: our own connection was closed
-    with the refusal, and reconnecting as a gui would simply be refused
-    again for the same reason -- which is what made an earlier version of
-    this quietly do nothing.
-    """
-    from ptychosaxs.client.connection import BeamlineClient
-
-    try:
-        asker = BeamlineClient(kind="cli", label=f"{GUI_TYPE} relaunch")
-        asker.connect(start_server=False, timeout_s=5)
-    except Exception as exc:
-        print(f"(could not ask it to come forward: {exc})", file=sys.stderr)
-        return
-    try:
-        asker.system.request_focus(GUI_TYPE)
-    except Exception as exc:
-        print(f"(could not ask it to come forward: {exc})", file=sys.stderr)
-    finally:
-        asker.close()
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1740,6 +1716,7 @@ def main():
     args, _ = parser.parse_known_args()  # so Qt args pass through
 
     from ptychosaxs.client.qt import QtBeamlineClient, attach_single_instance
+    from ptychosaxs.gui_launch import request_focus_and_exit
     from ptychosaxs.link import errors
 
     app = QApplication(sys.argv)
@@ -1753,7 +1730,7 @@ def main():
         # ini file, then leave quietly.
         print(f"{GUI_TYPE} is already running (pid {exc.pid}).")
         print("Raising the existing window.")
-        _request_focus_and_exit()
+        request_focus_and_exit(GUI_TYPE)
         return 0
     except Exception as exc:
         print(f"Could not reach the beamline server: {exc}", file=sys.stderr)
