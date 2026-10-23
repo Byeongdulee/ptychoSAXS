@@ -306,3 +306,359 @@ class ScanExecutorsMixin:
             # rows written underneath.
             "optics_name",
         ]
+
+    def _emit_progress(
+        self,
+        t0: float,
+        i: int,
+        N: int,
+        update_progress,
+        update_status,
+        t_scanstart: float = None,
+        progress_3d=None,
+    ) -> None:
+        """Emit progress-bar and status-bar updates for step scans.
+
+        Handles both standalone 2-D and 3-D-slice contexts:
+          - Standalone (progress_3d is None): fraction = (i+1)/N
+          - 3-D slice (progress_3d = (slice_index, total_slices)):
+              fraction = (N*slice + (i+1)) / (N*total_slices)
+              elapsed time is measured from t_scanstart (the 3-D scan start).
+
+        t0          — executor start time (time.time() at top of executor)
+        t_scanstart — overall 3-D scan start time; only used when progress_3d set
+        """
+        if progress_3d is not None and t_scanstart is not None:
+            c3d, all3d = progress_3d
+            frac = (N * c3d + (i + 1)) / (N * all3d)
+            elapsed = time.time() - t_scanstart
+        else:
+            frac = (i + 1) / N if N > 0 else 1.0
+            elapsed = time.time() - t0
+        frac = max(frac, 1e-6)
+        remaining = elapsed / frac - elapsed
+        if update_progress:
+            update_progress(int(frac * 100))
+        if update_status:
+            update_status(
+                f"Point {i + 1}/{N} — {elapsed:.0f}s elapsed, ~{remaining:.1f}s remaining"
+            )
+
+    def _emit_axis_positions(self, *axes):
+        """Push each axis's settled position out on the motion signals the
+        GUI's position labels listen to."""
+        signals = getattr(self.ctx.pts, "signals", None)
+        if signals is None:
+            return
+        for axis in axes:
+            signals.AxisNameSignal.emit(axis)
+            signals.AxisPosSignal.emit(self.ctx.pts.get_pos(axis))
+
+    def _scan_mv(self, axis, target, wait=True, update_status=None):
+        """Move a motor during a scan without letting a stage-motion timeout abort it.
+
+        pts.mv() raises if a move doesn't settle within its internal 10 s
+        window (TimeoutError), or if the hexapod still will not move after
+        its servo-recovery attempts (RuntimeError). Uncaught, either
+        propagates out of the worker-thread scan executor into Worker.run()
+        (rungui.py), which treats any exception as fatal and aborts the whole
+        scan. A single slow/stalled move shouldn't lose an entire scan's
+        worth of data, so scan executors call this instead of
+        self.ctx.pts.mv() directly and just log + continue.
+
+        Deliberately does NOT set self.ctx.messages["recent error message"] —
+        that dict key is wired (see _ErrorDict in rungui.py) to flash the GUI's
+        red scan-status error box, which is more alarm than a tolerated,
+        continued-past timeout warrants. Prints to the terminal and (if
+        available) posts to the status bar instead.
+        """
+        try:
+            self.ctx.pts.mv(axis, target, wait=wait)
+        except (TimeoutError, RuntimeError) as exc:
+            msg = (
+                f"Stage motion failed moving {axis} to {target} "
+                f"({exc}) — continuing scan. {time.ctime()}"
+            )
+            print(msg)
+
+    def is_arming_detecotors_timedout(self):
+        TIMEOUT = 10
+        t_start = time.time()
+        timeout_occurred = False
+        for detN, det in enumerate(self.ctx.detector):
+            if det is not None:
+                if self.ctx.parameters._pulses_per_step > 1:
+                    while det.Armed == 0 or det.getCapture() == 0:
+                        det.StartCapture()
+                        wait_for_det_capture_arm_s = 0.1  # retry interval while waiting for detector capture to arm
+                        time.sleep(wait_for_det_capture_arm_s)
+                        if (time.time() - t_start) > TIMEOUT:
+                            timeout_occurred = True
+                            print(
+                                f"Timeout occurred for detector {det._prefix} after {TIMEOUT} seconds."
+                            )
+                            break
+                else:
+                    while det.Armed == 0:
+                        det.Arm()
+                        wait_for_det_arm_s = (
+                            0.1  # retry interval while waiting for detector to arm
+                        )
+                        time.sleep(wait_for_det_arm_s)
+                        if (time.time() - t_start) > TIMEOUT:
+                            timeout_occurred = True
+                            print(
+                                f"Timeout occurred for detector {det._prefix} after {TIMEOUT} seconds."
+                            )
+                            break
+                    if timeout_occurred:
+                        print("Breaking out of detector loop due to timeout.")
+                        break
+        return timeout_occurred, TIMEOUT
+
+    def is_waiting_detectors_timedout(self, expt, i):
+        if self.ctx.parameters._pulses_per_step > 1.5:
+            TIMEOUT = (expt + 0.03) * self.ctx.parameters._pulses_per_step + 10
+        else:
+            TIMEOUT = expt + 3
+        t_start = time.time()
+        timeout_occurred = False
+        for ndet, det in enumerate(self.ctx.detector):
+            if ndet > 1:
+                continue
+            if det is not None:
+                while det.ArrayCounter_RBV < self.ctx.parameters._pulses_per_step * (
+                    i + 1
+                ):
+                    wait_for_det_frame_s = 0.02  # poll interval while waiting for detector to collect the expected frame count
+                    time.sleep(wait_for_det_frame_s)
+                    if (time.time() - t_start) > TIMEOUT:
+                        timeout_occurred = True
+                        print(
+                            f"Timeout occurred for detector {det._prefix} after {TIMEOUT} seconds."
+                        )
+                        break
+                if timeout_occurred:
+                    print("Breaking out of detector loop due to timeout.")
+                    break
+        return timeout_occurred, TIMEOUT
+
+    def _detector_camserver_error(self):
+        """The camera's own error text when it is sitting in an error state.
+
+        A camserver failure stops frames arriving, which the fly wait loop
+        can only see as silence - it then waits out the full stall window
+        (30 s for the last frame) with nothing to report. Asking the
+        detector directly turns that into an immediate, explanatory failure.
+        Empty string when the detector is healthy or unreadable.
+        """
+        from epics import caget
+
+        for ndet, det in enumerate(self.ctx.detector):
+            if ndet > 1 or det is None:
+                continue
+            prefix = getattr(det, "_prefix", "")
+            if not prefix:
+                continue
+            base = prefix if prefix.endswith("cam1:") else prefix + "cam1:"
+            try:
+                if caget(base + "DetectorState_RBV", as_string=True,
+                         timeout=1) != "Error":
+                    return ""
+                return "%s / %s" % (
+                    caget(base + "StatusMessage_RBV", as_string=True, timeout=1),
+                    caget(base + "StringFromServer_RBV", as_string=True, timeout=1),
+                )
+            except Exception:
+                return ""
+        return ""
+
+    def refresh_detectors(self, update_status=None):
+        """Refresh the detectors to ensure they are ready for the next scan."""
+        stata = 1
+        for detN, det in enumerate(self.ctx.detector):
+            if detN > 1:
+                continue
+            if det is not None:
+                scaninfo = []
+                scaninfo.append("\n")
+                scaninfo.append(f"#I {det._prefix} IOC error at %{time.ctime()}.\n")
+                m1, m2, m3 = det.getMessages()
+                scaninfo.append(f"{m1}\n{m2}\n{m3}")
+                scaninfo.append("\n")
+                self.ctx.write_scaninfo_to_logfile(scaninfo)
+                try:
+                    status = (
+                        det.refresh()
+                    )  # if failed, it will return 0. ohterwise it will return 1.
+                    stata = stata * status
+                except Exception as e:
+                    msg = f"Error refreshing detector {det._prefix}: {e}"
+                    print(msg)
+                    if update_status:
+                        update_status(msg)
+        return stata
+
+    def wait_for_beam(self, update_status, value):
+        ct0 = time.time()
+        while self.ctx.isOK2run is not True:
+            wait_for_beam_poll_s = 10  # poll interval while waiting for beam to return
+            time.sleep(wait_for_beam_poll_s)
+            self.ctx.messages["current status"] = (
+                f"Beam has been down for {int((time.time() - ct0) / 60)} minutes. {time.ctime()}"
+            )
+            update_status(self.ctx.messages["current status"])
+            if self.isStopScanIssued:
+                break
+        # Need some action after shutter back up
+        self.ctx.shutter.open_A()
+        self.ctx.messages["current status"] = (
+            f"Beam just came back. A-shutter open command was sent and run will resume in 10mins. {time.ctime()}"
+        )
+        update_status(self.ctx.messages["current status"])
+        wait_for_shutter_stabilize_s = 60  # wait after opening A-shutter before reopening to allow beam to stabilize
+        time.sleep(wait_for_shutter_stabilize_s)
+        self.ctx.shutter.open_A()
+        wait_for_beam_warmup_s = (
+            60 * 9
+        )  # additional warm-up wait after beam returns before resuming scan
+        time.sleep(wait_for_beam_warmup_s)
+        scaninfo = []
+        scaninfo.append("\n")
+        scaninfo.append(
+            "#Note: Shutter has been closed for %i mins" % int((time.time() - ct0) / 60)
+        )
+        scaninfo.append("#Note: angle %0.3f will be re-run" % value)
+        self.ctx.write_scaninfo_to_logfile(scaninfo)
+
+    def _fetch_detector_epics_metadata(self, detector_config: dict) -> dict:
+        """Query detector-specific EPICS metadata.
+
+        Args:
+            detector_config: Configuration dict for this detector
+
+        Returns:
+            Dictionary {nexus_path: value} for all detector PVs that succeeded.
+            Skips any PV that returns None.
+        """
+        try:
+            import epics
+        except ImportError:
+            print("Warning: pyepics not available, returning empty metadata")
+            return {}
+
+        metadata = {}
+        detector_pvs = detector_config.get("detector_pvs", {})
+
+        for nexus_path, pv_info in detector_pvs.items():
+            pv_name = pv_info["pv"]
+            try:
+                value = epics.caget(pv_name)
+                if value is not None:
+                    metadata[nexus_path] = value
+            except Exception as e:
+                print(f"Warning: Failed to query detector PV {pv_name}: {e}")
+
+        return metadata
+
+    def _fetch_shared_epics_metadata(self, cached_zone_plate_optics: dict = None) -> dict:
+        """Query all shared EPICS metadata (same for all detectors).
+
+        Args:
+            cached_zone_plate_optics: Pre-fetched zone plate optics metadata to avoid duplicate queries.
+                                      If provided, use this instead of querying again.
+
+        Returns:
+            Dictionary {nexus_path: value} for all PVs that succeeded.
+            Skips any PV that returns None.
+        """
+        from .nexus_metadata_config import SHARED_METADATA_MAP, SLITS_METADATA_MAP, ZONE_PLATE_METADATA_MAP
+
+        try:
+            import epics
+        except ImportError:
+            print("Warning: pyepics not available, returning empty metadata")
+            return {}
+
+        metadata = {}
+
+        # Query shared metadata (beam, source, sample motors, scalars)
+        for nexus_path, pv_info in SHARED_METADATA_MAP.items():
+            pv_name = pv_info["pv"]
+            try:
+                value = epics.caget(pv_name)
+                if value is not None:
+                    metadata[nexus_path] = value
+            except Exception as e:
+                print(f"Warning: Failed to query PV {pv_name}: {e}")
+
+        # Query slits (conditional on checkbox)
+        save_us_optics = getattr(self.ctx.parameters, "_save_us_optics", False)
+        if save_us_optics:
+            slits_success = {}
+            for nexus_path, pv_info in SLITS_METADATA_MAP.items():
+                pv_name = pv_info["pv"]
+                try:
+                    value = epics.caget(pv_name)
+                    if value is not None:
+                        slits_success[nexus_path] = value
+                except Exception as e:
+                    print(f"Warning: Failed to query slit PV {pv_name}: {e}")
+            # Add slits only if at least one succeeded
+            if slits_success:
+                metadata.update(slits_success)
+
+        # Use cached zone plate optics if provided, otherwise query
+        if cached_zone_plate_optics is not None:
+            metadata.update(cached_zone_plate_optics)
+        elif save_us_optics:
+            zp_success = {}
+            for nexus_path, pv_info in ZONE_PLATE_METADATA_MAP.items():
+                pv_name = pv_info["pv"]
+                try:
+                    value = epics.caget(pv_name)
+                    if value is not None:
+                        zp_success[nexus_path] = value
+                except Exception as e:
+                    print(f"Warning: Failed to query zone plate PV {pv_name}: {e}")
+            # Add zone plate only if at least one succeeded
+            if zp_success:
+                metadata.update(zp_success)
+
+        # Query the goniometer translation stages through self.ctx.pts, so these
+        # read back from the same place every other motion call does.
+        for nexus_path, axis in (
+            ('/entry/sample/trans1', 'trans1'),
+            ('/entry/sample/trans2', 'trans2'),
+        ):
+            try:
+                if axis in self.ctx.pts.gonio.motornames:
+                    metadata[nexus_path] = self.ctx.pts.get_pos(axis)
+            except Exception as e:
+                print(f"Warning: Failed to query gonio axis {axis}: {e}")
+
+        return metadata
+
+    def _append_hexapod_positions_to_master_file(self, master_path: str, hexapod_pos: np.ndarray) -> None:
+        """Write the hexapod-predicted position array to an already-created master file.
+
+        Reopens the master file (created earlier in _pre_scan) in append mode
+        and adds /entry/sample/hexapod_positions alongside the software-nominal
+        /entry/sample/positions dataset.
+        """
+        import h5py
+
+        try:
+            with h5py.File(master_path, 'r+') as f:
+                sample = f['/entry/sample']
+                if 'hexapod_positions' in sample:
+                    del sample['hexapod_positions']
+                sample.create_dataset('hexapod_positions', data=hexapod_pos)
+                sample['hexapod_positions'].attrs['units'] = b'mm'
+                sample['hexapod_positions'].attrs['description'] = (
+                    b'Nx2 array of (X, Z) positions predicted from the programmed '
+                    b'hexapod trajectory (step size + phantom trigger + even-row '
+                    b'padding), verified equal to hexapod.pulse_number'
+                )
+        except Exception as e:
+            print(f"Warning: Failed to write hexapod_positions to master file {master_path}: {e}")
