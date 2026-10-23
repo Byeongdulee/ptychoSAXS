@@ -13,6 +13,7 @@ panel. A read that fails leaves the previous value standing.
 """
 
 import threading
+import time
 
 from ptychosaxs.link import config
 from ptychosaxs.api.events import (
@@ -32,6 +33,7 @@ class Publisher:
         self._stop = threading.Event()
         self._thread = None
         self._status_countdown = 0
+        self._slow_ticks = 0
 
     def start(self):
         self._thread = threading.Thread(target=self._loop, name="ptys-publish",
@@ -44,11 +46,34 @@ class Publisher:
 
     def _loop(self):
         while not self._stop.wait(self._period):
+            started = time.monotonic()
             try:
                 self._tick()
             except Exception:
                 # A publisher that dies takes every panel's readout with it.
                 self._log.exception("publisher tick failed")
+            self._check_tick_time(time.monotonic() - started)
+
+    def _check_tick_time(self, elapsed):
+        """Complain when a tick overruns its own period.
+
+        Everything this thread does is meant to be a monitor-cache read, so
+        a tick longer than the publish interval means something is blocking
+        -- and because every client's readout comes from here, that shows
+        up at the panels as lag with no other symptom. Saying so in the log
+        turns "the GUI feels slow" into a named record.
+        """
+        if elapsed <= self._period:
+            self._slow_ticks = 0
+            return
+        self._slow_ticks += 1
+        # Rate limited: a wedged IOC would otherwise fill the log.
+        if self._slow_ticks == 1 or self._slow_ticks % 100 == 0:
+            self._log.warning(
+                "publisher tick took %.0f ms, longer than its %.0f ms "
+                "period (%d in a row); every client's readout is delayed "
+                "by this", elapsed * 1000, self._period * 1000,
+                self._slow_ticks)
 
     def _tick(self):
         self._publish_motion()

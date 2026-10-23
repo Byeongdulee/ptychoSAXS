@@ -17,6 +17,18 @@ follow.
 """
 
 import threading
+import time
+
+#: Cap on a single record read. Matches epics_motor.READ_TIMEOUT_S, and for
+#: the same reason: these are served from pyepics' monitor cache, so a read
+#: that takes measurable time means the record is not answering.
+READ_TIMEOUT_S = 0.2
+
+#: How long a freshly created record may take to connect before we call it
+#: unreachable. Channel Access search is asynchronous, so a PV is always
+#: briefly unconnected right after it is made; warning then would flag every
+#: healthy record at startup and teach everyone to ignore the warning.
+CONNECT_GRACE_S = 5.0
 
 
 class _MemoryPV:
@@ -33,7 +45,10 @@ class _MemoryPV:
         self.pvname = pvname
         self._value = value
 
-    def get(self):
+    def get(self, timeout=None):
+        # Accepts `timeout` because PVCache.get always passes one; without
+        # it every simulated read raised TypeError and came back None, so
+        # every bound box in debug mode stayed blank.
         return self._value
 
     def put(self, value):
@@ -48,6 +63,8 @@ class PVCache:
         self._lock = threading.RLock()
         self._pvs = {}                  # name -> PV object
         self._refs = {}                 # name -> {conn_id, ...}
+        self._unreachable = set()       # reported once, not every tick
+        self._created = {}              # name -> when we made the channel
 
     # -- construction --------------------------------------------------------
 
@@ -71,6 +88,7 @@ class PVCache:
                     self._log.exception("could not open PV %s", name)
                     return None
                 self._pvs[name] = pv
+                self._created[name] = time.monotonic()
             return pv
 
     # -- subscription --------------------------------------------------------
@@ -115,11 +133,36 @@ class PVCache:
     # -- access --------------------------------------------------------------
 
     def get(self, name):
+        """This record's value, or None. Never blocks for long.
+
+        The connection check is the important half. A record whose IOC is
+        down never connects, and pyepics' get() on it blocks for the whole
+        timeout -- so reading a handful of dead records on the publisher
+        thread stalls the broadcast for every connected client. That is not
+        hypothetical: two unreachable X-ray-eye camera records were enough
+        to add about a second to every position update in the optics panel.
+
+        Same discipline as epics_motor._read, which this should have
+        followed from the start.
+        """
         pv = self._channel(name)
         if pv is None:
             return None
+        if not getattr(pv, "connected", True):
+            age = time.monotonic() - self._created.get(name, 0)
+            if age > CONNECT_GRACE_S and name not in self._unreachable:
+                self._unreachable.add(name)
+                self._log.warning(
+                    "record %s has not connected in %.0fs; it reads as None "
+                    "until its IOC answers. This no longer slows anything "
+                    "down, but whatever binds it will stay blank.",
+                    name, age)
+            return None
+        if name in self._unreachable:
+            self._unreachable.discard(name)
+            self._log.info("record %s is answering again", name)
         try:
-            return pv.get()
+            return pv.get(timeout=READ_TIMEOUT_S)
         except Exception:
             self._log.debug("could not read %s", name, exc_info=True)
             return None
@@ -128,6 +171,10 @@ class PVCache:
         pv = self._channel(name)
         if pv is None:
             raise RuntimeError(f"no channel for {name}")
+        if not getattr(pv, "connected", True):
+            # A put to a disconnected PV is dropped silently by pyepics, so
+            # say so rather than letting a box look like it was written.
+            raise RuntimeError(f"{name} is not connected")
         pv.put(value)
         return True
 
