@@ -15,6 +15,8 @@ hardware imports, and so tests/test_optics_status.py runs headlessly. Same split
 
 import configparser
 import json
+
+from ptychosaxs import optics_config
 import os
 import re
 import time
@@ -45,42 +47,13 @@ CAGET_TIMEOUT = 0.5
 #   saxs_z     12idcACS1:m1
 #   beamstop   12ideSFT:m4, m5
 # ---------------------------------------------------------------------------
-MOTORS = OrderedDict([
-    ("BS_ver",      ("opticsbox", 0)),
-    ("BS_hor",      ("opticsbox", 1)),
-    ("ZP_ver",      ("opticsbox", 2)),
-    ("ZP_hor",      ("opticsbox", 3)),
-    ("BSZP_Ztrans", ("opticsbox", 4)),
-    ("OSA_X",       ("OSA", 0)),
-    ("OSA_Z",       ("OSA", 1)),
-    ("OSA_Y",       ("OSA", 2)),
-    ("SAXS_Z",      ("saxs_z", 0)),
-    ("SAXSBS_hor",  ("beamstop", 0)),
-    ("SAXSBS_ver",  ("beamstop", 1)),
-])
-
-# PV record base for each motor. Readback is "<base>.RBV", move-to is
-# "<base>.VAL" (see ptychosaxs/epicsmotor.py get_pos/mv).
-#
-# These are load-bearing in two different ways and must stay in step with the
-# pvlist order in MOTORS above. The optics panel drives motion through the
-# controllers, not through this table, but read_live_positions() below cagets
-# these names directly, and scan_handler/nexus_metadata_config derive their
-# PV strings from here -- so a wrong entry silently logs the wrong motor
-# rather than failing loudly.
-PV_BASES = {
-    "BS_ver":      "12idc:m10",
-    "BS_hor":      "12idc:m11",
-    "ZP_ver":      "12idc:m12",
-    "ZP_hor":      "12idc:m13",
-    "BSZP_Ztrans": "12idc:m14",
-    "OSA_X":       "12idc:m9",
-    "OSA_Z":       "12idc:m15",
-    "OSA_Y":       "12idc:m16",
-    "SAXS_Z":      "12idcACS1:m1",
-    "SAXSBS_hor":  "12ideSFT:m4",
-    "SAXSBS_ver":  "12ideSFT:m5",
-}
+# Record layout comes from the device layer so the panel, the status logic
+# and the controllers cannot disagree about which motor is which. It used to
+# be duplicated here, with a comment warning that the two copies "must stay
+# in step". ptychosaxs/optics_config.py imports nothing, so this module is
+# still Qt-free and hardware-free.
+MOTORS = optics_config.MOTORS
+PV_BASES = optics_config.PV_BASES
 
 # The upstream optics logged per scan, in the order they appear in the scan
 # summary CSV and in scan_handler._US_OPTICS_PVS. Both derive from this list,

@@ -115,9 +115,12 @@ a machine that can reach only some of the hardware still comes up.
 python -m pytest
 ```
 
-586 tests, no hardware and no display required. The server tests start
-real daemons on a private socket in a tmpdir. Two failures in
-`tests/test_sample_alignment_flow.py` are known and pre-existing.
+623 tests, no hardware and no display required -- the device layer imports
+without Qt and without opening a single connection, which
+`tests/test_device_layer_headless.py` enforces with an audit hook. The
+server tests start real daemons on a private socket in a tmpdir. Two
+failures in `tests/test_sample_alignment_flow.py` are known and
+pre-existing.
 
 ## Layout
 
@@ -128,7 +131,7 @@ real daemons on a private socket in a tmpdir. Two failures in
 | `ptychosaxs/client/` | client library; `client/qt.py` is the only Qt importer |
 | `ptychosaxs/link/` | the wire shared by both ends (not named "transport" -- see below) |
 | `ptychosaxs/mcp/` | MCP server over stdio, no tools yet |
-| `ptychosaxs/` | device layer: motors, hexapod, goniometer, phi, driver-selection policy |
+| `ptychosaxs/` | device layer: motors, hexapod, goniometer, phi, optics, driver-selection policy. No Qt, and no connections at import |
 | `ptychosaxs/tools/` | detectors, DG645 timing, scalers, softglue, shutter, file transfer |
 | `ptychosaxs/debug/` | simulated stand-ins for every device |
 | `ptychosaxs/analysis/` | offline analysis helpers |

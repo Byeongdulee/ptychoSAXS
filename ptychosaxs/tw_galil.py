@@ -1,15 +1,53 @@
-import gclib
+"""Galil controller over gclib.
+
+Importing this used to open the TCP connection: `g.GOpen(IP)` ran at module
+scope, so the module could not be imported for introspection, could not be
+imported twice, and could not be imported at all on a machine without the
+controller reachable. `connect()` does it now, and `g` is a proxy that
+connects on first attribute access so existing call sites read the same.
+"""
+
 import sys
 from threading import Lock
+
 lock = Lock()
 IP = '10.54.122.161'
-g = gclib.py()
-g.GOpen(IP)
-#c = g.GCommand
-g.GCommand('LD 3,3,3,3,3,3,3,3')
+
 motornames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 motorunits = ['step', 'step', 'step', 'step', 'step', 'step', 'step', 'step']
-#g.GClose()
+
+_g = None
+
+
+def connect(ip=None):
+    """Open the controller. Idempotent; returns the gclib handle."""
+    global _g
+    if _g is None:
+        import gclib
+        handle = gclib.py()
+        handle.GOpen(ip or IP)
+        handle.GCommand('LD 3,3,3,3,3,3,3,3')
+        _g = handle
+    return _g
+
+
+def disconnect():
+    global _g
+    if _g is not None:
+        try:
+            _g.GClose()
+        finally:
+            _g = None
+
+
+class _LazyGalil:
+    """Connects on first use, so `g.GCommand(...)` still works unchanged."""
+
+    def __getattr__(self, name):
+        return getattr(connect(), name)
+
+
+g = _LazyGalil()
 
 def turn_on():
     #g.GOpen(IP)

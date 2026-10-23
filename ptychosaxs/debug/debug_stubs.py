@@ -500,38 +500,20 @@ class SGStreamStub:
 
     def flush(self) -> None:
         pass
-
-
-class BeamStatusStub:
-    """Simulates the beam status monitor."""
-
-    def __init__(self, *args, **kwargs):
-        print("[DEBUG] BeamStatusStub initialised.")
-
-    def get_status(self) -> str:
-        return "beam_on"
-
-    shutter_status = "open"
-    beam_current = 100.0
-
-
 # ===========================================================================
 # Level-1 debug stubs — motor positions tracked; QDS returns random values
 # ===========================================================================
 
-class _MotorSignals:
-    """
-    PyQt5 signal container for InstrumentsStub.
-    Imported lazily so that PyQt5 is only required when level-1 is active.
-    """
-    def __new__(cls):
-        from PyQt5.QtCore import QObject, pyqtSignal
+def _MotorSignals():
+    """The same notification object the real `motors` carries.
 
-        class _Signals(QObject):
-            AxisNameSignal = pyqtSignal(str)
-            AxisPosSignal = pyqtSignal(float)
-
-        return _Signals()
+    Was a lazily-imported QObject; motions_ver2.motorSignals is now Qt-free,
+    so the stub shares it rather than keeping a parallel definition that
+    could drift. A GUI swaps in Qt signals at startup either way -- see
+    gui/motor_signals.install.
+    """
+    from ptychosaxs.motions_ver2 import motorSignals
+    return motorSignals()
 
 
 class _HexapodInfo(SimulatedTrajectory):
@@ -825,122 +807,51 @@ class DebugEpicsMotorController:
 # The names below are per-axis in the same order as each controller's real PV
 # list, so they line up index-for-index with gui/optics_motors.py's MOTORS
 # table -- debug output then names the motor the panel thinks it is driving.
+def _optics_stub(group):
+    """Build a debug optics controller from the real record table.
+
+    The names were duplicated here as literals. They happened to match, but
+    nothing enforced it, and the panel addresses motors by index -- so a
+    group that drifted would have pointed debug-mode buttons at different
+    stages than the real ones without anything failing.
+    """
+    from ptychosaxs import optics_config
+    names = list(optics_config.GROUPS[group])
+    units = [optics_config.DEFAULT_UNITS[n] for n in names]
+    return names, units
+
+
 class DebugOpticsbox(DebugEpicsMotorController):
-    """Debug stub for opticsbox — 5 motors matching the real PV list."""
+    """Debug stub for opticsbox."""
 
     def __init__(self):
-        super().__init__(
-            names=["BS_ver", "BS_hor", "ZP_ver", "ZP_hor", "BSZP_Ztrans"],
-            units=["mm", "mm", "mm", "mm", "mm"],
-        )
+        super().__init__(*_optics_stub("opticsbox"))
 
 
 class DebugOSA(DebugEpicsMotorController):
-    """Debug stub for OSA — 3 motors (X, Z, Y)."""
+    """Debug stub for the order-sorting aperture."""
 
     def __init__(self):
-        super().__init__(
-            names=["OSA_X", "OSA_Z", "OSA_Y"],
-            units=["mm", "mm", "mm"],
-        )
-
-
-class DebugCamera(DebugEpicsMotorController):
-    """Debug stub for the SAXS detector translation — 1 motor."""
-
-    def __init__(self):
-        super().__init__(
-            names=["SAXS_Z"],
-            units=["mm"],
-        )
+        super().__init__(*_optics_stub("OSA"))
 
 
 class DebugSaxsZ(DebugEpicsMotorController):
-    """Debug stub for the SAXS detector Z stage (12idcACS1:m1) — 1 motor.
-
-    Separate from DebugCamera, which stubs the optical camera (12idc:m2);
-    the optics panel drives this one.
-    """
+    """Debug stub for the SAXS detector Z stage (12idcACS1:m1)."""
 
     def __init__(self):
-        super().__init__(
-            names=["SAXS_Z"],
-            units=["mm"],
-        )
+        super().__init__(*_optics_stub("saxs_z"))
 
 
 class DebugBeamstop(DebugEpicsMotorController):
-    """Debug stub for the SAXS beamstop — 2 motors (hor, ver)."""
+    """Debug stub for the SAXS beamstop."""
 
     def __init__(self):
-        super().__init__(
-            names=["SAXSBS_hor", "SAXSBS_ver"],
-            units=["mm", "mm"],
-        )
+        super().__init__(*_optics_stub("beamstop"))
 
 
-class FakeSlitMotor:
-    """
-    Mimics the slit object from epics.py.
-    The slit iteration in motor_control.__init__ reads .name and .units
-    (not .DESC / .EGU like epics motors).
-    """
-
-    def __init__(self, name: str, units: str):
-        self.name = name
-        self.units = units
-
-
-class DebugSlit:
-    """
-    Debug stub for epicsslit / slit controller.
-    Exposes .motors (list of FakeSlitMotor), .motornames, .motorunits,
-    and the same get_pos / mv / mvr / stop / set_pos interface.
-    """
-
-    def __init__(self):
-        _names = ["H slit", "V slit"]
-        _units = ["mm", "mm"]
-        self.motors = [FakeSlitMotor(n, u) for n, u in zip(_names, _units)]
-        self.motornames = list(_names)
-        self.motorunits = list(_units)
-        self._pos = {n: 0.0 for n in _names}
-        print("[DEBUG] DebugSlit initialised.")
-
-    def _resolve(self, axis) -> str:
-        if isinstance(axis, int):
-            return self.motornames[axis]
-        return axis
-
-    def get_pos(self, axis) -> float:
-        return self._pos.get(self._resolve(axis), 0.0)
-
-    def mv(self, axis, target, wait=False) -> None:
-        name = self._resolve(axis)
-        self._pos[name] = float(target)
-        print(f"[DEBUG] DebugSlit.mv({name!r}, {target})")
-
-    def mvr(self, axis, delta, wait=False) -> None:
-        name = self._resolve(axis)
-        self._pos[name] += float(delta)
-        print(f"[DEBUG] DebugSlit.mvr({name!r}, {delta}) -> {self._pos[name]:.4f}")
-
-    def stop(self, axis) -> None:
-        print(f"[DEBUG] DebugSlit.stop({self._resolve(axis)!r})")
-
-    def set_pos(self, axis, pos) -> float:
-        name = self._resolve(axis)
-        self._pos[name] = float(pos)
-        print(f"[DEBUG] DebugSlit.set_pos({name!r}, {pos})")
-        return self._pos[name]
-
-
-# ===========================================================================
-# CRL_3dprint stubs - used by gui/CRL_3dprint.py --debug_mode
-# ===========================================================================
-
-# Field suffixes FakeMotorPV gives motion meaning to. Anything else is stored
-# and returned verbatim.
+# Motor-record field names and defaults shared by the fake records
+# below. Module-level because FakeMotorPV, FakeMotorRecord and the
+# Debug* controllers all index them.
 _MOTOR_DRIVE = ".VAL"
 _MOTOR_READBACK = ".RBV"
 _MOTOR_RELATIVE = ".RLV"

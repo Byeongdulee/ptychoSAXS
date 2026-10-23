@@ -1,9 +1,9 @@
 
 import os
 import sys
+import threading
 import time
 import numpy as np
-from PyQt5.QtCore import QObject, pyqtSignal
 
 # ==========================================================================
 # Per-controller debug flags
@@ -60,18 +60,26 @@ from ptychosaxs.transport import (
 # test, or a machine with no ACS crate - opened a network connection as a
 # side effect, and made the module unimportable without the library.
 _acs_controller = None
+_acs_lock = threading.Lock()
 
 
 def _acs_connect():
-    """Connect to the ACS controller once, on first use."""
-    global _acs_controller
-    if _acs_controller is None:
-        from acspy.control import Controller
+    """Connect to the ACS controller once, on first use.
 
-        controller = Controller("ethernet", 1)
-        controller.connect(acsIP)
-        _acs_controller = controller
-    return _acs_controller
+    Locked because this is a process-wide cache and the server reaches it
+    from several threads: two callers racing here would each build a
+    Controller and open a second ethernet session to the same box, and
+    whichever finished last would win the global while the other leaked.
+    """
+    global _acs_controller
+    with _acs_lock:
+        if _acs_controller is None:
+            from acspy.control import Controller
+
+            controller = Controller("ethernet", 1)
+            controller.connect(acsIP)
+            _acs_controller = controller
+        return _acs_controller
 
 
 class _SimulatedController:
@@ -105,9 +113,50 @@ class _SimulatedController:
     def disconnect(self):
         pass
 
-class motorSignals(QObject):
-    AxisNameSignal = pyqtSignal(str)
-    AxisPosSignal = pyqtSignal(float)
+class _Signal:
+    """The slice of pyqtSignal this module actually uses: connect and emit.
+
+    Plain callables, called on the emitting thread. That is the right
+    default for a headless process and wrong for a GUI, where a position
+    emitted from a scan worker must not touch a widget directly -- so the
+    GUI replaces the whole signals object with a Qt-backed one (see
+    gui/motor_signals.py) and gets queued delivery back. Keeping the device
+    layer free of Qt is what lets the server import it at all.
+    """
+
+    def __init__(self):
+        self._subscribers = []
+
+    def connect(self, fn):
+        self._subscribers.append(fn)
+        return fn
+
+    def disconnect(self, fn=None):
+        if fn is None:
+            self._subscribers.clear()
+        elif fn in self._subscribers:
+            self._subscribers.remove(fn)
+
+    def emit(self, *args):
+        for fn in list(self._subscribers):
+            try:
+                fn(*args)
+            except Exception:
+                # A broken listener must not abort the move that emitted.
+                import traceback
+                traceback.print_exc()
+
+
+class motorSignals:
+    """Position and axis-name notifications from `motors`.
+
+    Duck-compatible with the QObject this used to be, so the emit sites and
+    gui/handlers/scan_handler.py's _emit_axis_positions did not change.
+    """
+
+    def __init__(self):
+        self.AxisNameSignal = _Signal()
+        self.AxisPosSignal = _Signal()
 
 
 def generate_raster_scan_positions(size):

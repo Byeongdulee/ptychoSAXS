@@ -295,6 +295,7 @@ from asyncqt import QEventLoop
 
 from gui.font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
 from gui.ini_utils import INI_DIR
+from gui import motor_signals
 from gui.resize_utils import ProportionalResizer
 
 import pyqtgraph as pg
@@ -1007,6 +1008,10 @@ class ptyco_main_control(QObject):
         )
         self.ui.actionSave_current_results.triggered.connect(self.save_softglue)
         if pts is not None:
+            # The device layer's own signals call listeners on the emitting
+            # thread, which for a scan worker means touching widgets off the
+            # GUI thread. Swap in Qt signals so delivery is queued.
+            motor_signals.install(self.pts)
             self.pts.signals.AxisPosSignal.connect(self.update_motorpos)
             self.pts.signals.AxisNameSignal.connect(self.update_motorname)
         self.ui.actionTestFly.triggered.connect(self.scantest)
