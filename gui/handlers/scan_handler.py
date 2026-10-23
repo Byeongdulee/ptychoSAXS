@@ -75,30 +75,25 @@ else:
 HEXAPOD_FLYMODE_WAVELET = 0
 HEXAPOD_FLYMODE_STANDARD = 1
 FRACTION_EXPOSURE_PERIOD = 0.2
-DETECTOR_READOUTTIME = 0.02
-DETECTOR_NOT_STARTED_ERROR = -1
 QDS_UNIT_NM = 0
 QDS_UNIT_UM = 1
 QDS_UNIT_MM = 2
 QDS_UNIT_DEFAULT = 1
 STRUCK_CHANNELS = [2, 3, 4, 5]
 
-# Scaler channels counted at each 1-D step-scan position and saved next to the
-# Struck MCS csv. Unrelated to STRUCK_CHANNELS above: those come out of the MCS
-# waveform in one shot at scandone(), these are counted one position at a time
-# the way gui/handlers/scalar_scan.py's OneShot mode does - but on 12idc:scaler1
-# rather than that window's 12idc:3820:scaler1.
-SCAN_SCALAR_PVS = {
-    "IC": "12idc:scaler1.S2",
-    "BS2": "12idc:scaler1.S3",
-    "BS": "12idc:scaler1.S4",
-    "IfCRL": "12idc:scaler1.S5",
-}
-SCALER_CONT_PV = "12idc:scaler1.CONT"  # mode: 0 = OneShot, 1 = AutoCount (free-running)
-SCALER_TP_PV = "12idc:scaler1.TP"  # scaler preset (count) time
-SCALER_CNT_PV = "12idc:scaler1.CNT"  # count start (put 1) / done readback (reads back 0)
-COUNT_DONE_TIMEOUT_MARGIN_S = 5.0  # added to the count time as the ceiling for one OneShot count
-COUNT_POLL_INTERVAL_S = 0.01  # polling granularity while waiting for .CNT to drop back to 0
+# Record names and timing now live in ptychosaxs/api/scan_config.py, so a
+# headless scan runner can read them without importing this Qt handler.
+# Re-exported here because this file names them in many places.
+from ptychosaxs.api.scan_config import (  # noqa: E402
+    COUNT_DONE_TIMEOUT_MARGIN_S,
+    COUNT_POLL_INTERVAL_S,
+    DETECTOR_NOT_STARTED_ERROR,
+    DETECTOR_READOUTTIME,
+    SCALER_CNT_PV,
+    SCALER_CONT_PV,
+    SCALER_TP_PV,
+    SCAN_SCALAR_PVS,
+)
 
 
 def rstrip_from_char(string, char):
