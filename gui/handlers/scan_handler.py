@@ -567,16 +567,7 @@ class ScanHandler(ScanExecutorsMixin):
             "expt": expt,
         }
 
-    @staticmethod
-    def _signed_step(ast: float, afe: float, step: float) -> float:
-        """See ptychosaxs.api.scanplan.signed_step."""
-        return scanplan.signed_step(ast, afe, step)
 
-    def _make_positions(
-        self, p0: float, st: float, fe: float, step: float
-    ) -> np.ndarray:
-        """See ptychosaxs.api.scanplan.make_positions."""
-        return scanplan.make_positions(p0, st, fe, step)
 
     def _pre_scan(self, scan_label: str, scan_kind: str = "step", xmotor: int = 0, ymotor: int = 2) -> None:
         """Common setup called at the start of every scan entry point (GUI thread).
@@ -673,58 +664,8 @@ class ScanHandler(ScanExecutorsMixin):
         self.w.write_scaninfo_to_logfile(scaninfo)
         self._write_scan_summary_line(scan_label, axes_params, n_pos)
 
-    def _get_scan_summary_csv_path(self):
-        if len(self.w.parameters.logfilename) == 0:
-            return None
-        return pathlib.Path(self.w.parameters.logfilename).with_suffix(".csv")
 
-    def _get_scan_summary_header(self):
-        return [
-            "scan",
-            "completed",
-            "date",
-            "time",
-            "sample_name",
-            "scan_type",
-            "ExpTime",
-            "n_pos",
-            "monoE",
-            "phi",
-            "detectors_used",
-            "scan_center",
-            "scan_negative_edge",
-            "scan_positive_edge",
-            "scan_step_size",
-            # Same list, same order, as the values spliced in by
-            # _write_scan_summary_line via _get_us_optics_positions.
-            *_optics_status.US_OPTICS_MOTORS,
-            "trans1",
-            "trans2",
-            # Appended at the end on purpose: _migrate_scan_summary_header
-            # can only ever append, so a column inserted mid-list would land
-            # at the end of an existing CSV's header and desync it from the
-            # rows written underneath.
-            "optics_name",
-        ]
 
-    def _format_scan_axis_string(self, axes_params, key):
-        mapping = {
-            "scan_center": "p0",
-            "scan_negative_edge": "st",
-            "scan_positive_edge": "fe",
-            "scan_step_size": "step",
-        }
-        if key not in mapping:
-            return ""
-        parts = []
-        for ax in axes_params:
-            val = ax.get(mapping[key], "")
-            try:
-                formatted = f"{float(val):f}"
-            except (TypeError, ValueError):
-                formatted = ""
-            parts.append(f"{ax['name']} {formatted} ")
-        return "".join(parts)
 
     def _get_phi_angle(self, axes_params):
         axis_names = [ax.get("name", "").lower() for ax in axes_params]
@@ -742,18 +683,6 @@ class ScanHandler(ScanExecutorsMixin):
                 return lb7_widget.text()
         return ""
 
-    def _get_mono_energy(self):
-        try:
-            import epics
-        except ImportError:
-            return ""
-        try:
-            val = epics.caget("12ida2:EnCalc")
-        except Exception:
-            return ""
-        if val is None:
-            return ""
-        return str(val)
 
     # Derived from optics_status, which the optics panel and the Check
     # Upstream Optics report also read, so the PV strings cannot drift
@@ -764,31 +693,9 @@ class ScanHandler(ScanExecutorsMixin):
         for _motor in _optics_status.US_OPTICS_MOTORS
     ]
 
-    def _get_us_optics_positions(self):
-        try:
-            import epics
-        except ImportError:
-            return [""] * len(self._US_OPTICS_PVS)
-        values = []
-        for _, pv in self._US_OPTICS_PVS:
-            try:
-                val = epics.caget(pv)
-            except Exception:
-                val = None
-            values.append("" if val is None else str(val))
-        return values
 
     _GONIO_TRANS_AXES = ["trans1", "trans2"]
 
-    def _get_gonio_trans_positions(self):
-        values = []
-        for axis in self._GONIO_TRANS_AXES:
-            try:
-                val = self.w.pts.get_pos(axis) if axis in self.w.pts.gonio.motornames else None
-            except Exception:
-                val = None
-            values.append("" if val is None else str(val))
-        return values
 
     def check_fly_blur(self):
         """Estimate the sample blur during a fly scan exposure and show it in a dialog.
@@ -901,13 +808,7 @@ class ScanHandler(ScanExecutorsMixin):
         """See ptychosaxs.api.scanplan.adjust_axis_length."""
         return scanplan.adjust_axis_length(n, axis_index, scan_kind)
 
-    def _extend_axis_positions(self, coords: np.ndarray, step: float, axis_index: int, scan_kind: str) -> np.ndarray:
-        """See ptychosaxs.api.scanplan.extend_axis_positions."""
-        return scanplan.extend_axis_positions(coords, step, axis_index, scan_kind)
 
-    def _compute_n_positions(self, position_arrays, scan_kind="step"):
-        """See ptychosaxs.api.scanplan.count_positions."""
-        return scanplan.count_positions(position_arrays, scan_kind)
 
     def _compute_helix_total_time(self, phi_st: float, phi_fe: float, phi_step: float, phi_tm: float) -> tuple:
         """Return (total_time, Nsteps, step_time) for a helix fly scan's phi axis.
@@ -1502,10 +1403,6 @@ class ScanHandler(ScanExecutorsMixin):
             symbolPen=pg.mkPen("b", width=2),
         )
 
-    @staticmethod
-    def _snake_positions(x_positions, y_positions):
-        """See ptychosaxs.api.scanplan.snake_positions."""
-        return scanplan.snake_positions(x_positions, y_positions)
 
     # ------------------------------------------------------------------
     # Extracted methods
@@ -1650,21 +1547,6 @@ class ScanHandler(ScanExecutorsMixin):
     # own variant that stripped the leading "/" off an absolute Linux path and
     # joined the rest with backslashes.
 
-    def _step_detector_period(self, expt: float) -> float:
-        """The camera exposure period to program for a step scan.
-
-        AcquirePeriod is camserver's `expperiod`: the floor on how closely
-        two exposures may follow one another. Step mode never set it -- only
-        fly_ready did -- so the camera kept whatever a previous fly scan or
-        alignment had left behind, and a stale value put that floor under
-        every point of the scan regardless of the exposure time.
-
-        Deliberately the same formula as the DG645's Cycperiod below: a
-        camera period longer than the trigger spacing would make the detector
-        ignore triggers, which reads as a frame timeout rather than as a
-        misconfiguration.
-        """
-        return round(max(expt + DETECTOR_READOUTTIME, 0.03), 6)
 
     def _working_folder(self) -> str:
         """The Working folder exactly as typed on the main window.
@@ -1674,20 +1556,6 @@ class ScanHandler(ScanExecutorsMixin):
         """
         return self.ui.edit_workingfolder.text()
 
-    @staticmethod
-    def _join_posix(base, *parts) -> str:
-        """Join into a Linux path, dropping empty components.
-
-        `base` keeps any leading "/" it came with, so an absolute basepath
-        stays absolute; every later component is stripped of its own
-        separators so no "//" or trailing "/" can creep in.
-        """
-        out = str(base).replace("\\", "/").rstrip("/")
-        for part in parts:
-            part = str(part).replace("\\", "/").strip("/")
-            if part:
-                out = "%s/%s" % (out, part) if out else part
-        return out
 
     def _gui_scan_folder(self, folder_type, scannumberstring, working_folder=None) -> str:
         """The scan's output folder, as this process must open it."""
@@ -2467,20 +2335,6 @@ class ScanHandler(ScanExecutorsMixin):
         scan_num = self.w.parameters.scan_number
         return self._get_master_file_path_with_number(detector_type, sample_name, scan_num)
 
-    def _get_detector_config(self, detector_type: str) -> dict:
-        """Get the configuration dict for a detector type.
-
-        Args:
-            detector_type: 'SAXS', 'WAXS', etc.
-
-        Returns:
-            Configuration dictionary with PVs, constants, and metadata mapping
-        """
-        from .nexus_metadata_config import DETECTOR_CONFIGS
-
-        if detector_type not in DETECTOR_CONFIGS:
-            raise ValueError(f"Unknown detector type: {detector_type}")
-        return DETECTOR_CONFIGS[detector_type]
 
     def _fetch_zone_plate_optics_metadata(self) -> dict:
         """Query zone plate optics metadata (for caching to avoid duplicate queries).
@@ -2814,18 +2668,6 @@ class ScanHandler(ScanExecutorsMixin):
         except Exception as e:
             print(f"Warning: Failed to write hexapod_positions to master file {master_path}: {e}")
 
-    def _piezo_axis_units(self, axes) -> str:
-        """Engineering unit of each scanned piezo axis, as the controller
-        reports it. A scan may pair a translation with a tilt, so these are
-        not always the same unit."""
-        gonio = self.w.pts.gonio
-        units = []
-        for axis in axes:
-            try:
-                units.append(gonio.motorunits[gonio.motornames.index(axis)])
-            except Exception:
-                units.append("")
-        return units[0] if len(set(units)) == 1 else ",".join(units)
 
     def _append_piezo_positions_to_master_file(
         self, master_path: str, piezo_pos: np.ndarray, axes

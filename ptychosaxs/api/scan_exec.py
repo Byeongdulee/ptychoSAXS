@@ -133,3 +133,176 @@ class ScanExecutorsMixin:
             epics.caput(SCALER_CONT_PV, 1)
         except Exception as e:
             print(f"Warning: could not restore scaler to free-running: {e}")
+
+    @staticmethod
+    def _signed_step(ast: float, afe: float, step: float) -> float:
+        """See ptychosaxs.api.scanplan.signed_step."""
+        return scanplan.signed_step(ast, afe, step)
+
+    def _make_positions(
+        self, p0: float, st: float, fe: float, step: float
+    ) -> np.ndarray:
+        """See ptychosaxs.api.scanplan.make_positions."""
+        return scanplan.make_positions(p0, st, fe, step)
+
+    @staticmethod
+    def _snake_positions(x_positions, y_positions):
+        """See ptychosaxs.api.scanplan.snake_positions."""
+        return scanplan.snake_positions(x_positions, y_positions)
+
+    def _extend_axis_positions(self, coords: np.ndarray, step: float, axis_index: int, scan_kind: str) -> np.ndarray:
+        """See ptychosaxs.api.scanplan.extend_axis_positions."""
+        return scanplan.extend_axis_positions(coords, step, axis_index, scan_kind)
+
+    def _compute_n_positions(self, position_arrays, scan_kind="step"):
+        """See ptychosaxs.api.scanplan.count_positions."""
+        return scanplan.count_positions(position_arrays, scan_kind)
+
+    @staticmethod
+    def _join_posix(base, *parts) -> str:
+        """Join into a Linux path, dropping empty components.
+
+        `base` keeps any leading "/" it came with, so an absolute basepath
+        stays absolute; every later component is stripped of its own
+        separators so no "//" or trailing "/" can creep in.
+        """
+        out = str(base).replace("\\", "/").rstrip("/")
+        for part in parts:
+            part = str(part).replace("\\", "/").strip("/")
+            if part:
+                out = "%s/%s" % (out, part) if out else part
+        return out
+
+    def _format_scan_axis_string(self, axes_params, key):
+        mapping = {
+            "scan_center": "p0",
+            "scan_negative_edge": "st",
+            "scan_positive_edge": "fe",
+            "scan_step_size": "step",
+        }
+        if key not in mapping:
+            return ""
+        parts = []
+        for ax in axes_params:
+            val = ax.get(mapping[key], "")
+            try:
+                formatted = f"{float(val):f}"
+            except (TypeError, ValueError):
+                formatted = ""
+            parts.append(f"{ax['name']} {formatted} ")
+        return "".join(parts)
+
+    def _get_scan_summary_csv_path(self):
+        if len(self.ctx.parameters.logfilename) == 0:
+            return None
+        return pathlib.Path(self.ctx.parameters.logfilename).with_suffix(".csv")
+
+    def _piezo_axis_units(self, axes) -> str:
+        """Engineering unit of each scanned piezo axis, as the controller
+        reports it. A scan may pair a translation with a tilt, so these are
+        not always the same unit."""
+        gonio = self.ctx.pts.gonio
+        units = []
+        for axis in axes:
+            try:
+                units.append(gonio.motorunits[gonio.motornames.index(axis)])
+            except Exception:
+                units.append("")
+        return units[0] if len(set(units)) == 1 else ",".join(units)
+
+    def _get_mono_energy(self):
+        try:
+            import epics
+        except ImportError:
+            return ""
+        try:
+            val = epics.caget("12ida2:EnCalc")
+        except Exception:
+            return ""
+        if val is None:
+            return ""
+        return str(val)
+
+    def _get_gonio_trans_positions(self):
+        values = []
+        for axis in self._GONIO_TRANS_AXES:
+            try:
+                val = self.ctx.pts.get_pos(axis) if axis in self.ctx.pts.gonio.motornames else None
+            except Exception:
+                val = None
+            values.append("" if val is None else str(val))
+        return values
+
+    def _get_us_optics_positions(self):
+        try:
+            import epics
+        except ImportError:
+            return [""] * len(self._US_OPTICS_PVS)
+        values = []
+        for _, pv in self._US_OPTICS_PVS:
+            try:
+                val = epics.caget(pv)
+            except Exception:
+                val = None
+            values.append("" if val is None else str(val))
+        return values
+
+    def _get_detector_config(self, detector_type: str) -> dict:
+        """Get the configuration dict for a detector type.
+
+        Args:
+            detector_type: 'SAXS', 'WAXS', etc.
+
+        Returns:
+            Configuration dictionary with PVs, constants, and metadata mapping
+        """
+        from .nexus_metadata_config import DETECTOR_CONFIGS
+
+        if detector_type not in DETECTOR_CONFIGS:
+            raise ValueError(f"Unknown detector type: {detector_type}")
+        return DETECTOR_CONFIGS[detector_type]
+
+    def _step_detector_period(self, expt: float) -> float:
+        """The camera exposure period to program for a step scan.
+
+        AcquirePeriod is camserver's `expperiod`: the floor on how closely
+        two exposures may follow one another. Step mode never set it -- only
+        fly_ready did -- so the camera kept whatever a previous fly scan or
+        alignment had left behind, and a stale value put that floor under
+        every point of the scan regardless of the exposure time.
+
+        Deliberately the same formula as the DG645's Cycperiod below: a
+        camera period longer than the trigger spacing would make the detector
+        ignore triggers, which reads as a frame timeout rather than as a
+        misconfiguration.
+        """
+        return round(max(expt + DETECTOR_READOUTTIME, 0.03), 6)
+
+    def _get_scan_summary_header(self):
+        return [
+            "scan",
+            "completed",
+            "date",
+            "time",
+            "sample_name",
+            "scan_type",
+            "ExpTime",
+            "n_pos",
+            "monoE",
+            "phi",
+            "detectors_used",
+            "scan_center",
+            "scan_negative_edge",
+            "scan_positive_edge",
+            "scan_step_size",
+            # Same list, same order, as the values spliced in by
+            # _write_scan_summary_line via _get_us_optics_positions.
+            *_optics_status.US_OPTICS_MOTORS,
+            "trans1",
+            "trans2",
+            # Appended at the end on purpose: _migrate_scan_summary_header
+            # can only ever append, so a column inserted mid-list would land
+            # at the end of an existing CSV's header and desync it from the
+            # rows written underneath.
+            "optics_name",
+        ]
