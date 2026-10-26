@@ -3,21 +3,31 @@
 A one-way ZMQ link that carries quDIS interferometer samples off the Windows
 machine that holds the USB connection.
 
-**This folder is walled off.** Nothing here imports from `ptychosaxs/`,
-`gui/`, `tools/` or `handlers/`, and nothing in the rest of the repository
-imports from here. Copy the folder to the Windows box on its own and it runs.
+**This folder is walled off, in one direction.** Nothing here imports from
+`ptychosaxs/`, `gui/`, `tools/` or `handlers/` — copy the folder to the
+Windows box on its own and it still runs. The reverse is no longer true:
+`ptychosaxs/qds_bridge_client.py` imports `wire.py` and `config.py` from here,
+on purpose, so the wire format and host/port can't drift between the two
+copies. That is the one sanctioned cross-import; nothing else in the
+repository should import from `qds_bridge/`, and this folder still imports
+nothing back.
 
 ## What this round is for
 
-Measuring message loss and stability at the real USB sample rate, nothing
-more. It is deliberately *not* yet:
+Measuring message loss and stability at the real USB sample rate was the
+first round. This one adds the piece that was deliberately deferred then: a
+quiet client meant to run inside the GUI process rather than a human's
+terminal (`ptychosaxs/qds_bridge_client.py`), wired into
+`ptychosaxs/interferometers.py` behind `rungui.py`'s `QDS_USE_BRIDGE` flag.
+See that module's docstring for its watchdog behaviour.
+
+Still not done:
 
 - a host-side history deque, or any gap-recovery / backfill mechanism
-- integrated into `rungui.py`
 
-Both are planned. The loss figures this produces are what should size the
-deque, which is why they come first. `qds_publisher.py` carries a marked
-extension point where the deque drops in; nothing around it has to change.
+`qds_publisher.py` carries a marked extension point where the deque drops in;
+nothing around it has to change. The loss figures this tool produces are what
+should size it.
 
 ## Running it
 
@@ -58,7 +68,13 @@ python qds_publisher.py --simulate --rate 0      # free-running
 | `--quiet` | sub | gaps and summaries only |
 
 Defaults live in [`config.py`](config.py) — host `sec12mic`, port `5561`,
-queue bounds, report interval. Each is a one-line edit.
+queue bounds, report interval, and `HARDWARE_RATE_HZ` (100 Hz), the rate the
+real quDIS hardware is polled at. Each is a one-line edit.
+
+`HARDWARE_RATE_HZ` only applies to real hardware (`python qds_publisher.py`,
+no `--simulate`) — it is unrelated to `--simulate --rate`, which stays
+uncapped so it can keep stress-testing the transport above any rate the real
+device would ever produce.
 
 ## Reading the output
 

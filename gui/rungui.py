@@ -85,7 +85,7 @@ DEBUG_DEVICES = DEBUG_MODE and DEBUG_LEVEL in (0, 1)  # non-motors are stubbed
 DEBUG_HEXAPOD = False
 DEBUG_TOMO_PHI = False
 DEBUG_GONIO = False
-DEBUG_QDS = True
+DEBUG_QDS = False
 DEBUG_EPICS = False
 DEBUG_DG645 = False
 
@@ -126,6 +126,13 @@ GONIO_USE_SMARACT = False
 # "Tomo Rot"). No EPICS either way - this is a choice of driver, not of
 # transport. Needs acspy installed and a route to the ACS crate.
 PHI_USE_ACS = False
+
+# QDS over the network bridge (qds_bridge/) instead of direct USB /
+# softglueZynq. Only consulted when DEBUG_QDS is False above. The publisher,
+# qds_bridge/qds_publisher.py, must already be running on the machine with
+# the USB connection (sec12mic by default - see qds_bridge/config.py); this
+# flag only switches which client reads it. No axes - position sensor only.
+QDS_USE_BRIDGE = True
 
 _DEBUG_FLAG_NAMES = (
     "DEBUG_HEXAPOD", "DEBUG_TOMO_PHI", "DEBUG_GONIO", "DEBUG_QDS",
@@ -177,6 +184,7 @@ os.environ["PTYCHOSAXS_DEBUG_DG645"] = "1" if DEBUG_DG645 else "0"
 os.environ["PTYCHOSAXS_HEXAPOD_TRANSPORT"] = HEXAPOD_TRANSPORT
 os.environ["PTYCHOSAXS_GONIO_SMARACT"] = "1" if GONIO_USE_SMARACT else "0"
 os.environ["PTYCHOSAXS_PHI_ACS"] = "1" if PHI_USE_ACS else "0"
+os.environ["PTYCHOSAXS_QDS_USE_BRIDGE"] = "1" if QDS_USE_BRIDGE else "0"
 
 
 def _debug_flag_lines():

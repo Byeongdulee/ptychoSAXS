@@ -40,22 +40,53 @@ from wire import pack_sample  # noqa: E402
 # Sources
 # ---------------------------------------------------------------------------
 
+class _Pacer:
+    """Sleeps to a target rate against a deadline, not a fixed interval, so
+    the average rate holds even though each sleep overshoots. `rate=0` means
+    free running: never sleep, which is the useful setting for finding where
+    the transport starts dropping.
+    """
+
+    def __init__(self, rate):
+        self.period = (1.0 / rate) if rate > 0 else 0.0
+        self._next = None
+
+    def start(self):
+        self._next = time.perf_counter()
+
+    def wait(self):
+        if not self.period:
+            return
+        now = time.perf_counter()
+        if now < self._next:
+            time.sleep(self._next - now)
+        self._next += self.period
+        # Re-anchor if we have fallen far behind, rather than trying to claw
+        # back a backlog we will never make up.
+        if self._next < now - 1.0:
+            self._next = now
+
+
 class HardwareSource:
     """The real quDIS over USB, via the pyqudis ctypes wrapper.
 
     Mirrors what ptycho_qudis.connect() does: discover over Ethernet+USB3,
     then connect every device found. We publish the *relative* positions of
     one device, which is what the GUI's get_qds_pos consumes.
+
+    Paced to config.HARDWARE_RATE_HZ: the device can be polled far faster
+    than any consumer needs, and nothing downstream benefits from more.
     """
 
     IF_ETHERNET = 0x02
     IF_USB3 = 0x10
 
-    def __init__(self, device=0):
+    def __init__(self, device=0, rate=config.HARDWARE_RATE_HZ):
         self.device = device
         self._qudis = None
         self._poll = None
         self.device_count = 0
+        self._pacer = _Pacer(rate)
 
     def open(self):
         import ctypes
@@ -83,10 +114,14 @@ class HardwareSource:
             )
         for dev in range(self.device_count):
             self._qudis.qdslib.QDS_connect(dev)
+        rate = ("free-running" if not self._pacer.period
+                else f"{1.0 / self._pacer.period:.0f} Hz")
         print(f"quDIS: {self.device_count} device(s), publishing device "
-              f"{self.device} relative positions (nm)")
+              f"{self.device} relative positions (nm) at {rate}")
+        self._pacer.start()
 
     def read(self):
+        self._pacer.wait()
         rel, _abs = self._poll(self._qudis, self.device)
         return rel[0], rel[1], rel[2]
 
@@ -102,37 +137,26 @@ class HardwareSource:
 
 class SimulatedSource:
     """Synthetic samples at a target rate, so both ends can be exercised on
-    Linux before anyone touches the hardware.
-
-    Paced against a deadline rather than by sleeping a fixed interval, so the
-    average rate holds even though each sleep overshoots. `rate=0` means free
-    running: generate as fast as the loop allows, which is the useful setting
-    for finding where the transport starts dropping.
+    Linux before anyone touches the hardware. `rate=0` means free running:
+    generate as fast as the loop allows, which is the useful setting for
+    finding where the transport starts dropping.
     """
 
     def __init__(self, rate=1000.0):
-        self.period = (1.0 / rate) if rate > 0 else 0.0
-        self._next = None
+        self._pacer = _Pacer(rate)
         self._t0 = None
 
     def open(self):
         self._t0 = time.perf_counter()
-        self._next = self._t0
-        rate = "free-running" if self.period == 0 else f"{1.0 / self.period:.0f} Hz"
+        self._pacer.start()
+        rate = ("free-running" if not self._pacer.period
+                else f"{1.0 / self._pacer.period:.0f} Hz")
         print(f"simulated source: {rate}")
 
     def read(self):
         import math
 
-        if self.period:
-            now = time.perf_counter()
-            if now < self._next:
-                time.sleep(self._next - now)
-            self._next += self.period
-            # Re-anchor if we have fallen far behind, rather than trying to
-            # claw back a backlog we will never make up.
-            if self._next < now - 1.0:
-                self._next = now
+        self._pacer.wait()
         t = time.perf_counter() - self._t0
         return (
             1000.0 * math.sin(t),

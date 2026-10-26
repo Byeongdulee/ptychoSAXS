@@ -31,6 +31,17 @@ RCV_HWM = 100_000
 # How often each end prints a summary line, in seconds.
 REPORT_INTERVAL_S = 5.0
 
+# Target rate for polling the real quDIS hardware, in Hz. The device can be
+# polled far faster than any consumer needs, and nothing downstream (the
+# bridge client in ptychosaxs/, or a human watching the GUI) benefits from
+# more than this. One line to change.
+#
+# This is separate from --simulate --rate, which stays uncapped: that flag
+# exists to stress-test the transport at rates above what the real device
+# would ever produce (see README), and this constant would defeat that if it
+# applied there too.
+HARDWARE_RATE_HZ = 100.0
+
 
 def endpoint(host=QDS_HOST, port=QDS_PORT):
     """Connect-side address, e.g. "tcp://sec12mic:5561"."""
