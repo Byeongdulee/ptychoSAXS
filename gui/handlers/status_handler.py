@@ -207,8 +207,11 @@ class StatusHandler:
                 raise RuntimeError(
                     "epics is required for QDS in non-debug mode"
                 ) from exc
-            pos = self.w.pts.qds.get_position()
-            pos = np.array(pos)
+            # get_position() returns (rel, abs): rel is a list of one
+            # device's [x, y, z], matching ptychosaxs.py's `r, a =
+            # self.qds.get_position(); r = r[0]` usage.
+            rel, _abs = self.w.pts.qds.get_position()
+            pos = np.array(rel[0])
             r = pos / 1000
             temperature = _epics.caget("usxLAX:12IDE_temperature")
             r = np.append(r, temperature)

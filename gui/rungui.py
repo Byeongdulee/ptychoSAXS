@@ -1204,8 +1204,12 @@ class ptyco_main_control(QObject):
 
         self.ui.edit_scanname.setText(self.parameters.scan_name)
 
-        # Periodic timers (Windows only — EPICS callbacks handle updates on Linux)
-        if os.name == "nt":
+        # Periodic QDS timer (Windows only — EPICS callbacks handle updates on
+        # Linux, for the direct-hardware/softglueZynq paths). The bridge
+        # client has no EPICS callback of its own to piggyback on, so it
+        # needs this timer on Linux too; everything else (DEBUG_QDS stub,
+        # direct USB, softglueZynq) keeps the original Windows-only behavior.
+        if os.name == "nt" or QDS_USE_BRIDGE:
             self.timer = QTimer()
             self.timer.timeout.connect(self.update_qds)
             self.timer.start(100)

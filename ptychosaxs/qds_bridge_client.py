@@ -46,6 +46,18 @@ SILENCE_THRESHOLD_S = 5.0
 RECHECK_INTERVAL_S = 5.0
 _POLL_TIMEOUT_MS = 500
 
+# Printed whenever the bridge looks unreachable (no data, or a synchronous
+# connect failure), so whoever is staring at the GUI terminal has the actual
+# fix in front of them instead of having to go find this README.
+_CANNOT_CONNECT_MSG = (
+    "Cannot connect to qds interferometer. As of Oct 2026:\n"
+    "Login to s12ide@sec12mic, in the Anaconda terminal run:\n"
+    "conda activate ptychoSAXS\n"
+    "cd C:\\Users\\s12ide\\Documents\\GitHub\\ptychoSAXS\\qds_bridge\n"
+    "python qds_publisher.py\n"
+    "Or simply double-click qds_publisher on the desktop."
+)
+
 
 class QDSBridgeClient:
     """Subscribes to one qds_bridge publisher and reports its latest sample."""
@@ -96,6 +108,7 @@ class QDSBridgeClient:
             sock.connect(self._endpoint)
         except zmq.ZMQError as exc:
             print(f"[qds-client] connect failed: {exc}")
+            print(_CANNOT_CONNECT_MSG)
             with self._lock:
                 self._connect_error = str(exc)
             sock.close()
@@ -120,6 +133,7 @@ class QDSBridgeClient:
                     if not silent and gap >= SILENCE_THRESHOLD_S:
                         print(f"[qds-client] no data for {gap:.1f}s "
                               f"from {self._endpoint}")
+                        print(_CANNOT_CONNECT_MSG)
                         silent = True
                     next_check = now + RECHECK_INTERVAL_S
                     continue

@@ -35,6 +35,12 @@ elif QDS_USE_BRIDGE:
         print("[qds-client] plot_position() is not available over the bridge.")
 
     qds = QDSBridgeClient()
+    # Nothing in gui/rungui.py ever calls instruments.connect() (which would
+    # call qds.connect()) - confirmed by grep across the repo. Without this,
+    # the background thread never starts and get_position() raises "no
+    # samples received yet" forever. Connect eagerly here instead of relying
+    # on a call site that does not exist.
+    qds.connect()
 else:
     from qds.qds import ptycho_qudis, plot_position
     from ptychosaxs.tools.softglue import sgz_pty
