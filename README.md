@@ -1,19 +1,15 @@
 # ptychoSAXS
 
-Control software for the 12-ID-C ptycho-SAXS instrument: device drivers, scan
+Control software for the 12-ID-E ptycho-SAXS instrument: device drivers, scan
 logic and the Qt panels that drive them.
 
 ## Environment
 
-Use the `ptychoSAXS` conda environment. It is the only one here with
-InstrumentKit, which `tools/dg645.py` needs:
+Use the `ptychoSAXS` conda environment.
 
 ```
 /home/beams/S12IDE/.conda/envs/ptychoSAXS/bin/python      # Python 3.12
 ```
-
-Running against a different interpreter is the usual cause of a confusing
-`ModuleNotFoundError: No module named 'instruments'` during test collection.
 
 ## Install
 
@@ -22,10 +18,6 @@ Editable install, so the working tree is what runs:
 ```
 python -m pip install -e .
 ```
-
-This puts `ptychosaxs` (with `tools`, `debug` and `analysis` as subpackages)
-and `gui` on the path as real packages. Nothing manipulates `sys.path` at import time any more, and no
-command has to be run from a particular directory.
 
 ## Running the GUIs
 
@@ -56,8 +48,7 @@ when it does.
 Hardware is owned by one shared server process, not by each GUI. The first
 panel to start spawns it, every panel after that joins it, and it exits when
 the last one disconnects. That is what makes two panels safe to run at once:
-the PI C-887 accepts exactly one TCP connection, so the old arrangement --
-every GUI opening its own -- genuinely conflicted.
+the PI C-887 accepts exactly one TCP connection.
 
 The GUIs manage it for you. To drive it directly:
 
@@ -74,11 +65,6 @@ The socket, lockfile and log live in `$XDG_RUNTIME_DIR/ptychosaxs/`
 output goes, including every driver fallback -- read it first when a stage
 comes up simulated.
 
-Two rules worth knowing:
-
-* **One of each GUI.** A second copy of a panel that is already open is
-  refused, and the existing window is raised instead. Different panels
-  running together is fine.
 * **A fly scan is never interrupted.** Its trajectory runs in the C-887's
   wave generator and has no host-side stop, so closing the last GUI during
   one leaves the server up until it finishes. A step scan is asked to stop
