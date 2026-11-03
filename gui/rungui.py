@@ -1213,11 +1213,7 @@ class ptyco_main_control(QObject):
             self.timer = QTimer()
             self.timer.timeout.connect(self.update_qds)
             self.timer.start(100)
-
-        if os.name == "nt":
-            self.timer_update = QTimer()
-            self.timer_update.timeout.connect(self.update_status)
-            self.timer_update.start(10_000)
+            
         if DEBUG_MODE:
             parts = []
             if DEBUG_MOTORS:

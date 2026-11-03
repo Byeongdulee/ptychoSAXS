@@ -232,8 +232,8 @@ class StatusHandler:
         try:
             r = self.get_qds_pos()
         except:
-            self.w.messages["recent error message"] = "QDS does not work."
-            print(self.w.messages["recent error message"])
+            # self.w.messages["recent error message"] = "QDS does not work."
+            # print(self.w.messages["recent error message"])
             return
         self.w.qds_array.append(r)
         self.ui.lcd_X.display("%0.3f" % (r[0]))
