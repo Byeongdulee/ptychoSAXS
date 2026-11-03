@@ -131,6 +131,6 @@ pre-existing.
 | `ptychosaxs/tools/` | detectors, DG645 timing, scalers, softglue, shutter, file transfer |
 | `ptychosaxs/debug/` | simulated stand-ins for every device |
 | `ptychosaxs/analysis/` | offline analysis helpers |
-| `gui/` | PyQt5 panels; layout in `gui/ui/`, persisted settings in `gui/ini/` |
+| `gui/` | PyQt5 panels: the three launchable apps (`rungui`, `optics_motors`, `CRL_3dprint`) at the top level; `handlers/` (main-panel logic, incl. scan trajectories and the user view), `common/` (fonts, resizing, .ini, More/Less ladder), `widgets/`, `optics/`, `alignment/`, `macros/`; layout in `gui/ui/`, persisted settings in `gui/ini/` |
 | `qds_bridge/` | standalone ZMQ bridge for the QDS interferometer. Deliberately walled off: it imports nothing from the rest of the repo and is copied to the Windows box on its own |
 | `tests/` | headless unit tests |

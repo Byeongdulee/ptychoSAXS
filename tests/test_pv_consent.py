@@ -12,7 +12,7 @@ bulk of this file exercises it.
 
 The Qt dialog hook is injected, so none of this needs a QApplication.
 """
-from gui import pv_consent
+from gui.common import pv_consent
 from ptychosaxs import pv_audit
 
 

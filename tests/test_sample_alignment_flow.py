@@ -26,7 +26,7 @@ import configparser
 
 import pytest
 
-from gui.alignment_flow import (
+from gui.alignment.alignment_flow import (
     CLOSE,
     ITER_STEPS,
     PAGE_TITLES,
@@ -44,8 +44,8 @@ from gui.alignment_flow import (
 from ptychosaxs.debug.debug_stubs import FakePV, InstrumentsStub
 from gui.optics_motors import INI_DEFAULTS as OPTICS_INI_DEFAULTS
 from gui.optics_motors import read_saxsbs_in_all, write_saxsbs_in_all
-from gui.ini_utils import ensure_ini_defaults
-from gui.sample_alignment import (
+from gui.common.ini_utils import ensure_ini_defaults
+from gui.alignment.sample_alignment import (
     HEXAPOD_X_COR_DEFAULT,
     PAGE_WIDGETS,
     ZP_OUT_THRESH,
@@ -55,7 +55,7 @@ from gui.sample_alignment import (
     script_html,
     zp_is_out,
 )
-from gui.xray_eye import XrayEye, eye_in_from_cmd, eye_is_out
+from gui.optics.xray_eye import XrayEye, eye_in_from_cmd, eye_is_out
 
 # The five motors every page of the workflow addresses.
 ALIGNMENT_MOTORS = ("X", "Z", "trans1", "trans2", "phi")

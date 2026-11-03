@@ -239,8 +239,19 @@ if _debug_on:
 
 _gui_dir = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(_gui_dir, "ui")
+# The More/Less ladder, most detailed first. The large view is built once and
+# kept (hidden when not shown): the user view borrows every setting it lacks
+# from it -- see gui/widgets/layered_window.py.
+LARGE_UI = os.path.join(UI_DIR, "ptychoSAXS_large.ui")
+USER_UI = os.path.join(UI_DIR, "ptychoSAXS_user.ui")
 
-from gui import pv_consent
+# Font size follows the window size, like a caqtdm screen and like the
+# optics panel (see optics_motors.py), instead of being picked by hand. Set
+# this to False to go back to fixed, designed-in sizes; nothing else needs
+# changing.
+DYNAMIC_FONTS = True
+
+from gui.common import pv_consent
 from ptychosaxs import pv_audit
 
 if DEBUG_MODE:
@@ -284,6 +295,7 @@ from PyQt5.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QMenu,
+    QVBoxLayout,
 )
 from PyQt5.QtGui import QIntValidator
 from PyQt5.QtCore import (
@@ -301,10 +313,14 @@ from PyQt5.QtCore import (
 )
 from asyncqt import QEventLoop
 
-from gui.font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
-from gui.ini_utils import INI_DIR
-from gui import motor_signals
-from gui.resize_utils import ProportionalResizer
+from gui.common.font_scaling import FontScaler
+from gui.common.font_utils import apply_saved_font_size
+from gui.common.ini_utils import INI_DIR
+from gui.common import motor_signals
+from gui.common.resize_utils import ProportionalResizer
+from gui.common.ui_levels import LevelSwitcher
+from gui.widgets.layered_window import LayeredMainWindow
+from ptychosaxs.api.scan_traj import FLY, STEP, TAKESHOT
 
 import pyqtgraph as pg
 
@@ -318,7 +334,7 @@ except ImportError:
 # which was imported behind a try/except that fell back to a no-op stub: on any
 # machine without it installed the GUI silently stopped remembering the working
 # folder, log filename, data basepaths, scan name and scan number.
-from gui.beamline_ini import (
+from gui.common.beamline_ini import (
     SafeIni as _IniClass,
     ensure_default_ini as _ensure_default_ini,
     quote_list as _ini_quote_list,
@@ -679,13 +695,12 @@ class _ErrorDict(dict):
 # ==========================================================================
 class ptyco_main_control(QObject):
     # Controller class — NOT a window itself.
-    # The visible window is self.ui, loaded from ptycoSAXS.ui.
+    # The visible window is self.ui, loaded from ptychoSAXS_large.ui.
     # Inheriting QObject (not QMainWindow) prevents a blank second window
     # from appearing alongside self.ui when the event loop starts.
 
     def __init__(self):
         super(ptyco_main_control, self).__init__()
-        guiName = os.path.join(UI_DIR, "ptycoSAXS.ui")
         self.pts = pts
         print("Connecting to PTS...")
         if not DEBUG_MOTORS:
@@ -701,7 +716,7 @@ class ptyco_main_control(QObject):
                         "IOC can reach the controller (File > IOC info)."
                     )
         # self.beamstatus = beamstatus()
-        self.ui = uic.loadUi(guiName)
+        self.ui = self._large_ui = uic.loadUi(LARGE_UI)
 
         # Expose module-level hardware objects on self so handlers can access
         # them via self.w.xxx without importing rungui (which would re-execute
@@ -719,10 +734,18 @@ class ptyco_main_control(QObject):
         from gui.handlers.motor_handler import MotorHandler
         from gui.handlers.scan_handler import ScanHandler
         from gui.handlers.status_handler import StatusHandler
+        from gui.handlers.traj_handler import TrajHandler
+        from gui.handlers.user_view import UserViewHandler
 
         self.motor_handler = MotorHandler(self)
         self.scan_handler = ScanHandler(self)
         self.status_handler = StatusHandler(self)
+        self.traj_handler = TrajHandler(self)
+        self.user_view = UserViewHandler(self)
+        self._scan_status = "No Scan"
+        self._status_lines = []       # (text, is_error), replayed on a view switch
+        self.qds_xy_scatter = False   # the user view plots QDS X vs Z first
+        self.scans_blocked = DEBUG_SCAN_BLOCKING
 
         # A per-instance copy of the module defaults. The scan-axis selectors
         # write here, and every scan entry point resolves its unset motor
@@ -898,11 +921,13 @@ class ptyco_main_control(QObject):
                 # a click to start a scan -- a direct call has no sender.
                 # The n=n default binds this iteration's value; _c takes
                 # the `checked` bool that clicked() supplies.
+                # Each scan button writes a trajectory file and runs it at
+                # once -- see TrajHandler.write_and_run.
                 self.ui.findChild(QPushButton, "pb_lup_%i" % n).clicked.connect(
-                    lambda _c=False, n=n: self.stepscan(n - 1)
+                    lambda _c=False, n=n: self.traj_handler.write_and_run(STEP, [n - 1])
                 )
                 self.ui.findChild(QPushButton, "pb_SAXSscan_%i" % n).clicked.connect(
-                    lambda _c=False, n=n: self.fly(n - 1)
+                    lambda _c=False, n=n: self.traj_handler.write_and_run(FLY, [n - 1])
                 )
             enable = pts is not None and self.motorconnected[i]
             self._set_motor_widgets_enabled(n, enable)
@@ -952,17 +977,20 @@ class ptyco_main_control(QObject):
             self.smaract_set_defaultspeed
         )
         self.ui.actionScanStop.triggered.connect(self.stopscan)
-        self.ui.pushButton_stopScan.clicked.connect(self.stopscan)
-        self.ui.pushButton_stopScan.setEnabled(False)
-        self.ui.pushButton_resetError.clicked.connect(self.reset_error_status)
-        self.ui.pushButton_stopScan.setStyleSheet(
-            "background-color: rgb(230, 230, 230); color: rgb(150, 150, 150);"
-        )
         for _lcd in (self.ui.lcd_X, self.ui.lcd_Z, self.ui.lcd_Z_2):
             _lcd.setStyleSheet("background-color: rgb(240, 240, 240);")
         self.isStopScanIssued = False
         self.is_hexrecord_required = False
         self.shutter_close_after_scan = False
+        self.fast_shutter_close_after_scan = False
+        # The detectors always write through their HDF5 plugin. Kept as an
+        # attribute only because the ptychosaxs executors read it off the
+        # window (see ptychosaxs.api.scans WINDOW_NAMES).
+        self.use_hdf_plugin = True
+        # Interferometer sampling period picked from the exposure time at
+        # each scan start (scan_handler.apply_auto_softglue_rate). Choosing
+        # a fixed period in the setup window or the menu turns this off.
+        self.softglue_rate_auto = True
         self.ui.actionflyX_and_stepY.triggered.connect(lambda: self.fly2d())
         self.ui.actionsnake.triggered.connect(lambda: self.fly2d(snake=True))
         self.ui.actionstepscan.triggered.connect(lambda: self.stepscan2d())
@@ -973,28 +1001,21 @@ class ptyco_main_control(QObject):
         self.ui.actionstep_2D.triggered.connect(
             lambda: self.stepscan3d(*self._scan_axis_indices())
         )
-        self.ui.pb_lup_step2d.clicked.connect(lambda: self.stepscan2d())
-        self.ui.pb_SAXSscan_fly2d.clicked.connect(
-            lambda: self.fly2d(snake=True)
+        self.ui.pb_lup_step2d.clicked.connect(
+            lambda: self.traj_handler.write_and_run(
+                STEP, [self.DEFAULTS["xmotor"], self.DEFAULTS["ymotor"]])
         )
-        self.ui.pb_extra_scans.clicked.connect(self._open_extra_scans_window)
-        # pb_sample_alignment is added to ptycoSAXS.ui by hand. Warn rather
-        # than raise if it is missing, so the rest of the panel still starts.
-        _pb_align = self.ui.findChild(QPushButton, "pb_sample_alignment")
-        if _pb_align is None:
-            print("[WARNING] pb_sample_alignment not found in ptycoSAXS.ui - "
-                  "the sample alignment window cannot be opened. Add a "
-                  "QPushButton with that objectName to the .ui file.")
-        else:
-            _pb_align.clicked.connect(self._open_sample_alignment_window)
+        self.ui.pb_SAXSscan_fly2d.clicked.connect(
+            lambda: self.traj_handler.write_and_run(
+                FLY, [self.DEFAULTS["xmotor"], self.DEFAULTS["ymotor"]])
+        )
         self.ui.pushButton_checkFlyBlur.clicked.connect(
             self.scan_handler.check_fly_blur
         )
-        self.ui.pb_timeSeries.clicked.connect(self.scan_handler.time_series)
-        self.ui.pb_takeshot.clicked.connect(self.scan_handler.takeshot)
-        self.ui.pb_writeMacro.clicked.connect(self._open_macro_window)
-        self.ui.pb_sendScanParamToMacro.setEnabled(False)
-        self.ui.pb_sendScanParamToMacro.clicked.connect(self._send_scan_param_to_macro)
+        self.ui.pb_takeshot.clicked.connect(
+            lambda: self.traj_handler.write_and_run(TAKESHOT)
+        )
+        self._wire_common_view()
         self.ui.pushButton_plotScanPositions.clicked.connect(
             lambda: self.scan_handler.plot_scan_positions_2d(
                 self.DEFAULTS["xmotor"], self.DEFAULTS["ymotor"]
@@ -1010,13 +1031,10 @@ class ptyco_main_control(QObject):
             self.scan_handler.go_to_saved_positions
         )
         self.ui.pb_lup_step3d.clicked.connect(
-            lambda: self.stepscan3d(*self._scan_axis_indices())
+            lambda: self.traj_handler.write_and_run(STEP, list(self._scan_axis_indices()))
         )
         self.ui.pb_SAXSscan_fly3d.clicked.connect(
-            lambda: self.fly3d(snake=True)
-        )
-        self.ui.pb_helix_scan.clicked.connect(
-            lambda: self.scan_handler.helix_fly_choose_axis(self.DEFAULTS["phimotor"])
+            lambda: self.traj_handler.write_and_run(FLY, list(self._scan_axis_indices()))
         )
 
         if DEBUG_SCAN_BLOCKING:
@@ -1059,12 +1077,6 @@ class ptyco_main_control(QObject):
         self.ui.pushButton_workingfolder_browse.clicked.connect(
             self._browse_workingfolder
         )
-        self.ui.edit_scanname.returnPressed.connect(lambda: self.update_scanname(True))
-        self.ui.edit_scannumber.returnPressed.connect(
-            lambda: self.update_scanname(True)
-        )
-        self.ui.pushButton_scanNp1.clicked.connect(self._scan_number_plus_one)
-        self.ui.pushButton_scanNm1.clicked.connect(self._scan_number_minus_one)
         self.ui.actionSet_step_acq_time.triggered.connect(
             self.set_step_acq_time
         )
@@ -1074,7 +1086,6 @@ class ptyco_main_control(QObject):
         self.ui.actionShutter_Close_Afterscan.triggered.connect(
             self.set_shutter_close_after_scan
         )
-        self.ui.actionUse_hdf_plugin.triggered.connect(self.set_hdf_plugin_use)
         self.ui.actionPtychography_mode.triggered.connect(self.select_detector_mode)
         self.ui.actionCapture_multi_frames_step.triggered.connect(
             self.select_hdf_multiframecapture_step
@@ -1084,9 +1095,6 @@ class ptyco_main_control(QObject):
         )
         self.ui.actionSet_basepaths.triggered.connect(self.set_basepaths)
         self.ui.actionPut_DET_alignmode.triggered.connect(self.set_det_alignmode)
-        self.ui.pushButton_setAlign.clicked.connect(lambda: self.set_det_alignmode(True))
-        self.ui.pushButton_setScan.clicked.connect(lambda: self.set_det_alignmode(False))
-        self.ui.pushButton_checkSAXS.clicked.connect(self.update_saxs_det_status)
         # Deliberately not connected. test_hexapod_fly() drives the direct
         # GCS socket, which requires the 12idbHXP IOC to be stopped, and that
         # is not a state a running GUI should assume. Disabled rather than
@@ -1137,7 +1145,6 @@ class ptyco_main_control(QObject):
 
         self.ui.btn_record_z1_2.clicked.connect(lambda: self.record_qdsZ(4))
         # self.ui.btn_record_z2_2.clicked.connect(lambda: self.record_qdsZ(5))
-        self.ui.pbar_scan.setValue(0)
 
         # ── Hexapod navigation panel ───────────────────────────────────────
         # self.ui.pb_hp_left.clicked.connect(lambda: self._hp_tweak(0, -1))
@@ -1160,15 +1167,8 @@ class ptyco_main_control(QObject):
         # ── Copy current positions ─────────────────────────────────────────
         self.ui.pushButton_copyCurrent.clicked.connect(self._copy_current_positions)
 
-        # ── Setup window ───────────────────────────────────────────────────
-        self.ui.pushButton_setup.clicked.connect(self._open_setup_window)
-        self.ui.pushButton_openOpticsGui.clicked.connect(self._open_optics_gui)
-        self.ui.pushButton_checkUpOptics.clicked.connect(
-            self._open_optics_status_window)
-
         # Defaults
         self.isStruckCountNeeded = False
-        self.set_hdf_plugin_use(True)
         self.select_hdf_multiframecapture_fly(True)
 
         # set default softglue collection freq. 1000 micro seconds.
@@ -1227,34 +1227,203 @@ class ptyco_main_control(QObject):
 
         self.set_scan_status("No Scan")
 
-        self.ui.pushButton_exit.clicked.connect(self.exit_gui)
+        # ── More/Less ladder: large view <-> user view ──────────────────────
+        # Everything above wired the large view. It is never destroyed: the
+        # user view is a LayeredMainWindow backed by it, so the scan engine's
+        # settings (menu actions, per-motor fields, position labels) keep
+        # living there while the user view is on screen.
+        self._large_plots = (self.plot_widget, self.ax, self.ax2, self.ax3)
+        self._large_resizer = None
+        self._levels = LevelSwitcher(
+            [LARGE_UI, USER_UI], self._build_view, "mainPanel",
+            persistent=lambda ui: ui is self._large_ui)
+        self._levels.start()
 
-        self.ui.show()
+    # ── Views: the large panel and the user panel ──────────────────────────
 
-        # QMainWindow only resolves its central widget's real size once the
-        # window is actually shown (layout activation is deferred) — force
-        # that to happen now, before snapshotting the as-designed layout, so
-        # the reference size/geometry used for proportional rescaling is
-        # accurate. Capturing this before restoreGeometry() means later
-        # rescales are always relative to the true .ui-authored arrangement.
-        QApplication.processEvents()
-        self._main_resizer = ProportionalResizer(self.ui.centralWidget())
-        self.ui.centralWidget().setMaximumSize(16777215, 16777215)
-        self.ui.setMinimumSize(
-            int(self._main_resizer.orig_size.width() * 0.4),
-            int(self._main_resizer.orig_size.height() * 0.4),
+    def _wire_common_view(self) -> None:
+        """Connect the widgets both views have, on whichever is self.ui.
+
+        One list for both, so a button that exists in the two .ui files
+        cannot end up doing different things in each. Buttons whose job
+        differs between the views (takeshot, Check Fly Blur) are wired by
+        each view's own code instead.
+        """
+        ui = self.ui
+        ui.pushButton_stopScan.clicked.connect(self.stopscan)
+        ui.pushButton_stopScan.setEnabled(False)
+        ui.pushButton_resetError.clicked.connect(self.reset_error_status)
+        ui.pb_extra_scans.clicked.connect(self._open_extra_scans_window)
+        # pb_sample_alignment is added to the .ui by hand. Warn rather than
+        # raise if it is missing, so the rest of the panel still starts.
+        _pb_align = ui.findChild(QPushButton, "pb_sample_alignment")
+        if _pb_align is None:
+            print("[WARNING] pb_sample_alignment not found in the .ui - "
+                  "the sample alignment window cannot be opened. Add a "
+                  "QPushButton with that objectName to the .ui file.")
+        else:
+            _pb_align.clicked.connect(self._open_sample_alignment_window)
+        ui.pb_timeSeries.clicked.connect(self.scan_handler.time_series)
+        ui.pb_writeMacro.clicked.connect(self._open_macro_window)
+        macro = getattr(self, "macro_window", None)
+        ui.pb_sendScanParamToMacro.setEnabled(macro is not None and macro.isVisible())
+        ui.pb_sendScanParamToMacro.clicked.connect(self._send_scan_param_to_macro)
+        ui.pb_helix_scan.clicked.connect(
+            lambda: self.scan_handler.helix_fly_choose_axis(self.DEFAULTS["phimotor"])
         )
+        phim, xm, ym = self.DEFAULTS["phimotor"], self.DEFAULTS["xmotor"], self.DEFAULTS["ymotor"]
+        ui.pb_helix_scan.setEnabled(
+            pts is not None
+            and phim < len(self.motorconnected) and self.motorconnected[phim]
+            and (self.motorconnected[ym] or self.motorconnected[xm])
+        )
+        ui.edit_scanname.returnPressed.connect(lambda: self.update_scanname(True))
+        ui.edit_scannumber.returnPressed.connect(lambda: self.update_scanname(True))
+        ui.pushButton_scanNp1.clicked.connect(self._scan_number_plus_one)
+        ui.pushButton_scanNm1.clicked.connect(self._scan_number_minus_one)
+        ui.pushButton_setAlign.clicked.connect(lambda: self.set_det_alignmode(True))
+        ui.pushButton_setScan.clicked.connect(lambda: self.set_det_alignmode(False))
+        ui.pushButton_checkSAXS.clicked.connect(self.update_saxs_det_status)
+        ui.pushButton_setup.clicked.connect(self._open_setup_window)
+        ui.pushButton_openOpticsGui.clicked.connect(self._open_optics_gui)
+        ui.pushButton_checkUpOptics.clicked.connect(self._open_optics_status_window)
+        ui.pushButton_exit.clicked.connect(self.exit_gui)
+        ui.pbar_scan.setValue(0)
 
-        _s = QSettings("ptychoSAXS", "ptychoSAXS")
-        _geom = _s.value("mainWindow/geometry")
-        if _geom is not None:
-            self.ui.restoreGeometry(_geom)
-        # The restored (or otherwise resolved) window size may differ from
-        # the design-time size captured above — resync widget geometry to it
-        # immediately instead of waiting for the user to resize manually.
-        self._main_resizer.rescale()
+    def _build_view(self, path):
+        """LevelSwitcher's build callback: show the view at `path`."""
+        if path == LARGE_UI:
+            return self._show_large_view()
+        return self._show_user_view(path)
 
-        apply_saved_font_size(self.ui)
+    @staticmethod
+    def _ensure_nav_button(ui, name, text, tip):
+        """Add a More/Less button to the status bar if the .ui has none.
+
+        LevelSwitcher wires pushButton_More/pushButton_Less by name; adding
+        them here keeps both .ui files usable as they are, and a button
+        placed in Designer under the same name takes over automatically.
+        """
+        if QObject.findChild(ui, QPushButton, name) is not None:
+            return
+        button = QPushButton(text)
+        button.setObjectName(name)
+        button.setToolTip(tip)
+        ui.statusBar().addPermanentWidget(button)
+
+    def _migrate_geometry_key(self, path):
+        """Carry the pre-ladder "mainWindow/geometry" over to the large view."""
+        s = QSettings("ptychoSAXS", "ptychoSAXS")
+        new_key = "mainPanel/geometry/%s" % os.path.basename(path)
+        old = s.value("mainWindow/geometry")
+        if old is not None and s.value(new_key) is None:
+            s.setValue(new_key, old)
+
+    def _show_large_view(self):
+        ui = self._large_ui
+        self.ui = ui
+        self.plot_widget, self.ax, self.ax2, self.ax3 = self._large_plots
+        self.qds_xy_scatter = False
+        self._ensure_nav_button(ui, "pushButton_Less", "Less",
+                                "Switch to the simplified user panel")
+        ui.show()
+        if self._large_resizer is None:
+            # QMainWindow only resolves its central widget's real size once
+            # the window is actually shown (layout activation is deferred) —
+            # force that now, before snapshotting the as-designed layout, so
+            # the reference geometry used for proportional rescaling is the
+            # true .ui-authored arrangement. Done on first show only: the
+            # window is kept, so its snapshot stays valid.
+            QApplication.processEvents()
+            self._large_resizer = ProportionalResizer(ui.centralWidget())
+            self._main_resizer = self._large_resizer
+            ui.centralWidget().setMaximumSize(16777215, 16777215)
+            ui.setMinimumSize(
+                int(self._large_resizer.orig_size.width() * 0.4),
+                int(self._large_resizer.orig_size.height() * 0.4),
+            )
+            # Snapshot the as-designed point sizes now, before any geometry
+            # is restored, for the same reason the resizer snapshots
+            # geometry here: both scale against the designed size.
+            if DYNAMIC_FONTS:
+                self._large_font_scaler = FontScaler(ui.centralWidget())
+            self._migrate_geometry_key(LARGE_UI)
+        self._levels.restore_geometry(ui)
+        # The restored size may differ from the design-time size captured
+        # above — resync widget geometry and fonts to it now.
+        self._large_resizer.rescale()
+        if DYNAMIC_FONTS:
+            self._large_font_scaler.rescale()
+        self._refresh_view_state()
+        return ui
+
+    def _show_user_view(self, path):
+        ui = LayeredMainWindow(self._large_ui)
+        uic.loadUi(path, ui)
+        self.ui = ui
+        self._wire_common_view()
+        self.user_view.wire()
+        if DEBUG_SCAN_BLOCKING:
+            for name in ("pushButton_run_scan", "pb_helix_scan", "pb_extra_scans"):
+                widget = QObject.findChild(ui, QPushButton, name)
+                if widget is not None:
+                    widget.setEnabled(False)
+
+        # Same three live QDS plots as the large view, except that the
+        # first shows X against Z (see StatusHandler.plot).
+        self.plot_widget = pg.GraphicsLayoutWidget()
+        self.ax = self.plot_widget.addPlot(row=0, col=0)
+        self.ax2 = self.plot_widget.addPlot(row=1, col=0)
+        self.ax3 = self.plot_widget.addPlot(row=2, col=0)
+        for axis in ("bottom", "left"):
+            self.ax.getAxis(axis).enableAutoSIPrefix(False)
+        QObject.findChild(ui, QVBoxLayout, "verticalLayout_2").addWidget(self.plot_widget)
+        self.qds_xy_scatter = True
+
+        self._ensure_nav_button(ui, "pushButton_More", "More",
+                                "Switch to the full panel")
+        ui.setWindowTitle(self._large_ui.windowTitle())
+
+        ui.show()
+        QApplication.processEvents()
+        ui._resizer = ProportionalResizer(ui.centralWidget())
+        ui.centralWidget().setMaximumSize(16777215, 16777215)
+        ui.setMinimumSize(
+            int(ui._resizer.orig_size.width() * 0.4),
+            int(ui._resizer.orig_size.height() * 0.4),
+        )
+        self._main_resizer = ui._resizer
+        if DYNAMIC_FONTS:
+            ui._font_scaler = FontScaler(ui.centralWidget())
+        self._levels.restore_geometry(ui)
+        ui._resizer.rescale()
+        if DYNAMIC_FONTS:
+            ui._font_scaler.rescale()
+        self._refresh_view_state()
+        self.user_view.replay_status(self._status_lines)
+        return ui
+
+    def _refresh_view_state(self):
+        """Bring a view that was just shown up to date with the session."""
+        self.ui.edit_scanname.setText(self.parameters.scan_name)
+        self.update_scannumber()
+        self.update_scanname()
+        self.set_scan_status(self._scan_status)
+        self.scan_handler._update_saxs_buttons_enabled()
+        self.user_view.show_working_folder()
+
+    def report_error(self, msg: str) -> None:
+        """Show an error the way scan errors are shown: status label, status
+        list, console."""
+        print(msg)
+        self.messages["recent error message"] = msg
+
+    def post_status(self, text: str, error: bool = False) -> None:
+        """One line in the user view's status list, kept for view switches."""
+        line = "%s  %s" % (time.strftime("%H:%M:%S"), text)
+        self._status_lines.append((line, error))
+        del self._status_lines[:-200]
+        self.user_view.post_status(line, error)
 
     # ── Motor widget enable/disable ────────────────────────────────────────
 
@@ -1734,6 +1903,7 @@ class ptyco_main_control(QObject):
                     val = self.pts.get_pos(name)
                 # self.ui.findChild(QLineEdit, "ed_%i"%(i+1)).setText("%0.4f"%val)
                 self.ui.findChild(QLabel, "lb_%i" % (i + 1)).setText("%0.6f" % val)
+                self.user_view.show_rbv(name, val)
                 val = None
         else:
             i = self.motornames.index(axis)
@@ -1743,6 +1913,7 @@ class ptyco_main_control(QObject):
                 val = self.pts.get_pos(axis)
             # self.ui.findChild(QLineEdit, "ed_%i"%(i+1)).setText("%0.4f"%val)
             self.ui.findChild(QLabel, "lb_%i" % (i + 1)).setText("%0.6f" % val)
+            self.user_view.show_rbv(axis, val)
 
     def update_motorpos(self, value):
         self.updatepos(self.signalmotor, value)
@@ -1918,10 +2089,9 @@ class ptyco_main_control(QObject):
         except Exception:
             pass
 
-        # 5. Persist window position.
+        # 5. Persist window position (under the shown level's own key).
         try:
-            _s = QSettings("ptychoSAXS", "ptychoSAXS")
-            _s.setValue("mainWindow/geometry", self.ui.saveGeometry())
+            self._levels.save_geometry()
         except Exception:
             pass
 
@@ -1935,9 +2105,6 @@ class ptyco_main_control(QObject):
 
     # ── Scan handler delegations ───────────────────────────────────────────
     # All scan logic lives in handlers/scan_handler.py; these are thin pass-throughs.
-
-    def set_hdf_plugin_use(self, value=None):
-        return self.scan_handler.set_hdf_plugin_use(value)
 
     def select_detector_mode(self, value=None):
         return self.scan_handler.select_detector_mode(value)
@@ -1966,8 +2133,8 @@ class ptyco_main_control(QObject):
     def reset_det_flymode(self):
         return self.scan_handler.reset_det_flymode()
 
-    def set_softglue_in(self, val):
-        return self.scan_handler.set_softglue_in(val)
+    def set_softglue_in(self, val, auto=False):
+        return self.scan_handler.set_softglue_in(val, auto)
 
     def stopscan(self):
         return self.scan_handler.stopscan()
@@ -2248,7 +2415,9 @@ class ptyco_main_control(QObject):
         return self.status_handler.set_logfilename()
 
     def update_workingfolder(self, folder=""):
-        return self.status_handler.update_workingfolder(folder)
+        result = self.status_handler.update_workingfolder(folder)
+        self.user_view.show_working_folder()
+        return result
 
     def select_qds_units(self):
         return self.status_handler.select_qds_units()
@@ -2294,6 +2463,9 @@ class ptyco_main_control(QObject):
 
     def reset_qdsZ2(self):
         return self.status_handler.reset_qdsZ2()
+
+    def reset_qds_all(self):
+        return self.status_handler.reset_qds_all()
 
     def record_qdsX(self, value):
         return self.status_handler.record_qdsX(value)
@@ -2436,19 +2608,21 @@ class ptyco_main_control(QObject):
         One place both the Check Upstream Optics window and the pre-scan
         guard read from, so they can never disagree.
         """
-        from gui import optics_status
+        from gui.optics import optics_status
 
         return optics_status.read_status(caget=self._optics_caget())
 
     def _open_optics_status_window(self):
         """Show the upstream optics report. Non-modal, so it can stay open
         while motors are nudged from the optics GUI's separate process."""
-        from gui.optics_status_dialog import OpticsStatusDialog
+        from gui.optics.optics_status_dialog import OpticsStatusDialog
 
         window = getattr(self, "optics_status_window", None)
         if window is None:
+            # Parented to the large view, which is never destroyed: the
+            # user view is, on every switch, and would take this with it.
             window = OpticsStatusDialog(
-                self.ui,
+                self._large_ui,
                 caget=self._optics_caget(),
                 eye_state=lambda: self.xray_eye.is_in(),
             )
@@ -2460,7 +2634,7 @@ class ptyco_main_control(QObject):
     def _open_macro_window(self):
         """Open (or raise) the non-modal scan macro window."""
         if getattr(self, "macro_window", None) is None:
-            from gui.macro_window import MacroWindow
+            from gui.macros.macro_window import MacroWindow
 
             self.macro_window = MacroWindow(self)
             apply_saved_font_size(self.macro_window)
@@ -2477,10 +2651,10 @@ class ptyco_main_control(QObject):
 
     # ── X-ray eye (Detectors menu) ─────────────────────────────────────────
     # State is shared with the optics GUI (a separate process) and the sample
-    # alignment window through the command PV's readback -- see gui/xray_eye.py.
+    # alignment window through the command PV's readback -- see gui/optics/xray_eye.py.
 
     def _wire_xray_eye_menu(self):
-        from gui.xray_eye import XrayEye
+        from gui.optics.xray_eye import XrayEye
 
         if DEBUG_DEVICES:
             from ptychosaxs.debug.debug_stubs import FakePV as _PV
@@ -2513,7 +2687,7 @@ class ptyco_main_control(QObject):
     def _open_sample_alignment_window(self):
         """Open (or raise) the non-modal guided sample alignment window."""
         if getattr(self, "sample_alignment_window", None) is None:
-            from gui.sample_alignment import SampleAlignmentWindow
+            from gui.alignment.sample_alignment import SampleAlignmentWindow
 
             self.sample_alignment_window = SampleAlignmentWindow(self)
         # SampleAlignmentWindow.show() also raises, activates, restarts the
@@ -2602,26 +2776,12 @@ class ptyco_main_control(QObject):
         apply_saved_font_size(dlg)
 
         # ── Populate with current state ────────────────────────────────────
-        dlg.spinBox_fontSize.setValue(
-            QSettings("ptychoSAXS", "ptychoSAXS").value(
-                "ui/fontSize", DEFAULT_FONT_SIZE, type=int
-            )
-        )
-
-        def _on_font_size_changed(size):
-            apply_font_size_to_tree(self.ui, size)
-            apply_font_size_to_tree(dlg, size)
-            if getattr(self, "macro_window", None) is not None:
-                apply_font_size_to_tree(self.macro_window, size)
-            if getattr(self, "extra_scans_window", None) is not None:
-                apply_font_size_to_tree(self.extra_scans_window, size)
-            if getattr(self, "sample_alignment_window", None) is not None:
-                apply_font_size_to_tree(self.sample_alignment_window.ui, size)
-            QSettings("ptychoSAXS", "ptychoSAXS").setValue("ui/fontSize", size)
-
-        dlg.spinBox_fontSize.valueChanged.connect(_on_font_size_changed)
-
-        dlg.lineEdit_logFname.setText(self.parameters.logfilename)
+        # The log file always lives in the data basepath as the GUI sees it,
+        # i.e. the Working folder, so only its name is shown and edited here.
+        # parameters.logfilename itself stays a full path: that is what the
+        # log writers open and what the .ini has always held.
+        log_folder = self.ui.edit_workingfolder.text()
+        dlg.lineEdit_logFname.setText(os.path.basename(self.parameters.logfilename))
         dlg.lineEdit_dataBasepaths.setText(
             getattr(self.parameters, "base_linux_datafolder", "")
         )
@@ -2644,12 +2804,28 @@ class ptyco_main_control(QObject):
         dlg.lineEdit_scanWait.setText(str(self.parameters._step_acq_time))
         dlg.lineEdit_acqTime.setText(str(self.parameters._fly_acq_time))
 
+        # Raise a too-short fly acquisition time as soon as it is entered, so
+        # the operator sees the value that will actually be used.
+        min_fly_acq_time = self.scan_handler.MIN_FLY_ACQ_TIME
+
+        def _clamp_fly_acq_time():
+            try:
+                acq_time = float(dlg.lineEdit_acqTime.text())
+            except ValueError:
+                return
+            if acq_time < min_fly_acq_time:
+                dlg.lineEdit_acqTime.setText(str(min_fly_acq_time))
+
+        dlg.lineEdit_acqTime.editingFinished.connect(_clamp_fly_acq_time)
+
         dlg.checkBox_SAXS.setChecked(self.ui.actionSAXS.isChecked())
         dlg.checkBox_WAXS.setChecked(self.ui.actionWAXS.isChecked())
         dlg.checkBox_closeShutterAfterScan.setChecked(
             self.ui.actionShutter_Close_Afterscan.isChecked()
         )
-        dlg.checkBox_hdf5Plugin.setChecked(self.ui.actionUse_hdf_plugin.isChecked())
+        dlg.checkBox_closeFastShutterAfterScan.setChecked(
+            self.fast_shutter_close_after_scan
+        )
         dlg.checkBox_multiFramesStep.setChecked(
             self.ui.actionCapture_multi_frames_step.isChecked()
         )
@@ -2673,7 +2849,7 @@ class ptyco_main_control(QObject):
         # scan .ini because it is a per-operator UI preference, not a scan
         # parameter, and it is mirrored by the "Expert User" checkbox on the
         # alignment window's first page -- both are views of the one setting.
-        from gui.sample_alignment import EXPERT_KEY, confirm_beamline_staff
+        from gui.alignment.sample_alignment import EXPERT_KEY, confirm_beamline_staff
 
         dlg.checkBox_expertMode.setChecked(
             QSettings("ptychoSAXS", "ptychoSAXS").value(
@@ -2690,31 +2866,37 @@ class ptyco_main_control(QObject):
 
         dlg.checkBox_expertMode.toggled.connect(_on_expert_toggled)
 
-        # Radio buttons — grouped by id matching set_softglue_in(val)
+        # Radio buttons — grouped by id matching set_softglue_in(val), with
+        # Auto as id 0 (picked from the exposure time at each scan start).
         btn_group = QButtonGroup(dlg)
+        btn_group.addButton(dlg.radioButton_ifAuto, 0)
         btn_group.addButton(dlg.radioButton_0p1ms, 1)
         btn_group.addButton(dlg.radioButton_1ms, 2)
         btn_group.addButton(dlg.radioButton_10ms, 3)
-        if self.ui.actionTrigout.isChecked():
+        if self.softglue_rate_auto:
+            dlg.radioButton_ifAuto.setChecked(True)
+        elif self.ui.actionTrigout.isChecked():
             dlg.radioButton_0p1ms.setChecked(True)
         elif self.ui.actionDetout.isChecked():
             dlg.radioButton_1ms.setChecked(True)
         else:
             dlg.radioButton_10ms.setChecked(True)
 
-        # Browse button — pick a log file path without closing the dialog.
+        # Browse button — pick a log file without closing the dialog. It opens
+        # in the data basepath and keeps only the file's name, since that is
+        # where the log is written regardless of the folder browsed to.
         # Logging only ever appends to this file (see write_scaninfo_to_logfile),
         # so picking an existing filename should not warn about overwriting it.
         def _browse_logfile():
             path, _ = QFileDialog.getSaveFileName(
                 dlg,
                 "Select Log File",
-                dlg.lineEdit_logFname.text(),
+                os.path.join(log_folder, dlg.lineEdit_logFname.text()),
                 "Text files (*.txt);;All files (*)",
                 options=QFileDialog.DontConfirmOverwrite,
             )
             if path:
-                dlg.lineEdit_logFname.setText(path)
+                dlg.lineEdit_logFname.setText(os.path.basename(path))
 
         dlg.pushButton_logFname.clicked.connect(_browse_logfile)
 
@@ -2739,8 +2921,10 @@ class ptyco_main_control(QObject):
         if _setup_result != QDialog.Accepted:
             return
 
-        # Log filename
-        logfname = dlg.lineEdit_logFname.text()
+        # Log filename: a bare name, written into the data basepath. A blank
+        # field leaves logging off, as before.
+        logname = os.path.basename(dlg.lineEdit_logFname.text().strip())
+        logfname = os.path.join(log_folder, logname) if logname else ""
         if logfname != self.parameters.logfilename:
             self.parameters.logfilename = logfname
             self.parameters.scan_number = 0
@@ -2767,7 +2951,7 @@ class ptyco_main_control(QObject):
             pass
         try:
             acq_time = float(dlg.lineEdit_acqTime.text())
-            acq_time = max(acq_time, self.scan_handler.OVERHEAD_FLY)
+            acq_time = max(acq_time, min_fly_acq_time)
             self.parameters._fly_acq_time = acq_time
         except ValueError:
             pass
@@ -2780,13 +2964,15 @@ class ptyco_main_control(QObject):
         self.select_detectors(6, dlg.checkBox_xrfXSP3.isChecked())
 
         # Modes and toggles
-        self.set_hdf_plugin_use(dlg.checkBox_hdf5Plugin.isChecked())
         self.select_hdf_multiframecapture_step(dlg.checkBox_multiFramesStep.isChecked())
         self.select_hdf_multiframecapture_fly(dlg.checkBox_multiFramesFly.isChecked())
         self.select_detector_mode(dlg.checkBox_ptychoMode.isChecked())
         self.set_monitor_beamline_status(dlg.checkBox_monitorBeamline.isChecked())
         self.set_shutter_close_after_scan(
             dlg.checkBox_closeShutterAfterScan.isChecked()
+        )
+        self.fast_shutter_close_after_scan = (
+            dlg.checkBox_closeFastShutterAfterScan.isChecked()
         )
         # Stored as 0/1, not a bool: the ini round-trips numbers reliably,
         # whereas a False written as the text "False" would read back truthy.
@@ -2808,7 +2994,9 @@ class ptyco_main_control(QObject):
 
         # Softglue collection speed
         speed_id = btn_group.checkedId()
-        if speed_id in (1, 2, 3):
+        if speed_id == 0:
+            self.softglue_rate_auto = True
+        elif speed_id in (1, 2, 3):
             self.set_softglue_in(speed_id)
 
         self.parameters.writeini()
@@ -2920,6 +3108,9 @@ class ptyco_main_control(QObject):
                 "Scan Error"→ red    rgb(255, 0, 0)
                 "No Scan"   → yellow #fffde7  (default/idle)
         """
+        previous, self._scan_status = getattr(self, "_scan_status", "No Scan"), status
+        if previous in ("Scanning", "Stopping") and status in ("No Scan", "Stopped"):
+            self._on_scan_ended("yes" if status == "No Scan" else "partial")
         scanning = status == "Scanning"
         self.ui.pushButton_stopScan.setEnabled(scanning)
         if scanning:
@@ -2949,6 +3140,17 @@ class ptyco_main_control(QObject):
             lbl.setText("Not Scanning")
             lbl.setStyleSheet("background-color: #fffde7; color: #000000")
 
+    def _on_scan_ended(self, outcome: str) -> None:
+        """A scan finished ("yes") or was stopped ("partial")."""
+        number = getattr(self.scan_handler, "_scan_number_at_start", self.parameters.scan_number)
+        run = self.traj_handler.running
+        if run is not None:
+            label = "%s %s" % (run["traj"].scan_id, run["traj"].sample_name)
+        else:
+            label = "S%04d %s" % (int(number), self.parameters.scan_name)
+        self.post_status("%s %s" % (label, "complete" if outcome == "yes" else "stopped by user"))
+        self.traj_handler.scan_ended(outcome)
+
     def _on_error_message(self, msg: str) -> None:
         if msg:
             QMetaObject.invokeMethod(
@@ -2962,9 +3164,18 @@ class ptyco_main_control(QObject):
     def _on_worker_error(self, traceback_str: str) -> None:
         print(traceback_str)
         self._apply_error_status(traceback_str)
+        # A worker that raised is a scan that died; a queued trajectory
+        # must not start on top of whatever state it left.
+        if self.isscan:
+            self.traj_handler.scan_ended("error")
 
     @pyqtSlot(str)
     def _apply_error_status(self, msg: str) -> None:
+        # A traceback's last line is the exception itself -- the one line
+        # the status list has room for; the label's tooltip keeps the rest.
+        lines = [line for line in msg.strip().splitlines() if line.strip()]
+        if lines:
+            self.post_status("ERROR: " + lines[-1].strip(), error=True)
         lbl = self.ui.findChild(QLabel, "label_scan_status")
         if lbl is None:
             return
@@ -3018,6 +3229,21 @@ beamline_client = None
 GUI_TYPE = "rungui"
 
 
+class _CurrentView:
+    """Stands for whichever main window the panel is showing right now.
+
+    The More/Less ladder replaces the window, so anything holding on to the
+    one that existed at startup (the single-instance focus request) would
+    raise a hidden or deleted window.
+    """
+
+    def __init__(self, panel):
+        self._panel = panel
+
+    def __getattr__(self, name):
+        return getattr(self._panel.ui, name)
+
+
 def main():
     global app, main_panel, beamline_client
     from ptychosaxs.client.qt import QtBeamlineClient, attach_single_instance
@@ -3047,7 +3273,7 @@ def main():
 
     build_devices()
     main_panel = ptyco_main_control()
-    attach_single_instance(main_panel.ui, beamline_client)
+    attach_single_instance(_CurrentView(main_panel), beamline_client)
     app.aboutToQuit.connect(beamline_client.close)
 
     # qasync's loop, because the panel's own long operations still run on

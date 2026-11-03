@@ -30,9 +30,15 @@ class StatusHandler:
 
     def __init__(self, window) -> None:
         self.w = window
-        self.ui = window.ui
         self._status_post_failures = 0
         self._connect_signals()
+
+    @property
+    def ui(self):
+        """The window currently shown. Resolved on every access, because the
+        More/Less ladder swaps the main window and a cached reference would
+        keep pointing at the one that was closed."""
+        return self.w.ui
 
     def _connect_signals(self) -> None:
         pass
@@ -261,6 +267,15 @@ class StatusHandler:
         self.w.parameters._ref_Z2 = r[2]
         self.w.parameters.writeini()
 
+    def reset_qds_all(self):
+        """Zero all three channels from one reading (user view's
+        "Set live pos to 0"), so they share a single instant."""
+        r = self.get_qds_pos(False)
+        self.w.parameters._ref_X = r[0]
+        self.w.parameters._ref_Z = r[1]
+        self.w.parameters._ref_Z2 = r[2]
+        self.w.parameters.writeini()
+
     def record_qdsX(self, value):
         txt = str(self.ui.lcd_X.value())
         if value == 1:
@@ -370,11 +385,20 @@ class StatusHandler:
             self.w.ax.clear()
             self.w.ax2.clear()
             self.w.ax3.clear()
-            if r.ndim == 1:
+            xy_scatter = getattr(self.w, "qds_xy_scatter", False) and r.ndim == 2
+            if xy_scatter:
+                # The user view's first plot is the sample's X-Z position:
+                # channel 2 against channel 3, drawn like the QDS scatter in
+                # the scan-positions window (see plot_scan_positions_2d).
+                self.w.ax.plot(x=r[:, 1], y=r[:, 2], pen=None, symbol="o",
+                               symbolSize=4, symbolBrush=pg.mkBrush("c"),
+                               symbolPen=pg.mkPen(None))
+            elif r.ndim == 1:
                 self.w.ax.plot(pos, r, pen=pg.mkPen("r"))
             else:
                 self.w.ax.plot(pos, r[:, 0], pen=pg.mkPen("r"))
-            self.w.ax.setLabel("bottom", xl)
+            if not xy_scatter:
+                self.w.ax.setLabel("bottom", xl)
 
             if len(self.w.plotlabels) == 0:
                 if self.w.isStruckCountNeeded:
@@ -386,7 +410,11 @@ class StatusHandler:
                     yl2 = "Z position (um)"
                     yl3 = "Z position (um)"
                 self.w.plotlabels = [yl, yl2, yl3]
-            self.w.ax.setLabel("left", self.w.plotlabels[0])
+            if xy_scatter:
+                self.w.ax.setLabel("bottom", self.w.plotlabels[1] or "QDS channel 2")
+                self.w.ax.setLabel("left", self.w.plotlabels[2] or "QDS channel 3")
+            else:
+                self.w.ax.setLabel("left", self.w.plotlabels[0])
             if r.ndim == 2:
                 self.w.ax2.plot(pos, r[:, 1], pen=pg.mkPen("r"))
                 self.w.ax2.setLabel("bottom", xl)

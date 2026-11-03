@@ -12,13 +12,13 @@ setup(
     packages=find_packages(
         include=["ptychosaxs*", "gui*"]
     ),
-    package_data={"gui": ["ui/*.ui", "ini/*.ini", "*.json"]},
+    package_data={"gui": ["ui/*.ui", "ini/*.ini", "*.json", "macros/*.json"]},
     url='#',
     license='LICENSE.txt',
     description='12ID-C ptycho-SAXS DAQ/Controller tool',
     python_requires=">=3.10",
     # py12inifunc used to be required here. Its .ini format now lives in
-    # gui/beamline_ini.py: the package was imported behind a try/except that
+    # gui/common/beamline_ini.py: the package was imported behind a try/except that
     # fell back to a no-op stub, so an environment missing it lost every
     # setting the GUI tried to persist, silently.
     install_requires=[

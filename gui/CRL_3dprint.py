@@ -31,9 +31,9 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
-from gui.font_utils import DEFAULT_FONT_SIZE, apply_font_size_to_tree
-from gui.ini_utils import INI_DIR, ensure_ini_defaults
-from gui.resize_utils import ProportionalResizer
+from gui.common.font_utils import DEFAULT_FONT_SIZE, apply_font_size_to_tree
+from gui.common.ini_utils import INI_DIR, ensure_ini_defaults
+from gui.common.resize_utils import ProportionalResizer
 from gui.handlers.scalar_scan import INI_DEFAULTS as SCALAR_SCAN_INI_DEFAULTS
 from gui.handlers.scalar_scan import ScalarScanWindow
 
@@ -733,10 +733,10 @@ class CRL3DPrintControl(QObject):
 
     def _wire_xray_eye(self):
         # Shared with the optics GUI, the main panel and the sample alignment
-        # window through the command PV's readback -- see gui/xray_eye.py.
+        # window through the command PV's readback -- see gui/optics/xray_eye.py.
         # This used to read the status PV with the opposite polarity to
         # optics_motors, so the two GUIs showed contradictory states.
-        from gui.xray_eye import XrayEye
+        from gui.optics.xray_eye import XrayEye
 
         self.xray_eye = XrayEye(self._pv_class(), debug=self.debug_mode)
         self._refresh_xrayeye_buttons()

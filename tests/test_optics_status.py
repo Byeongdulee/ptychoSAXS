@@ -1,4 +1,4 @@
-"""Unit tests for gui/optics_status.py.
+"""Unit tests for gui/optics/optics_status.py.
 
 No Qt, no EPICS, no hardware -- live positions are injected, and the ini is
 written to a tmp_path.
@@ -9,8 +9,8 @@ import textwrap
 
 import pytest
 
-from gui import optics_status as os_mod
-from gui.optics_status import (
+from gui.optics import optics_status as os_mod
+from gui.optics.optics_status import (
     BETWEEN, IN, OUT, UNDEFINED, BLOCKS, classify_block, classify_optic,
     check_good_for_ptycho, read_definitions, read_status,
 )
@@ -277,3 +277,15 @@ def test_read_status_without_epics_is_all_undefined(tmp_path):
                          caget=lambda pv: (_ for _ in ()).throw(RuntimeError("no IOC")))
     assert status.epics_ok is False
     assert all(b.state == UNDEFINED for b in status.blocks.values())
+
+
+def test_definitions_are_read_from_the_ini_the_optics_panel_writes():
+    """The module moved from gui/ to ptychosaxs/api/ with its ini path still
+    relative to itself, so it read a file that does not exist and reported
+    every optic as undefined."""
+    import os
+    from gui.common.ini_utils import INI_DIR as GUI_INI_DIR
+    from ptychosaxs.api import optics_status as api_status
+
+    assert os.path.normpath(os.path.dirname(api_status.OPTICS_INI_PATH)) == \
+        os.path.normpath(GUI_INI_DIR)

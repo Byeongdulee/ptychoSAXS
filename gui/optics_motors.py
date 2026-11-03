@@ -39,11 +39,11 @@ import json
 import os
 import sys
 
-from gui.font_scaling import FontScaler
-from gui.font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
-from gui.ini_utils import INI_DIR, ensure_ini_defaults
-from gui.optics_modes import fmt_seconds, OpticsModes
-from gui.optics_status import (
+from gui.common.font_scaling import FontScaler
+from gui.common.font_utils import apply_font_size_to_tree, apply_saved_font_size, DEFAULT_FONT_SIZE
+from gui.common.ini_utils import INI_DIR, ensure_ini_defaults
+from gui.optics.optics_modes import fmt_seconds, OpticsModes
+from gui.optics.optics_status import (
     BLOCKS as _STATUS_BLOCKS,
     MOTORS,
     PV_BASES,
@@ -52,10 +52,10 @@ from gui.optics_status import (
     IN as _IN,
     OUT as _OUT,
 )
-from gui.pv_lineedit import PVLineEdit
-from gui.resize_utils import ProportionalResizer
-from gui.ui_levels import LevelSwitcher
-from gui.xray_eye import EYE_CMD_PV, EYE_EXPOSURE_PV, EYE_EXPOSURE_RBV_PV, XrayEye
+from gui.widgets.pv_lineedit import PVLineEdit
+from gui.common.resize_utils import ProportionalResizer
+from gui.common.ui_levels import LevelSwitcher
+from gui.optics.xray_eye import EYE_CMD_PV, EYE_EXPOSURE_PV, EYE_EXPOSURE_RBV_PV, XrayEye
 
 _GUI_DIR = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(_GUI_DIR, "ui")

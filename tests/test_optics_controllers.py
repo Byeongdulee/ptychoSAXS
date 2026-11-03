@@ -83,7 +83,7 @@ def test_motorunits_are_available_without_blowing_up():
 def test_the_status_module_and_the_device_layer_share_one_table():
     """These were two hand-maintained copies, with a comment warning they
     "must stay in step ... a wrong entry silently logs the wrong motor"."""
-    from gui import optics_status
+    from gui.optics import optics_status
     assert optics_status.PV_BASES is oc.PV_BASES
     assert optics_status.MOTORS is oc.MOTORS
 

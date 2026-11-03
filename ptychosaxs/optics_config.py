@@ -1,13 +1,13 @@
 """Which EPICS record each upstream optics motor is.
 
 One table, imported by both the device layer (ptychosaxs/optics.py, which
-builds controllers from it) and the status logic (gui/optics_status.py,
+builds controllers from it) and the status logic (gui/optics/optics_status.py,
 which cagets the records directly). It used to be two: optics.py carried
 ordered PV lists and optics_status.py carried a parallel name->PV dict, with
 a comment warning that they "must stay in step ... a wrong entry silently
 logs the wrong motor rather than failing loudly". Now they cannot disagree.
 
-Pure data. No imports at all, so gui/optics_status.py keeps the property its
+Pure data. No imports at all, so gui/optics/optics_status.py keeps the property its
 own docstring claims -- Qt-free and hardware-free, importable in a test with
 no pyepics present.
 """

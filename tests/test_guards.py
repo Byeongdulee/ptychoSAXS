@@ -152,8 +152,8 @@ def test_the_scan_handler_routes_every_guard_through_one_renderer():
     from gui.handlers import scan_handler
 
     src = inspect.getsource(scan_handler.ScanHandler)
-    for method in ("_confirm_large_scan", "_check_hdf_for_multi_pulse",
-                   "_check_saxs_det_mode", "_check_velocity_limits"):
+    for method in ("_confirm_large_scan", "_check_saxs_det_mode",
+                   "_check_velocity_limits"):
         body = src.split(f"def {method}(")[1].split("\n    def ")[0]
         assert "QMessageBox" not in body, (
             f"{method} still builds its own dialog")

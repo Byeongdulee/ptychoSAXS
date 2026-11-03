@@ -3,7 +3,7 @@
 Deliberately Qt-free: this module owns every routing, gating and labelling
 decision the sample alignment window makes, so all of that logic can be tested
 headlessly (see tests/test_sample_alignment_flow.py) without a QApplication,
-a display, or hardware. gui/sample_alignment.py is a thin view over it -- it
+a display, or hardware. gui/alignment/sample_alignment.py is a thin view over it -- it
 renders pages and drives motors, but never decides where a button goes.
 
 The workflow guides an operator through aligning a sample on the tomography

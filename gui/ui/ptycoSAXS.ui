@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1167</width>
-    <height>823</height>
+    <height>830</height>
    </rect>
   </property>
   <property name="font">
@@ -4042,7 +4042,6 @@ Scans</string>
     <addaction name="actionSet_basepaths"/>
     <addaction name="actionPut_DET_alignmode"/>
     <addaction name="separator"/>
-    <addaction name="actionUse_hdf_plugin"/>
     <addaction name="actionPtychography_mode"/>
     <addaction name="actionCapture_multi_frames_step"/>
     <addaction name="actionCapture_multi_frames_fly"/>
@@ -4328,17 +4327,6 @@ Scans</string>
   <action name="actionSet_Log_Filename">
    <property name="text">
     <string>Set Log Filename</string>
-   </property>
-  </action>
-  <action name="actionUse_hdf_plugin">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="checked">
-    <bool>false</bool>
-   </property>
-   <property name="text">
-    <string>Use hdf plugin</string>
    </property>
   </action>
   <action name="actionevery_10_millie_seconds">

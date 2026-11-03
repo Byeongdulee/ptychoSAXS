@@ -1,6 +1,6 @@
 """The upstream optics: positions, moves, and whether each block is in.
 
-The panel's half of this contract already existed. gui/optics_modes.py
+The panel's half of this contract already existed. gui/optics/optics_modes.py
 drives in/out sequences through a six-method interface on the panel --
 has_block, block_state, block_has_target, move_block, pv_value, pv_factory
 -- and its docstring says outright that "nothing here touches a widget of
@@ -8,7 +8,7 @@ the panel directly ... the same sequences would run against the full view,
 or a test double, unchanged". That interface is what moved here. The panel
 keeps the same calls; they cross a socket now.
 
-Classification is not reimplemented. gui/optics_status.py already turns
+Classification is not reimplemented. gui/optics/optics_status.py already turns
 live positions plus the saved definitions into IN / OUT / BETWEEN /
 UNDEFINED, is already Qt-free, and already takes its readings through an
 injectable `caget` so it can be driven from anywhere. The server passes its

@@ -1,6 +1,6 @@
 """Reusable proportional-resize scaling for absolutely-positioned .ui windows.
 
-ptycoSAXS.ui and setup_configuration.ui use absolute widget geometry rather
+ptychoSAXS_large.ui and setup_configuration.ui use absolute widget geometry rather
 than Qt layouts, so resizing the top-level window doesn't move/resize their
 children by itself. ProportionalResizer snapshots each named child widget's
 geometry at construction time and rescales all of them by the same (sx, sy)

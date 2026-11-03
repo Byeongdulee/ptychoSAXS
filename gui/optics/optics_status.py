@@ -5,7 +5,7 @@ ptychosaxs/api/optics_status.py because the server classifies optics state
 too, and a device-layer module importing from gui/ is backwards.
 
 Kept for one phase so the panels and tests that import
-`gui.optics_status` keep working while they are migrated.
+`gui.optics.optics_status` keep working while they are migrated.
 """
 
 from ptychosaxs.api.optics_status import *  # noqa: F401,F403

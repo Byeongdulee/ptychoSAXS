@@ -10,7 +10,7 @@ store, key "ui/fontSize".
 from PyQt5.QtCore import QSettings, QTimer
 from PyQt5.QtWidgets import QWidget
 
-# Matches the pointsize baked into most ptycoSAXS.ui widgets.
+# Matches the pointsize baked into most ptychoSAXS_large.ui widgets.
 DEFAULT_FONT_SIZE = 11
 
 _SETTINGS_KEY = "ui/fontSize"

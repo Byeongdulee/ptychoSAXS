@@ -1,6 +1,6 @@
 """Client-side mirror of the records the server is pushing.
 
-gui/pv_lineedit.py binds a QLineEdit to an object with `.connected`,
+gui/widgets/pv_lineedit.py binds a QLineEdit to an object with `.connected`,
 `.get()` and `.put()`. That used to be an epics.PV the panel opened itself,
 one cache per panel, polled on a GUI-thread timer. RemotePV is the same
 four-member interface backed by the shared server instead: reads come from

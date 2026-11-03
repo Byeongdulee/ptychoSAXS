@@ -24,7 +24,15 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
 
-INI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ini")
+# gui/ini/, where the optics panel writes optics_motors.ini. Spelled out as a
+# path rather than imported from gui.common.ini_utils, to keep this module
+# free of the GUI package. This used to be dirname(__file__)/ini, which was
+# right while the module lived in gui/ and silently pointed at a directory
+# that does not exist once it moved to ptychosaxs/api/ -- every in/out
+# definition then read as missing.
+INI_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "gui", "ini")
 OPTICS_INI_PATH = os.path.join(INI_DIR, "optics_motors.ini")
 
 # Position comparison tolerance, mm. A saved position matches the live

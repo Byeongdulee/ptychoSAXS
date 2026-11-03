@@ -257,6 +257,9 @@ class ShutterStub:
     def open_A(self) -> None:
         print("[DEBUG] ShutterStub: open_A()")
 
+    def close_fast(self) -> None:
+        print("[DEBUG] ShutterStub: close_fast()")
+
     def open_shutterC(self) -> None:
         self.open()
 

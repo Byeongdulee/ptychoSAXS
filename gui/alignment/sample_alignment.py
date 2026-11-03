@@ -26,7 +26,7 @@ from PyQt5.QtCore import QObject, QSettings, QTimer
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import QMessageBox
 
-from gui.alignment_flow import (
+from gui.alignment.alignment_flow import (
     CLOSE,
     PHI_HIGH_DEFAULT,
     PHI_LOW_DEFAULT,
@@ -37,13 +37,13 @@ from gui.alignment_flow import (
     iterative_script_lines,
     window_title,
 )
-from gui.font_utils import apply_saved_font_size
-from gui.ini_utils import INI_DIR
-from gui.motor_rows import MotorRow, MotorRowTable
-from gui.xray_eye import XrayEye
+from gui.common.font_utils import apply_saved_font_size
+from gui.common.ini_utils import INI_DIR
+from gui.widgets.motor_rows import MotorRow, MotorRowTable
+from gui.optics.xray_eye import XrayEye
 
-_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
-_UI_PATH = os.path.join(_MODULE_DIR, "ui", "sample_alignment.ui")
+_GUI_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_UI_PATH = os.path.join(_GUI_DIR, "ui", "sample_alignment.ui")
 
 # ---------------------------------------------------------------------------
 # Tunables -- deliberately code-only, not exposed in the GUI

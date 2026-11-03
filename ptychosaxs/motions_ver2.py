@@ -120,7 +120,7 @@ class _Signal:
     default for a headless process and wrong for a GUI, where a position
     emitted from a scan worker must not touch a widget directly -- so the
     GUI replaces the whole signals object with a Qt-backed one (see
-    gui/motor_signals.py) and gets queued delivery back. Keeping the device
+    gui/common/motor_signals.py) and gets queued delivery back. Keeping the device
     layer free of Qt is what lets the server import it at all.
     """
 

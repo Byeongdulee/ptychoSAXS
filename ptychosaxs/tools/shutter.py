@@ -4,6 +4,14 @@ import time
 
 beamline = '12IDC'
 
+# PV that closes the fast (Uniblitz) shutter, and the value written to close
+# it. The fast shutter is gated by the DG645 AB output (see dg645.py), so it
+# is normally already shut between exposures; this is for forcing it closed
+# after a scan. Its open counterpart is 12idc:uniblitz:shutter:open. Setting
+# the PV to "" makes shutter.close_fast() report that nothing was sent.
+FAST_SHUTTER_CLOSE_PV = "12idc:uniblitz:shutter:close"
+FAST_SHUTTER_CLOSE_VALUE = 1
+
 def keepshutteropen(beamline='12IDC'):
     if beamline.lower() == '12idb':
         station = 'B'
@@ -69,6 +77,13 @@ class shutter():
         
     def open_A(self):
         self.shutterA_open.put(1)
+
+    def close_fast(self):
+        if not FAST_SHUTTER_CLOSE_PV:
+            print("Fast shutter close requested, but FAST_SHUTTER_CLOSE_PV "
+                  "is empty in ptychosaxs/tools/shutter.py; nothing sent.")
+            return
+        caput(FAST_SHUTTER_CLOSE_PV, FAST_SHUTTER_CLOSE_VALUE)
 
 
 class keepshopenThread(Thread):

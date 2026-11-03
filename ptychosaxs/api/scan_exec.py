@@ -32,7 +32,6 @@ import numpy as np
 
 import math  # noqa: F401  (used by moved executors)
 
-from ptychosaxs.api import optics_status as _optics_status
 from ptychosaxs.api.scan_errors import (  # noqa: F401
     DET_MIN_READOUT_Error,
     DET_OVER_READOUT_SPEED_Error,
@@ -41,6 +40,10 @@ from ptychosaxs.api.scan_errors import (  # noqa: F401
 )
 from ptychosaxs.hexapod_traj import TrajectoryUnavailable  # noqa: F401
 from ptychosaxs.api import scanplan  # noqa: F401  (used by moved methods)
+from ptychosaxs.api import scan_traj
+
+# Tolerance for matching a trajectory file's %.6f positions.
+_TRAJ_ATOL = scan_traj._POSITION_ATOL
 from ptychosaxs.api.scan_config import (  # noqa: F401
     COUNT_DONE_TIMEOUT_MARGIN_S,
     HEXAPOD_FLYMODE_STANDARD,
@@ -169,6 +172,46 @@ class ScanExecutorsMixin:
         """See ptychosaxs.api.scanplan.count_positions."""
         return scanplan.count_positions(position_arrays, scan_kind)
 
+    # -- step scans run from a trajectory file ------------------------------
+
+    def _planned_points(self, motor_indices, phi=None):
+        """The trajectory file's points for these axes, or None.
+
+        Set only while a step scan runs from a trajectory file (see
+        ScanHandler.run_plan): the executors then visit exactly these
+        points, in file order, instead of the grid their p0/st/fe/step
+        describe -- so a hand-edited file of any shape runs as written.
+
+        `motor_indices` must be the plan's leading axes (X, Z of a 3-D
+        X/Z/phi plan). If the plan has a further (phi) column, only the rows
+        at `phi` are returned -- or, with phi None, those of the first phi.
+        """
+        plan = getattr(self, "_plan", None)
+        if not plan or plan.get("points") is None:
+            return None
+        indices = list(motor_indices)
+        if list(plan["motor_indices"])[:len(indices)] != indices:
+            return None
+        pts = np.asarray(plan["points"], dtype=float)
+        if pts.shape[1] > len(indices):
+            column = pts[:, len(indices)]
+            target = column[0] if phi is None else phi
+            pts = pts[np.isclose(column, target, atol=_TRAJ_ATOL)]
+        return pts[:, :len(indices)]
+
+    def _planned_slices(self, motor_indices):
+        """Distinct phi values of a 3-D step plan, in file order, or None."""
+        plan = getattr(self, "_plan", None)
+        if not plan or plan.get("points") is None:
+            return None
+        if list(plan["motor_indices"]) != list(motor_indices):
+            return None
+        out = []
+        for value in np.asarray(plan["points"], dtype=float)[:, -1]:
+            if not any(abs(value - v) <= _TRAJ_ATOL for v in out):
+                out.append(float(value))
+        return np.array(out)
+
     @staticmethod
     def _join_posix(base, *parts) -> str:
         """Join into a Linux path, dropping empty components.
@@ -193,15 +236,7 @@ class ScanExecutorsMixin:
         }
         if key not in mapping:
             return ""
-        parts = []
-        for ax in axes_params:
-            val = ax.get(mapping[key], "")
-            try:
-                formatted = f"{float(val):f}"
-            except (TypeError, ValueError):
-                formatted = ""
-            parts.append(f"{ax['name']} {formatted} ")
-        return "".join(parts)
+        return scan_traj.format_axis_values(axes_params, mapping[key])
 
     def _get_scan_summary_csv_path(self):
         if len(self.ctx.parameters.logfilename) == 0:
@@ -243,6 +278,20 @@ class ScanExecutorsMixin:
                 val = None
             values.append("" if val is None else str(val))
         return values
+
+    def _get_logged_motor_positions(self):
+        """The log's "motor positions" column: X, Y, Z, trans1, trans2 now.
+
+        Read live rather than cached, so a 3-D scan's per-slice rows record
+        where each slice actually started.
+        """
+        positions = {}
+        for axis in scan_traj.LOGGED_MOTORS:
+            try:
+                positions[axis] = self.ctx.pts.get_pos(axis)
+            except Exception:
+                positions[axis] = None
+        return scan_traj.format_motor_positions(positions)
 
     def _get_us_optics_positions(self):
         try:
@@ -290,33 +339,9 @@ class ScanExecutorsMixin:
         return round(max(expt + DETECTOR_READOUTTIME, 0.03), 6)
 
     def _get_scan_summary_header(self):
-        return [
-            "scan",
-            "completed",
-            "date",
-            "time",
-            "sample_name",
-            "scan_type",
-            "ExpTime",
-            "n_pos",
-            "monoE",
-            "phi",
-            "detectors_used",
-            "scan_center",
-            "scan_negative_edge",
-            "scan_positive_edge",
-            "scan_step_size",
-            # Same list, same order, as the values spliced in by
-            # _write_scan_summary_line via _get_us_optics_positions.
-            *_optics_status.US_OPTICS_MOTORS,
-            "trans1",
-            "trans2",
-            # Appended at the end on purpose: _migrate_scan_summary_header
-            # can only ever append, so a column inserted mid-list would land
-            # at the end of an existing CSV's header and desync it from the
-            # rows written underneath.
-            "optics_name",
-        ]
+        """See ptychosaxs.api.scan_traj.log_header, which trajectory files
+        also derive their header from."""
+        return scan_traj.log_header()
 
     def _emit_progress(
         self,
@@ -392,6 +417,16 @@ class ScanExecutorsMixin:
             )
             print(msg)
 
+    @staticmethod
+    def _still_acquiring(det):
+        """True if `det` reports an acquisition in progress (Acquire_RBV).
+        False if it is idle or cannot say -- which keeps the old re-arm
+        behaviour for detectors without that readback."""
+        try:
+            return int(det.Acquire_RBV) == 1
+        except Exception:
+            return False
+
     def is_arming_detecotors_timedout(self):
         TIMEOUT = 10
         t_start = time.time()
@@ -411,7 +446,15 @@ class ScanExecutorsMixin:
                             break
                 else:
                     while det.Armed == 0:
-                        det.Arm()
+                        # Re-arm only a detector whose acquisition has really
+                        # stopped. A Pilatus drops Armed for a moment while
+                        # each frame reads out; calling Arm() then sets
+                        # Acquire=1 on the running acquisition and restarts
+                        # it for another NumImages frames -- which is how a
+                        # 25-point step scan came to write 40 frames. While it
+                        # is still acquiring, just wait for Armed to return.
+                        if not self._still_acquiring(det):
+                            det.Arm()
                         wait_for_det_arm_s = (
                             0.1  # retry interval while waiting for detector to arm
                         )
@@ -1095,26 +1138,33 @@ class ScanExecutorsMixin:
                 zp['optics_ozw'].attrs['units'] = b'nm'
 
     def _migrate_scan_summary_header(self, csv_path) -> None:
-        """Append any columns from _get_scan_summary_header() missing from the
-        on-disk header (e.g. a column added by a newer version of this file),
-        so newly-written rows stay aligned with the header instead of
-        silently drifting on a pre-existing CSV."""
+        """Bring an on-disk log csv up to the current header.
+
+        Rows are rebuilt by column name, not position, so a column added
+        mid-header (such as "motor positions") lands in the right place in
+        every existing row with an empty cell, instead of shifting the
+        values after it under the wrong names. Columns the current header
+        no longer has are kept, at the end, so no recorded value is lost.
+        """
         try:
             with open(csv_path, newline="") as f:
                 rows = list(csv.reader(f))
             if not rows:
                 return
-            header = rows[0]
-            missing = [col for col in self._get_scan_summary_header() if col not in header]
-            if not missing:
+            old_header = rows[0]
+            new_header = self._get_scan_summary_header()
+            if old_header[:len(new_header)] == new_header:
                 return
-            header.extend(missing)
-            rows[0] = header
+            new_header = new_header + [c for c in old_header if c not in new_header]
+            migrated = [new_header]
+            for row in rows[1:]:
+                by_name = dict(zip(old_header, row))
+                migrated.append([by_name.get(col, "") for col in new_header])
             with open(csv_path, "w", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerows(rows)
-        except Exception:
-            pass
+                writer.writerows(migrated)
+        except Exception as exc:
+            print(f"Warning: could not migrate the scan log header in {csv_path}: {exc}")
 
     def _update_scan_summary_completed(self, status: str, scan_id: str = None) -> None:
         csv_path = self._get_scan_summary_csv_path()
@@ -1496,6 +1546,10 @@ class ScanExecutorsMixin:
                 modified_axes.append(ax)
         position_arrays = [self._make_positions(ax["p0"], ax["st"], ax["fe"], ax["step"]) for ax in modified_axes]
         n_pos = self._compute_n_positions(position_arrays, scan_kind=scan_kind)
+        planned = self._planned_points(
+            [ax["motor_index"] for ax in axes_params[:2]], phi=phi_value)
+        if planned is not None:
+            n_pos = len(planned)
         self._write_scan_summary_line(scan_label, modified_axes, n_pos)
 
     def stepscan0(self, motornumber=-1, update_progress=None, update_status=None):
@@ -1522,7 +1576,11 @@ class ScanExecutorsMixin:
         # enable fit menu
         if axis == "phi":
             self.ctx.ui.actionFit_QDS_phi.setEnabled(True)
-        if self.ctx.ui.chk_reverse_scan_dir.isChecked():
+        planned = self._planned_points([motornumber])
+        if planned is not None:
+            # From a trajectory file: its points, in its order.
+            st = planned[0, 0]
+        elif self.ctx.ui.chk_reverse_scan_dir.isChecked():
             if abs(st - pos) > abs(fe - pos):
                 t = fe
                 fe = st
@@ -1532,6 +1590,8 @@ class ScanExecutorsMixin:
         pos = self._make_positions(0, st - 0, fe - 0, step)
         if len(pos) == 1:
             pos = np.array([st, fe])
+        if planned is not None:
+            pos = planned[:, 0]
 
         # scaninfo = []
         # scaninfo.append('#H')
@@ -1684,8 +1744,14 @@ class ScanExecutorsMixin:
         fe = self.stepscan3d_fe + self.stepscan3d_p0
         step = self.stepscan3d_step
 
+        # From a trajectory file: its phi values, in file order.
+        slices = self._planned_slices([xmotor, ymotor, phimotor])
+        if slices is not None:
+            st = slices[0]
         self._scan_mv(axis, st, update_status=update_status)
         pos = self._make_positions(0, st - 0, fe - 0, step)
+        if slices is not None:
+            pos = slices
 
         i = 0
         Npos = len(pos)
@@ -1723,7 +1789,8 @@ class ScanExecutorsMixin:
                 if self.isStopScanIssued:
                     break
                 self._scan_mv(phiaxis, phip, update_status=update_status)
-                for xp, yp in xy_pos:
+                planned = self._planned_points([xmotor, ymotor], phi=phip)
+                for xp, yp in (xy_pos if planned is None else planned):
                     if self.isStopScanIssued:
                         break
                     self._scan_mv(xaxis, xp, update_status=update_status)
@@ -1764,12 +1831,16 @@ class ScanExecutorsMixin:
             self.progress_3d = (i, Npos)
             scan = f"{axis}{i:03d}"
             self._log_3d_slice_start(scan, self.stepscan3d_axes_params, value)
-            retval = self.ctx.stepscan2d0(
-                xmotor=xmotor,
-                ymotor=ymotor,
-                update_progress=update_progress,
-                update_status=update_status,
-            )
+            self._plan_phi = value
+            try:
+                retval = self.ctx.stepscan2d0(
+                    xmotor=xmotor,
+                    ymotor=ymotor,
+                    update_progress=update_progress,
+                    update_status=update_status,
+                )
+            finally:
+                self._plan_phi = None
             if retval == DETECTOR_NOT_STARTED_ERROR:
                 msg = f"Detector refresh failed ."
                 update_status(msg)
@@ -3041,6 +3112,11 @@ class ScanExecutorsMixin:
 
         # Nx2 numpy array of (x, y) in snake (boustrophedon) order
         pos = self._snake_positions(x_coords, y_coords)
+        # From a trajectory file: its points as listed (this phi slice's,
+        # inside a 3-D scan -- stepscan3d0 sets _plan_phi).
+        planned = self._planned_points([xmotor, ymotor], phi=getattr(self, "_plan_phi", None))
+        if planned is not None:
+            pos = planned
         Nline = len(pos)
         # keep for later use if needed
         self.stepscan2d_positions = pos

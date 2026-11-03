@@ -4,7 +4,7 @@ The beamline data PVs, and which of them this GUI writes.
 Opening the GUI used to increment the scan number and push it to the IOC
 before anyone had agreed to it, which is how a fresh launch could silently
 renumber someone else's run. This module is the inventory behind the
-consent prompts in gui/pv_consent.py: what exists, what this program
+consent prompts in gui/common/pv_consent.py: what exists, what this program
 touches, and when.
 
 Data only - no Qt, no pyepics - so the inventory can be asserted against

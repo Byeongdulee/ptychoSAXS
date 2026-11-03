@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import QMessageBox, QInputDialog, QLabel, QLineEdit, QFileD
 
 # The upstream-optics motor/PV table, shared with the optics panel and
 # rungui's Check Upstream Optics report so the three cannot disagree.
-from gui import optics_status as _optics_status
+from gui.optics import optics_status as _optics_status
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, QSettings
 import pyqtgraph as pg
 
@@ -100,6 +100,20 @@ def rstrip_from_char(string, char):
     return string
 
 
+class _FixedText:
+    """Stands in for a QLineEdit where a reader only calls .text().
+
+    _scan_fields hands its callers the exposure widget itself, which they
+    read later; a trajectory's exposure has no widget, so this carries it.
+    """
+
+    def __init__(self, value):
+        self._text = repr(float(value))
+
+    def text(self):
+        return self._text
+
+
 class _QdsScatterWorker(QObject):
     """Background worker that samples qds_array and emits it for scatter-plot updates."""
 
@@ -129,7 +143,11 @@ class ScanHandler(ScanExecutorsMixin):
     # Per-point overhead added to exposure time when estimating scan duration.
     # Fly scan overhead accounts for detector readout + SoftGlue latency.
     # Step scan overhead accounts for motor settle + readout.
-    OVERHEAD_FLY = 0.033  # seconds — Pilatus 2M hard minimum (30 Hz)
+    # Shortest fly-scan frame period, in seconds: the Pilatus 2M hard
+    # minimum (30 Hz). The setup window raises a shorter "Fly acquisition
+    # time" to this, and OVERHEAD_FLY follows it, so change it here only.
+    MIN_FLY_ACQ_TIME = 0.033
+    OVERHEAD_FLY = MIN_FLY_ACQ_TIME
     OVERHEAD_STEP = 0.5  # seconds
     # Extra settle time between phi slices in a 3-D fly scan, on top of whatever
     # get_detectors_ready()/_push_filepaths_to_detectors() already take. Detectors
@@ -158,15 +176,24 @@ class ScanHandler(ScanExecutorsMixin):
 
     def __init__(self, window) -> None:
         self.w = window
-        self.ui = window.ui
         # What the moved executors read instead of self.w. Session first,
         # window second, so a name can migrate to BeamlineSession without
         # any executor being edited again.
         self.ctx = ScanContext(window=window)
         self._saved_positions = {}  # {n: float} keyed by 1-indexed motor number
+        # Scan parameters taken from a trajectory file instead of the widgets,
+        # while one runs. See run_plan.
+        self._plan = None
         self._connect_signals()
 
         self.det_readout_time = DETECTOR_READOUTTIME
+
+    @property
+    def ui(self):
+        """The window currently shown. Resolved on every access, because the
+        More/Less ladder swaps the main window and a cached reference would
+        keep pointing at the one that was closed."""
+        return self.w.ui
 
     def _connect_signals(self) -> None:
         # Wire all scan-parameter line edits so that pressing Enter recalculates
@@ -358,13 +385,18 @@ class ScanHandler(ScanExecutorsMixin):
             self._get_mono_energy(),
             self._get_phi_angle(axes_params),
             self._get_detectors_used(),
+            self._get_logged_motor_positions(),
             self._format_scan_axis_string(axes_params, "scan_center"),
             self._format_scan_axis_string(axes_params, "scan_negative_edge"),
             self._format_scan_axis_string(axes_params, "scan_positive_edge"),
-            self._format_scan_axis_string(axes_params, "scan_step_size"),
+            # A step scan run from a trajectory whose points are not a
+            # regular grid has no step size to report.
+            "custom" if self._plan is not None and self._plan.get("custom")
+            else self._format_scan_axis_string(axes_params, "scan_step_size"),
             *optics_values,
             *gonio_trans_values,
             optics_identity.get("optics_name", ""),
+            optics_identity.get("optics_type", ""),
         ]
         self._last_scan_summary_id = scan_id
         try:
@@ -379,6 +411,46 @@ class ScanHandler(ScanExecutorsMixin):
                 "CSV Logging",
                 f"Could not write scan summary CSV {csv_path}: {exc}",
             )
+
+    # ------------------------------------------------------------------
+    # Running from a trajectory file
+    # ------------------------------------------------------------------
+
+    def run_plan(self, plan: dict, launch) -> bool:
+        """Call `launch` (a scan entry point) with its parameters from `plan`.
+
+        plan = {"expt": seconds, "axes": {motor_index: {p0, st, fe, step,
+        expt, name, motor_index}}}, built from a trajectory file by
+        TrajHandler.start. While it is set, _read_motor_params,
+        _scan_fields, _compute_2d_scan_positions and takeshot read it
+        instead of the per-motor widgets, and the scan-name prompt is
+        skipped -- the name is fixed by the file.
+
+        It has to outlive `launch`: the 2-D executors read _scan_fields on
+        the worker thread. So it stays until clear_plan, which TrajHandler
+        calls when the scan ends; if `launch` returns without starting a
+        scan (a guard said no, a parameter was bad) it is cleared here.
+        Returns whether a scan started.
+        """
+        self._plan = plan
+        try:
+            launch()
+        except Exception:
+            self._plan = None
+            raise
+        if not self.w.isscan:
+            self._plan = None
+            return False
+        return True
+
+    def clear_plan(self) -> None:
+        self._plan = None
+
+    def _plan_axis(self, motor_index):
+        plan = self._plan
+        if plan is None:
+            return None
+        return plan["axes"].get(motor_index)
 
     def _scan_fields(self, motor_index: int) -> dict:
         """p0/st/fe/step and the exposure widget for one motor slot.
@@ -400,6 +472,16 @@ class ScanHandler(ScanExecutorsMixin):
         worked, but it is now one method to fix rather than seventeen
         lookups buried in two 200-line functions.
         """
+        planned = self._plan_axis(motor_index)
+        if planned is not None:
+            return {
+                "p0_text": repr(float(planned["p0"])),
+                "st": float(planned["st"]),
+                "fe": float(planned["fe"]),
+                "step": float(planned["step"]),
+                "t_widget": _FixedText(planned["expt"]),
+            }
+
         n = motor_index + 1
 
         def edit(name):
@@ -435,6 +517,9 @@ class ScanHandler(ScanExecutorsMixin):
 
     def _confirm_large_scan(self, Ntot, tm, overhead):
         """Return True to proceed, False to abort."""
+        if self._plan is not None and self._plan.get("points") is not None:
+            # A step scan from a trajectory file visits exactly its points.
+            Ntot = len(self._plan["points"])
         return self._ask(guard_checks.large_scan(
             Ntot, tm, overhead,
             threshold=self.LARGE_SCAN_THRESHOLD,
@@ -444,12 +529,6 @@ class ScanHandler(ScanExecutorsMixin):
     # ------------------------------------------------------------------
     # Shared helpers used by all scan entry points and executors
     # ------------------------------------------------------------------
-
-    def _check_hdf_for_multi_pulse(self) -> bool:
-        """False when multi-pulse is on without the HDF5 plugin to aggregate
-        the frames. See ptychosaxs.api.guards.multi_pulse_needs_hdf."""
-        return self._ask(guard_checks.multi_pulse_needs_hdf(
-            self.w.parameters._pulses_per_step, self.w.use_hdf_plugin))
 
     def _check_saxs_det_mode(self) -> bool:
         """False unless the SAXS detector is in scan mode."""
@@ -467,6 +546,10 @@ class ScanHandler(ScanExecutorsMixin):
         if getattr(self.w, "macro_running", False):
             # A macro is driving scans unattended — accept the current name as-is
             # rather than blocking on a dialog nobody is there to click.
+            return True
+        if self._plan is not None:
+            # Running a trajectory file: its name is the one the scan folder
+            # and the file itself were created under.
             return True
 
         dlg = QDialog(self.w.ui)
@@ -527,8 +610,6 @@ class ScanHandler(ScanExecutorsMixin):
         """
         if confirm_name and not self._confirm_scan_name():
             return False
-        if not self._check_hdf_for_multi_pulse():
-            return False
         if det_mode and not self._check_saxs_det_mode():
             return False
         if velocities is not None and not self._check_velocity_limits(velocities):
@@ -560,7 +641,7 @@ class ScanHandler(ScanExecutorsMixin):
             return True
 
         try:
-            from gui import optics_status
+            from gui.optics import optics_status
 
             status = self.w.optics_status_report()
             ok, problems = optics_status.check_good_for_ptycho(status)
@@ -605,7 +686,7 @@ class ScanHandler(ScanExecutorsMixin):
             # Reuse the same report window the Check Upstream Optics button
             # opens, modally, then come back to this question.
             try:
-                from gui.optics_status_dialog import OpticsStatusDialog
+                from gui.optics.optics_status_dialog import OpticsStatusDialog
 
                 report = OpticsStatusDialog(
                     self.w.ui,
@@ -690,7 +771,14 @@ class ScanHandler(ScanExecutorsMixin):
 
         Raises ValueError or TypeError if any field is empty or non-numeric.
         Must be called from the GUI thread (reads Qt widgets).
+
+        While a trajectory runs (see run_plan) the file's values are returned
+        instead, without the start-position prompt: its p0 is the centre the
+        trajectory was written around.
         """
+        planned = self._plan_axis(motor_index)
+        if planned is not None:
+            return dict(planned, name=self.w.motornames[motor_index])
         n = motor_index + 1
         p0 = float(self.w.check_start_position(n))
         self.ui.findChild(QLineEdit, f"ed_{n}").setText(f"{p0:.6f}")
@@ -714,7 +802,8 @@ class ScanHandler(ScanExecutorsMixin):
 
 
 
-    def _pre_scan(self, scan_label: str, scan_kind: str = "step", xmotor: int = 0, ymotor: int = 2) -> None:
+    def _pre_scan(self, scan_label: str, scan_kind: str = "step", xmotor: int = 0, ymotor: int = 2,
+                  expt: float = None) -> None:
         """Common setup called at the start of every scan entry point (GUI thread).
 
         Resets detector file/frame counters, refreshes scan name and file paths,
@@ -728,7 +817,12 @@ class ScanHandler(ScanExecutorsMixin):
         XY grid (e.g. trans1/trans2 for a piezo scan). Defaults (0, 2) match the
         hexapod X/Z pair used by the "normal" 2-D scans, for callers with no XY
         grid of their own (1-D scans, takeshot, timeseries).
+
+        expt: the scan's exposure time (s), from which the interferometer
+        sampling period is chosen when it is set to Auto.
         """
+        if expt is not None:
+            self.apply_auto_softglue_rate(expt)
         self.w.update_scanname()
         self.w.get_detectors_ready()
         self.w.prepare_scan_files()
@@ -795,6 +889,8 @@ class ScanHandler(ScanExecutorsMixin):
             n_pos = self._compute_n_positions([position_arrays[0]], scan_kind="fly_phi")
         else:
             n_pos = self._compute_n_positions(position_arrays, scan_kind=scan_kind)
+        if self._plan is not None and self._plan.get("points") is not None:
+            n_pos = len(self._plan["points"])
         scaninfo = ["\n#S", self.w.parameters.scan_number, scan_label]
         for ax in axes_params:
             n = ax["motor_index"] + 1
@@ -853,20 +949,7 @@ class ScanHandler(ScanExecutorsMixin):
             if expt is None or step is None or expt <= 0 or step <= 0:
                 QMessageBox.warning(self.w.ui, "Fly Blur", "Exposure time and step size must both be > 0.")
                 return
-            step = abs(step)
-            fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
-            step_time = max(fly_acq_time, expt + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
-            step_time = round(step_time * 1000) / 1000
-            velocity_mm_s = step / step_time
-            movestep_um = step * 1000.0 * expt / step_time
-            msg = (
-                f"1D Fly (translation):\n"
-                f"Exposure time:     {expt * 1000.:.2f} ms\n"
-                f"Step size:         {step * 1000.:.3f} µm\n"
-                f"Acquisition time:  {step_time * 1000.:.2f} ms\n"
-                f"Velocity:          {velocity_mm_s * 1000.:.3f} µm/s\n"
-                f"Motion during exposure:  {movestep_um * 1000:.0f} nm"
-            )
+            msg = self.fly_blur_text(expt, step)
 
             # 1D fly phi (angular) blur. Exposure falls back to ed_lup_1_t,
             # matching _read_motor_params's per-axis-widget-or-shared behaviour.
@@ -876,20 +959,7 @@ class ScanHandler(ScanExecutorsMixin):
             phi_step = _read("ed_lup_7_N")
             if phi_step is not None and phi_step > 0:
                 phi_step = abs(phi_step)
-                phi_step_time = max(fly_acq_time, phi_expt + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
-                phi_step_time = round(phi_step_time * 1000) / 1000
-                phi_velocity_deg_s = phi_step / phi_step_time
-                phi_move_mdeg = phi_step * 1e3 * phi_expt / phi_step_time
-                phi_move_mrad = (1000 * np.pi / 180) * phi_step * phi_expt / phi_step_time
-                msg += (
-                    f"\n\n1D Fly phi (angular):\n"
-                    f"Exposure time:     {phi_expt * 1000.:.2f} ms\n"
-                    f"Step size:         {phi_step * 1000.:.3f} mdeg\n"
-                    f"Acquisition time:  {phi_step_time * 1000.:.2f} ms\n"
-                    f"Velocity:          {phi_velocity_deg_s:.4f} deg/s\n"
-                    f"Motion during exposure:  {phi_move_mdeg:.3f} mdeg\n"
-                    f"                      :  {phi_move_mrad:.3f} mrad"
-                )
+                msg += "\n\n" + self.fly_blur_text(phi_expt, phi_step, angular=True)
 
                 # Helix Z blur: phi and Z fly simultaneously over the same
                 # total_time, triggered at phi's step timing (see
@@ -915,6 +985,39 @@ class ScanHandler(ScanExecutorsMixin):
         except Exception as e:
             QMessageBox.warning(self.w.ui, "Fly Blur Error", f"Error calculating fly blur: {e}")
 
+
+    def fly_blur_text(self, expt, step, angular=False):
+        """One section of the Fly Blur report: how far the sample moves
+        during one exposure of a fly scan with this exposure (s) and step
+        (mm, or deg when angular). Used by check_fly_blur and by the user
+        view's Check Fly Blur, which passes the trajectory's values."""
+        step = abs(step)
+        fly_acq_time = getattr(self.w.parameters, "_fly_acq_time", self.OVERHEAD_FLY)
+        step_time = max(fly_acq_time, expt + DETECTOR_READOUTTIME, self.OVERHEAD_FLY)
+        step_time = round(step_time * 1000) / 1000
+        if angular:
+            velocity_deg_s = step / step_time
+            move_mdeg = step * 1e3 * expt / step_time
+            move_mrad = (1000 * np.pi / 180) * step * expt / step_time
+            return (
+                f"1D Fly phi (angular):\n"
+                f"Exposure time:     {expt * 1000.:.2f} ms\n"
+                f"Step size:         {step * 1000.:.3f} mdeg\n"
+                f"Acquisition time:  {step_time * 1000.:.2f} ms\n"
+                f"Velocity:          {velocity_deg_s:.4f} deg/s\n"
+                f"Motion during exposure:  {move_mdeg:.3f} mdeg\n"
+                f"                      :  {move_mrad:.3f} mrad"
+            )
+        velocity_mm_s = step / step_time
+        movestep_um = step * 1000.0 * expt / step_time
+        return (
+            f"1D Fly (translation):\n"
+            f"Exposure time:     {expt * 1000.:.2f} ms\n"
+            f"Step size:         {step * 1000.:.3f} µm\n"
+            f"Acquisition time:  {step_time * 1000.:.2f} ms\n"
+            f"Velocity:          {velocity_mm_s * 1000.:.3f} µm/s\n"
+            f"Motion during exposure:  {movestep_um * 1000:.0f} nm"
+        )
 
     def _adjust_axis_length(self, n: int, axis_index: int, scan_kind: str) -> int:
         """See ptychosaxs.api.scanplan.adjust_axis_length."""
@@ -1260,14 +1363,6 @@ class ScanHandler(ScanExecutorsMixin):
     # ------------------------------------------------------------------
     # Extracted methods
     # ------------------------------------------------------------------
-    def set_hdf_plugin_use(self, value=None):
-        if value is None:
-            value = self.ui.actionUse_hdf_plugin.isChecked()
-        self.ui.actionUse_hdf_plugin.setChecked(value)
-        self.w.use_hdf_plugin = value
-        if not value:
-            self.ui.actionCapture_multi_frames_fly.setEnabled(False)
-
     def select_detector_mode(self, value=None):
         if value is None:
             value = self.ui.actionPtychography_mode.isChecked()
@@ -1492,13 +1587,10 @@ class ScanHandler(ScanExecutorsMixin):
     def push_filepath_to_detectors(self):
         """Push the current working-folder path to each detector's HDF plugin FilePath PV.
 
-        Called when the user presses Enter on edit_workingfolder.  Only runs when
-        use_hdf_plugin is True.  Does NOT create folders and does NOT set FileName —
-        those only happen at scan-button press time via _prepare_scan_files().
+        Called when the user presses Enter on edit_workingfolder.  Does NOT
+        create folders and does NOT set FileName — those only happen at
+        scan-button press time via _prepare_scan_files().
         """
-        if not self.w.use_hdf_plugin:
-            return
-
         for i, det in enumerate(self.w.detector):
             if det is None:
                 continue
@@ -1623,7 +1715,43 @@ class ScanHandler(ScanExecutorsMixin):
             if det is not None:
                 det.set_fly_configuration()
 
-    def set_softglue_in(self, val):
+    # Interferometer (softglue) sampling period of each set_softglue_in id.
+    SOFTGLUE_PERIODS_S = {1: 1e-4, 2: 1e-3, 3: 1e-2}
+    # Slack added to the exposure time when Auto picks a sampling period, so
+    # floating point error cannot push an exposure of exactly 1 ms onto the
+    # 0.1 ms setting.
+    SOFTGLUE_AUTO_SLACK_S = 1e-6
+
+    def apply_auto_softglue_rate(self, expt):
+        """Pick the interferometer sampling period from the exposure time.
+
+        Only acts when Auto is selected in the setup window. Uses the
+        slowest period that is still <= expt + SOFTGLUE_AUTO_SLACK_S. An
+        exposure shorter than the fastest period is reported, and the scan
+        carries on at that fastest period.
+        """
+        if not self.w.softglue_rate_auto:
+            return
+        periods = self.SOFTGLUE_PERIODS_S
+        fitting = [v for v, p in periods.items()
+                   if p <= expt + self.SOFTGLUE_AUTO_SLACK_S]
+        if fitting:
+            val = max(fitting, key=periods.get)
+        else:
+            val = min(periods, key=periods.get)
+            msg = (f"Exposure time {expt * 1e3:g} ms is shorter than the "
+                   f"fastest interferometer sampling period "
+                   f"({periods[val] * 1e3:g} ms); scanning anyway.")
+            print(msg)
+            self.ui.statusbar.showMessage(msg)
+        print(f"Interferometer sampling (Auto): {periods[val] * 1e3:g} ms "
+              f"for {expt * 1e3:g} ms exposure.")
+        self.set_softglue_in(val, auto=True)
+
+    def set_softglue_in(self, val, auto=False):
+        # A fixed choice (menu or setup window) turns Auto off; Auto itself
+        # comes through here with auto=True.
+        self.w.softglue_rate_auto = auto
         if val == 1:
             self.ui.actionevery_10_millie_seconds.setChecked(False)
             self.ui.actionDetout.setChecked(False)
@@ -1732,8 +1860,6 @@ class ScanHandler(ScanExecutorsMixin):
         in index order, reaching SG last; fly-scan completion has no such
         ordering, so it must wait explicitly.
         """
-        if not self.w.use_hdf_plugin:
-            return
         for det in self.w.detector[:2]:
             if det is not None:
                 while det.fileGet("WriteFile_RBV"):
@@ -1753,6 +1879,14 @@ class ScanHandler(ScanExecutorsMixin):
                 time.sleep(1)
                 det.ForceStop()
 
+    def _close_shutters_after_scan(self):
+        """Close the C station shutter and/or the fast shutter at the end of
+        a scan, as chosen in the setup window."""
+        if self.w.shutter_close_after_scan:
+            self.w.shutter.close()
+        if self.w.fast_shutter_close_after_scan:
+            self.w.shutter.close_fast()
+
     def scandone(self, update_scannumber=True, donedone=True, update_gui=True,
                  direct_gui_updates=True, notify_folder_advanced=None, link_scan_number=None,
                  link_detector_data=True):
@@ -1765,8 +1899,7 @@ class ScanHandler(ScanExecutorsMixin):
             if i < 2 or donedone:
                 self.w.mv(key, self.w.motor_p0[key])
         if donedone:
-            if self.w.shutter_close_after_scan:
-                self.w.shutter.close()
+            self._close_shutters_after_scan()
 
         self.w.messages["current status"] = f"stepscan done. {time.ctime()}"
         print(self.w.messages["current status"])
@@ -1805,26 +1938,21 @@ class ScanHandler(ScanExecutorsMixin):
                         if det.Armed == 1:
                             det.Acquire = 0
                             print(f"Detector {i} is still armed. Disarming it now.")
-                    if self.w.use_hdf_plugin:
-                        while det.fileGet("WriteFile_RBV"):
-                            wait_for_hdf_write_s = 0.01  # poll interval while waiting for HDF file write to finish
-                            time.sleep(wait_for_hdf_write_s)
-                        if len(fn) == 0:
-                            fnum = det.fileGet("FileNumber_RBV")
+                    while det.fileGet("WriteFile_RBV"):
+                        wait_for_hdf_write_s = 0.01  # poll interval while waiting for HDF file write to finish
+                        time.sleep(wait_for_hdf_write_s)
+                    if len(fn) == 0:
+                        fnum = det.fileGet("FileNumber_RBV")
+                        fn = det.fileGet("FullFileName_RBV", as_string=True)
+                        if fnum is not None and str(fnum - 1) not in fn:
                             fn = det.fileGet("FullFileName_RBV", as_string=True)
-                            if fnum is not None and str(fnum - 1) not in fn:
-                                fn = det.fileGet("FullFileName_RBV", as_string=True)
 
-                        # when the measurement is all done, reset the file number to 0.
-                        if update_scannumber:
-                            det.filePut("FileNumber", 1)
-                            # print(f"Resetting file number of detector {i} to 0.")
-                            if i < 2:  # tiff file number 0
-                                det.FileNumber = 1
-                    else:
-                        if len(fn) == 0:
-                            fnum = det.FileNumber_RBV
-                            fn = bytes(det.FullFileName_RBV).decode().strip("\x00")
+                    # when the measurement is all done, reset the file number to 0.
+                    if update_scannumber:
+                        det.filePut("FileNumber", 1)
+                        # print(f"Resetting file number of detector {i} to 0.")
+                        if i < 2:  # tiff file number 0
+                            det.FileNumber = 1
 
             # save Struck as a separate csv file.
             if self.w.isStruckCountNeeded:
@@ -2055,7 +2183,7 @@ class ScanHandler(ScanExecutorsMixin):
         a missing one: an unmatched ZP gives ("unknown_optic", "", 1).
         Never raises -- a scan must not fail over a metadata lookup.
         """
-        from gui import optics_status
+        from gui.optics import optics_status
 
         try:
             status = self.w.optics_status_report()
@@ -2129,17 +2257,23 @@ class ScanHandler(ScanExecutorsMixin):
             except (TypeError, ValueError):
                 return 0.0
 
-        x_n = xmotor + 1
-        x_p0 = _p0(x_n)
-        x_L = _val(f"ed_lup_{x_n}_L")
-        x_R = _val(f"ed_lup_{x_n}_R")
-        x_step = _val(f"ed_lup_{x_n}_N", 1.0)
+        # A step scan from a trajectory file: its listed points (the first
+        # phi slice's, for 3-D), not a grid rebuilt from them.
+        listed = self._planned_points([xmotor, ymotor])
+        if listed is not None and len(listed):
+            return np.array(listed, dtype=float)
 
-        y_n = ymotor + 1
-        y_p0 = _p0(y_n)
-        y_L = _val(f"ed_lup_{y_n}_L")
-        y_R = _val(f"ed_lup_{y_n}_R")
-        y_step = _val(f"ed_lup_{y_n}_N", 1.0)
+        def _axis(motor_index):
+            planned = self._plan_axis(motor_index)
+            if planned is not None:
+                return (float(planned["p0"]), float(planned["st"]),
+                        float(planned["fe"]), float(planned["step"]))
+            n = motor_index + 1
+            return (_p0(n), _val(f"ed_lup_{n}_L"), _val(f"ed_lup_{n}_R"),
+                    _val(f"ed_lup_{n}_N", 1.0))
+
+        x_p0, x_L, x_R, x_step = _axis(xmotor)
+        y_p0, y_L, y_R, y_step = _axis(ymotor)
 
         # Generate coordinate arrays via the same single-source formula used
         # everywhere else (_make_positions handles step==0 and direction
@@ -2517,7 +2651,7 @@ class ScanHandler(ScanExecutorsMixin):
         for det in self.w.detector:
             if det is not None:
                 if (
-                    self.w.use_hdf_plugin and self.w.hdf_plugin_savemode_step > 0
+                    self.w.hdf_plugin_savemode_step > 0
                 ):  # capture mode
                     while det.fileGet("WriteFile_RBV"):
                         wait_for_hdf_write_s = 0.01  # poll interval while waiting for HDF file write to finish
@@ -2816,8 +2950,7 @@ class ScanHandler(ScanExecutorsMixin):
         self._update_scan_summary_completed(
             "partial" if self.isStopScanIssued else "yes"
         )
-        if self.w.shutter_close_after_scan:
-            self.w.shutter.close()
+        self._close_shutters_after_scan()
         if self.isStopScanIssued:
             self.w.set_scan_status("Stopped")
             self.ui.statusbar.showMessage("Scan stopped by user \u2014 motors returned.")
@@ -2872,8 +3005,7 @@ class ScanHandler(ScanExecutorsMixin):
             self.w.set_scan_status("No Scan")
             self.ui.statusbar.showMessage("3-D fly scan complete.")
         self.w.updateprogressbar(100)
-        if self.w.shutter_close_after_scan:
-            self.w.shutter.close()
+        self._close_shutters_after_scan()
         self._wait_for_primary_detectors_written()
         self._stop_sg_detector()
         self.w.update_scanname()
@@ -3006,7 +3138,8 @@ class ScanHandler(ScanExecutorsMixin):
             return
 
         scan_label = "fly2d_SNAKE" if snake else "fly2d"
-        self._pre_scan(scan_label, scan_kind=scan_kind, xmotor=xmotor, ymotor=ymotor)
+        self._pre_scan(scan_label, scan_kind=scan_kind, xmotor=xmotor, ymotor=ymotor,
+                       expt=xax["expt"])
 
         # SoftGlue socket stream is required for snake scans (both axes move
         # simultaneously; softglue provides the hardware timing signal).
@@ -3144,7 +3277,8 @@ class ScanHandler(ScanExecutorsMixin):
             return
 
         scan_label = "fly3d_SNAKE" if snake else "fly3d"
-        self._pre_scan(scan_label, scan_kind=scan_kind, xmotor=xmotor, ymotor=ymotor)
+        self._pre_scan(scan_label, scan_kind=scan_kind, xmotor=xmotor, ymotor=ymotor,
+                       expt=xax["expt"])
 
         self.w.switch_SGstream(snake)
 
@@ -3247,7 +3381,7 @@ class ScanHandler(ScanExecutorsMixin):
         if not self._confirm_large_scan(n_positions, ax["expt"], self.OVERHEAD_FLY):
             return
 
-        self._pre_scan("fly", scan_kind=scan_kind, xmotor=motornumber)
+        self._pre_scan("fly", scan_kind=scan_kind, xmotor=motornumber, expt=ax["expt"])
 
         self.isMCS_ready = False
         if self.w.detector[2] is not None:
@@ -3353,7 +3487,7 @@ class ScanHandler(ScanExecutorsMixin):
         if not self._confirm_large_scan(n_positions, phi_ax["expt"], self.OVERHEAD_FLY):
             return
 
-        self._pre_scan("helix_fly", scan_kind="fly_phi")
+        self._pre_scan("helix_fly", scan_kind="fly_phi", expt=phi_ax["expt"])
 
         self.isMCS_ready = False
         if self.w.detector[2] is not None:
@@ -3410,6 +3544,8 @@ class ScanHandler(ScanExecutorsMixin):
             expt = float(_t_widget.text()) if _t_widget else 0.0
         except ValueError:
             expt = 0.0
+        if self._plan is not None:
+            expt = float(self._plan["expt"])
         if expt <= 0:
             QMessageBox.warning(self.w.ui, "Takeshot", "Exposure time must be > 0.")
             return
@@ -3422,7 +3558,7 @@ class ScanHandler(ScanExecutorsMixin):
         if not self._pre_scan_guards(confirm_name=False):
             return
 
-        self._pre_scan("takeshot")
+        self._pre_scan("takeshot", expt=expt)
         self.w.motor_p0 = {}
         axes_params = [{"name": "time", "motor_index": 0, "expt": expt,
                         "p0": 0.0, "st": 0.0, "fe": period_s, "step": period_s}]
@@ -3524,7 +3660,7 @@ class ScanHandler(ScanExecutorsMixin):
         if not self._pre_scan_guards(confirm_name=False):
             return
 
-        self._pre_scan("timeseries")
+        self._pre_scan("timeseries", expt=expt)
         self.w.motor_p0 = {}
         axes_params = [{"name": "time", "motor_index": 0, "expt": expt,
                         "p0": 0.0, "st": 0.0, "fe": n_images * period_s, "step": period_s}]
@@ -3566,7 +3702,7 @@ class ScanHandler(ScanExecutorsMixin):
                 expt,
                 n_images,
                 period=period_s,
-                capture=(self.w.use_hdf_plugin, savemode),
+                capture=(True, savemode),
                 fn=self.w.hdf_plugin_name[detN],
             )
             if primary_det is None and "3820" not in det._prefix:
@@ -3645,7 +3781,7 @@ class ScanHandler(ScanExecutorsMixin):
         if not self._confirm_large_scan(len(pos), ax["expt"], self.OVERHEAD_STEP):
             return
 
-        self._pre_scan("stepscan")
+        self._pre_scan("stepscan", expt=ax["expt"])
 
         # Populate the instance variables that stepscan0 reads from the worker thread.
         # (Workers cannot safely read Qt widgets, so we pass data via instance state.)
@@ -3694,7 +3830,7 @@ class ScanHandler(ScanExecutorsMixin):
         ):
             return
 
-        self._pre_scan("stepscan2d", xmotor=xmotor, ymotor=ymotor)
+        self._pre_scan("stepscan2d", xmotor=xmotor, ymotor=ymotor, expt=xax["expt"])
 
         # Store X and Y parameters for the executor (worker thread cannot read UI).
         self.stepscan1d_p0 = xax["p0"]
@@ -3773,7 +3909,7 @@ class ScanHandler(ScanExecutorsMixin):
         ):
             return
 
-        self._pre_scan("stepscan3d", xmotor=xmotor, ymotor=ymotor)
+        self._pre_scan("stepscan3d", xmotor=xmotor, ymotor=ymotor, expt=xax["expt"])
 
         self.isMCS_ready = False
         if self.w.detector[2] is not None:
@@ -4144,9 +4280,7 @@ class ScanHandler(ScanExecutorsMixin):
 
         if cmd == "set":
             if saxsmode:
-                self.w.set_hdf_plugin_use(True)
                 self.w.select_detector_mode(False)
-                self.w.set_hdf_plugin_use(True)
                 # self.w.set_basepaths('/net/s12data/export/12id-c/')
 
             if testmode:

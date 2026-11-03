@@ -60,27 +60,6 @@
     <bool>true</bool>
    </property>
   </widget>
-  <widget class="QCheckBox" name="checkBox_hdf5Plugin">
-   <property name="geometry">
-    <rect>
-     <x>190</x>
-     <y>90</y>
-     <width>141</width>
-     <height>20</height>
-    </rect>
-   </property>
-   <property name="font">
-    <font>
-     <pointsize>10</pointsize>
-    </font>
-   </property>
-   <property name="text">
-    <string>HDF5 plugin</string>
-   </property>
-   <property name="checked">
-    <bool>true</bool>
-   </property>
-  </widget>
   <widget class="QCheckBox" name="checkBox_xrfXSP3">
    <property name="geometry">
     <rect>
@@ -200,7 +179,7 @@
     </font>
    </property>
    <property name="toolTip">
-    <string>Experiment log file will be saved in this folder.  QDS softglue data will be saved under /positions.</string>
+    <string>Log file name only, e.g. log.txt. It is written into the data basepath (the Working folder).</string>
    </property>
    <property name="maxLength">
     <number>500</number>
@@ -259,7 +238,7 @@ Leave unchecked on Windows: the Working folder is then a Windows path (e.g. Z:\1
    <property name="toolTip">
     <string>Linux path the detector IOCs write under. The Working folder is appended to it, minus its drive letter.
 
-Ignored when "Running on Linux?" is checked - the Working folder is then already a Linux path and is used as-is.</string>
+Ignored when &quot;Running on Linux?&quot; is checked - the Working folder is then already a Linux path and is used as-is.</string>
    </property>
    <property name="maxLength">
     <number>500</number>
@@ -404,7 +383,7 @@ Ignored when "Running on Linux?" is checked - the Working folder is then already
    <property name="geometry">
     <rect>
      <x>570</x>
-     <y>180</y>
+     <y>200</y>
      <width>71</width>
      <height>20</height>
     </rect>
@@ -417,7 +396,7 @@ Ignored when "Running on Linux?" is checked - the Working folder is then already
    <property name="geometry">
     <rect>
      <x>570</x>
-     <y>200</y>
+     <y>220</y>
      <width>71</width>
      <height>20</height>
     </rect>
@@ -430,7 +409,7 @@ Ignored when "Running on Linux?" is checked - the Working folder is then already
    <property name="geometry">
     <rect>
      <x>570</x>
-     <y>220</y>
+     <y>240</y>
      <width>71</width>
      <height>20</height>
     </rect>
@@ -457,8 +436,8 @@ Sampling Rate:</string>
    <property name="geometry">
     <rect>
      <x>190</x>
-     <y>210</y>
-     <width>241</width>
+     <y>240</y>
+     <width>221</width>
      <height>20</height>
     </rect>
    </property>
@@ -478,8 +457,8 @@ Sampling Rate:</string>
    <property name="geometry">
     <rect>
      <x>190</x>
-     <y>240</y>
-     <width>241</width>
+     <y>270</y>
+     <width>221</width>
      <height>20</height>
     </rect>
    </property>
@@ -565,54 +544,12 @@ Optics on Scan</string>
     <bool>false</bool>
    </property>
   </widget>
-  <widget class="QLabel" name="label_fontSize">
-   <property name="geometry">
-    <rect>
-     <x>190</x>
-     <y>265</y>
-     <width>91</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="font">
-    <font>
-     <pointsize>10</pointsize>
-    </font>
-   </property>
-   <property name="text">
-    <string>Font Size</string>
-   </property>
-  </widget>
-  <widget class="QSpinBox" name="spinBox_fontSize">
-   <property name="geometry">
-    <rect>
-     <x>290</x>
-     <y>262</y>
-     <width>61</width>
-     <height>25</height>
-    </rect>
-   </property>
-   <property name="font">
-    <font>
-     <pointsize>10</pointsize>
-    </font>
-   </property>
-   <property name="minimum">
-    <number>6</number>
-   </property>
-   <property name="maximum">
-    <number>24</number>
-   </property>
-   <property name="value">
-    <number>11</number>
-   </property>
-  </widget>
   <widget class="QFrame" name="frame_4">
    <property name="geometry">
     <rect>
-     <x>420</x>
-     <y>220</y>
-     <width>141</width>
+     <x>410</x>
+     <y>270</y>
+     <width>181</width>
      <height>111</height>
     </rect>
    </property>
@@ -633,7 +570,7 @@ Optics on Scan</string>
      <rect>
       <x>10</x>
       <y>10</y>
-      <width>61</width>
+      <width>91</width>
       <height>41</height>
      </rect>
     </property>
@@ -658,9 +595,14 @@ Layout</string>
      <rect>
       <x>10</x>
       <y>60</y>
-      <width>61</width>
+      <width>91</width>
       <height>41</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+     </font>
     </property>
     <property name="styleSheet">
      <string notr="true">background-color: rgb(180, 255, 255);</string>
@@ -676,9 +618,9 @@ Layout</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>80</x>
+      <x>110</x>
       <y>60</y>
-      <width>51</width>
+      <width>61</width>
       <height>41</height>
      </rect>
     </property>
@@ -701,9 +643,9 @@ Layout</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>80</x>
+      <x>110</x>
       <y>10</y>
-      <width>51</width>
+      <width>61</width>
       <height>41</height>
      </rect>
     </property>
@@ -759,6 +701,43 @@ Layout</string>
    </property>
    <property name="alignment">
     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+   </property>
+  </widget>
+  <widget class="QRadioButton" name="radioButton_ifAuto">
+   <property name="geometry">
+    <rect>
+     <x>570</x>
+     <y>180</y>
+     <width>71</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Auto</string>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="checkBox_closeFastShutterAfterScan">
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>210</y>
+     <width>221</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+    </font>
+   </property>
+   <property name="text">
+    <string>Fast Shutter Close After Scan</string>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
    </property>
   </widget>
  </widget>

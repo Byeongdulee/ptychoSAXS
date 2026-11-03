@@ -11,7 +11,9 @@ import configparser
 import os
 
 # Directory every GUI .ini lives in, created on demand by ensure_ini_defaults.
-INI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ini")
+# gui/ini/, one level up from this package.
+INI_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ini")
 
 
 def ensure_ini_defaults(path, defaults):

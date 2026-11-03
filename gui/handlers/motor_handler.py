@@ -18,8 +18,14 @@ if TYPE_CHECKING:
 class MotorHandler:
     def __init__(self, window: "ptyco_main_control"):
         self.w = window          # reference to the main window
-        self.ui = window.ui      # shortcut to the loaded .ui widgets
         self._connect_signals()
+
+    @property
+    def ui(self):
+        """The window currently shown. Resolved on every access, because the
+        More/Less ladder swaps the main window and a cached reference would
+        keep pointing at the one that was closed."""
+        return self.w.ui
 
     def _connect_signals(self):
         """Connect push-button signals to this handler's slots.

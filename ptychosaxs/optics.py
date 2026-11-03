@@ -13,7 +13,7 @@ instead of sleeping in 10 ms steps, and takes an injectable PV class so the
 whole thing is testable with no Channel Access at all.
 
 Record layout lives in ptychosaxs/optics_config.py, shared with
-gui/optics_status.py so the two cannot disagree about which motor is which.
+gui/optics/optics_status.py so the two cannot disagree about which motor is which.
 """
 
 from ptychosaxs import optics_config

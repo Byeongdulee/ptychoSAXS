@@ -23,11 +23,17 @@ critically -- calls `self._levels.restore_geometry(ui)` after showing it (see
 the ordering note on that method). It must not install its own closeEvent;
 LevelSwitcher owns that so it can save each level's geometry under that
 level's own key.
+
+A level whose window holds state other levels depend on can be kept alive
+across switches: pass `persistent=lambda ui: ...`, and a window it returns
+True for is hidden on the way out instead of closed and deleted, and
+`build` may hand the same window back the next time that level is opened
+(see rungui.py's ptyco_main_control, whose large view backs the user view).
 """
 
 import os
 
-from PyQt5.QtCore import QSettings
+from PyQt5.QtCore import QObject, QSettings
 from PyQt5.QtWidgets import QPushButton
 
 
@@ -42,7 +48,7 @@ class LevelSwitcher:
 
     def __init__(self, levels, build, settings_prefix, settings=None,
                  more_button="pushButton_More", less_button="pushButton_Less",
-                 remember=True):
+                 remember=True, persistent=None):
         self.levels = list(levels)
         self.build = build
         self.settings_prefix = settings_prefix
@@ -50,6 +56,7 @@ class LevelSwitcher:
         self.more_button = more_button
         self.less_button = less_button
         self.remember = remember
+        self.persistent = persistent
         self.index = 0
         self.ui = None
 
@@ -77,6 +84,7 @@ class LevelSwitcher:
         if index == self.index:
             return self.ui
         old_ui = self.ui
+        old_index = self.index
         anchor = old_ui.frameGeometry().topLeft() if old_ui is not None else None
 
         self.index = index
@@ -85,9 +93,14 @@ class LevelSwitcher:
 
         self.ui = self._open(index, anchor)
 
-        if old_ui is not None:
-            old_ui.close()      # runs its own closeEvent -- saves its geometry
-            old_ui.deleteLater()
+        if old_ui is not None and old_ui is not self.ui:
+            if self.persistent is not None and self.persistent(old_ui):
+                # Hiding sends no closeEvent, so save its geometry here.
+                self.settings.setValue(self._geometry_key(old_index), old_ui.saveGeometry())
+                old_ui.hide()
+            else:
+                old_ui.close()      # runs its own closeEvent -- saves its geometry
+                old_ui.deleteLater()
         return self.ui
 
     def _open(self, index, anchor):
@@ -117,15 +130,30 @@ class LevelSwitcher:
         ui.closeEvent = on_close
 
     def _connect_nav_buttons(self, ui):
-        """Wire whichever of More/Less this level's .ui actually has."""
-        more = ui.findChild(QPushButton, self.more_button)
-        less = ui.findChild(QPushButton, self.less_button)
+        """Wire whichever of More/Less this level's .ui actually has.
+
+        Once per window: a persistent window comes back through here on
+        every visit, and a second connection would fire a second switch.
+        """
+        if ui.property("_levelNavWired"):
+            return
+        ui.setProperty("_levelNavWired", True)
+        # QObject.findChild, not ui.findChild: a window may override the
+        # latter to fall back to another window's widgets (rungui's user
+        # view does), and a nav button must be this window's own.
+        more = QObject.findChild(ui, QPushButton, self.more_button)
+        less = QObject.findChild(ui, QPushButton, self.less_button)
         if more is not None:
             more.clicked.connect(lambda: self.switch_to(self.index - 1))
         if less is not None:
             less.clicked.connect(lambda: self.switch_to(self.index + 1))
 
     # -- geometry -------------------------------------------------------
+
+    def save_geometry(self):
+        """Save the current level's geometry now, e.g. on application exit."""
+        if self.ui is not None:
+            self.settings.setValue(self._geometry_key(self.index), self.ui.saveGeometry())
 
     def _geometry_key(self, index):
         basename = os.path.basename(self.levels[index])

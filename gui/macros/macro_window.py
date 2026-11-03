@@ -63,16 +63,29 @@ SCAN_ESTIMATE_SLOTS = {"x": 1, "z": 3, "phi": 7}
 #
 # Keyed by button name because that is what saved macros in
 # macro_commands.json already store; nothing about those files changes.
+#
+# Each scan goes through TrajHandler.write_and_run, exactly as the large
+# panel's buttons do: a trajectory csv is written beside the master file and
+# the scan is run from it, so macro scans leave the same record as hand-run
+# ones. Under macro_running that path asks nothing -- the scan-name prompt
+# and the start-position prompt both take their unattended branch.
 def _scan_action(main, button_name):
     """The call `button_name` stands for, or None if it is not a scan."""
     import re as _re
 
+    from ptychosaxs.api.scan_traj import FLY, STEP, TAKESHOT
+
+    run = main.traj_handler.write_and_run
+
+    def xz():
+        return [main.DEFAULTS["xmotor"], main.DEFAULTS["ymotor"]]
+
     fixed = {
-        "pb_lup_step2d": lambda: main.stepscan2d(),
-        "pb_SAXSscan_fly2d": lambda: main.fly2d(snake=True),
-        "pb_lup_step3d": lambda: main.stepscan3d(*main._scan_axis_indices()),
-        "pb_SAXSscan_fly3d": lambda: main.fly3d(snake=True),
-        "pb_takeshot": lambda: main.scan_handler.takeshot(),
+        "pb_lup_step2d": lambda: run(STEP, xz()),
+        "pb_SAXSscan_fly2d": lambda: run(FLY, xz()),
+        "pb_lup_step3d": lambda: run(STEP, list(main._scan_axis_indices())),
+        "pb_SAXSscan_fly3d": lambda: run(FLY, list(main._scan_axis_indices())),
+        "pb_takeshot": lambda: run(TAKESHOT),
     }
     if button_name in fixed:
         return fixed[button_name]
@@ -83,9 +96,7 @@ def _scan_action(main, button_name):
     match = _re.fullmatch(r"pb_(lup|SAXSscan)_(\d+)", button_name or "")
     if match:
         kind, slot = match.group(1), int(match.group(2))
-        if kind == "lup":
-            return lambda: main.stepscan(slot - 1)
-        return lambda: main.fly(slot - 1)
+        return lambda: run(STEP if kind == "lup" else FLY, [slot - 1])
     return None
 
 
