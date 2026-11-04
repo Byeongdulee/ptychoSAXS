@@ -176,6 +176,14 @@ class PVCache:
             # say so rather than letting a box look like it was written.
             raise RuntimeError(f"{name} is not connected")
         pv.put(value)
+        if self._profile.simulated and name.endswith(".VAL"):
+            # A simulated record has no IOC to move it, so its readback
+            # would never follow a drive and anything classifying position
+            # from .RBV (the optics panel's slit status) could not be
+            # exercised in debug mode. Arrive instantly instead.
+            rbv = self._channel(name[:-len(".VAL")] + ".RBV")
+            if rbv is not None:
+                rbv.put(value)
         return True
 
     def snapshot(self, names=None):

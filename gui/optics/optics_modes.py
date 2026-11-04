@@ -243,6 +243,8 @@ class OpticsModes:
       move_block(key, into)   command a block in (True) or out (False)
       pv_value(name)          a PV as a float, or None if unreadable
       pv_factory(name)        a PV object for PVLineEdit, or None
+      slits_has_target(preset)  whether "ptycho"/"SAXS" slit widths are defined
+      move_slits(preset)      write those widths, unasked; True if sent
     """
 
     def __init__(self, panel):
@@ -300,6 +302,21 @@ class OpticsModes:
         self.panel.xray_eye.set_in(False)
         return True
 
+    def _set_slits(self, preset):
+        """Send the slits to `preset` (fire and forget). False, with nothing
+        moved, if that preset is not fully defined.
+
+        Every sequence calls this first, so a missing definition stops the
+        sequence before any optic has moved -- the same up-front refusal
+        _move_blocks gives a missing optics position. The slits are not
+        waited on: nothing else in the sequence depends on their width.
+        """
+        if not self.panel.slits_has_target(preset):
+            self._warn("No saved %s slit sizes.\nNothing has been moved."
+                       % preset)
+            return False
+        return self.panel.move_slits(preset)
+
     def _insert_saxsbs(self, preamble):
         """Put the SAXS beamstop in and wait for it. False if it never got
         there, or if this view has no SAXS beamstop block at all."""
@@ -312,12 +329,15 @@ class OpticsModes:
     # -- Ptycho Mode -------------------------------------------------------
 
     def ptycho_mode(self):
-        """ZP, BS and OSA in; then clear the eye and the SAXS beamstop.
+        """Slits to ptycho, ZP, BS and OSA in; then clear the eye and the
+        SAXS beamstop.
 
         The two retractions come last and are asked about separately. Both
         uncover the detector, so neither happens until the optics that are
         supposed to be in the beam actually are.
         """
+        if not self._set_slits("ptycho"):
+            return
         if not self._move_blocks(PTYCHO_BLOCKS, True, "ZP, BS and OSA"):
             return
 
@@ -336,12 +356,15 @@ class OpticsModes:
     # -- X-ray Eye Mode ----------------------------------------------------
 
     def xray_eye_mode(self):
-        """Eye in, verified by the operator, then the optics out of the way.
+        """Slits to ptycho, eye in, verified by the operator, then the optics
+        out of the way.
 
         The verification is not a formality -- the eye does fail to insert --
         so the sequence will not retract a single optic until someone has
         looked at the camera and said the eye is there.
         """
+        if not self._set_slits("ptycho"):
+            return
         self.panel.xray_eye.set_in(True)
 
         while True:
@@ -399,7 +422,10 @@ class OpticsModes:
     # -- SAXS Mode ---------------------------------------------------------
 
     def saxs_mode(self):
-        """SAXS beamstop in, then ZP, BS and OSA out from behind it."""
+        """Slits to SAXS, SAXS beamstop in, then ZP, BS and OSA out from
+        behind it."""
+        if not self._set_slits("SAXS"):
+            return
         if not self._insert_saxsbs("Inserting SAXS beamstop before removing "
                                    "optics."):
             return

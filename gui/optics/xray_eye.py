@@ -44,6 +44,27 @@ def camera_pv(field):
 EYE_EXPOSURE_PV = camera_pv("cam1:AcquireTime")
 EYE_EXPOSURE_RBV_PV = camera_pv("cam1:AcquireTime_RBV")
 
+# Acquisition control, used by the takeshot / Start / Stop buttons (see
+# gui/optics/eye_camera.py). Acquire is the command; Acquire_RBV is the
+# camera's own "busy" readback, which is what decides whether the eye is
+# already acquiring. ImageMode is the standard areaDetector enum.
+EYE_ACQUIRE_PV = camera_pv("cam1:Acquire")
+EYE_ACQUIRE_RBV_PV = camera_pv("cam1:Acquire_RBV")
+EYE_IMAGE_MODE_PV = camera_pv("cam1:ImageMode")
+IMAGE_MODE_SINGLE = 0
+IMAGE_MODE_CONTINUOUS = 2
+
+# The fast (Uniblitz) shutter in front of the eye: writing 1 to either record
+# fires that action. Same records as ptychosaxs/tools/shutter.py, named here
+# rather than imported because that module opens Channel Access on import and
+# the panels talk to EPICS only through the server.
+FAST_SHUTTER_OPEN_PV = "12idc:uniblitz:shutter:open"
+FAST_SHUTTER_CLOSE_PV = "12idc:uniblitz:shutter:close"
+
+# Pause between the takeshot steps (shutter open -> trigger, and acquisition
+# done -> shutter close), in milliseconds.
+TAKESHOT_STEP_DELAY_MS = 100
+
 
 def eye_in_from_cmd(value):
     """True when the last command inserted the eye, None if unreadable."""

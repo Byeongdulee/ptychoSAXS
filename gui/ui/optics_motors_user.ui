@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>506</width>
-    <height>285</height>
+    <width>472</width>
+    <height>351</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -80,7 +80,7 @@
       <x>270</x>
       <y>85</y>
       <width>191</width>
-      <height>81</height>
+      <height>101</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -98,7 +98,7 @@
        <x>8</x>
        <y>6</y>
        <width>111</width>
-       <height>21</height>
+       <height>28</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -133,9 +133,9 @@
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>29</y>
+       <y>36</y>
        <width>111</width>
-       <height>21</height>
+       <height>28</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -149,9 +149,9 @@
      <property name="geometry">
       <rect>
        <x>8</x>
-       <y>52</y>
+       <y>66</y>
        <width>111</width>
-       <height>21</height>
+       <height>28</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -165,10 +165,10 @@
    <widget class="QPushButton" name="pushButton_stopAll">
     <property name="geometry">
      <rect>
-      <x>390</x>
-      <y>205</y>
-      <width>71</width>
-      <height>31</height>
+      <x>380</x>
+      <y>270</y>
+      <width>81</width>
+      <height>28</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -181,10 +181,10 @@
    <widget class="QPushButton" name="pushButton_exit">
     <property name="geometry">
      <rect>
-      <x>390</x>
-      <y>170</y>
-      <width>71</width>
-      <height>31</height>
+      <x>10</x>
+      <y>270</y>
+      <width>81</width>
+      <height>28</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -584,104 +584,231 @@ zone plate</string>
      </property>
     </widget>
    </widget>
-   <widget class="QLineEdit" name="ed_xeExp">
-    <property name="geometry">
-     <rect>
-      <x>220</x>
-      <y>210</y>
-      <width>61</width>
-      <height>28</height>
-     </rect>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">background-color: rgb(255, 255, 255);</string>
-    </property>
-    <property name="text">
-     <string>0.002</string>
-    </property>
-    <property name="alignment">
-     <set>Qt::AlignCenter</set>
-    </property>
-   </widget>
-   <widget class="QPushButton" name="pb_xeExp_stepUp">
-    <property name="geometry">
-     <rect>
-      <x>340</x>
-      <y>214</y>
-      <width>41</width>
-      <height>21</height>
-     </rect>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">background-color: #ab47bc; color: white;</string>
-    </property>
-    <property name="text">
-     <string>10x</string>
-    </property>
-   </widget>
-   <widget class="QPushButton" name="pb_xeExp_stepDown">
-    <property name="geometry">
-     <rect>
-      <x>290</x>
-      <y>214</y>
-      <width>41</width>
-      <height>21</height>
-     </rect>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">background-color: #ab47bc; color: white;</string>
-    </property>
-    <property name="text">
-     <string>0.1x</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="lbl_xeExp_label">
+   <widget class="QWidget" name="col_xe" native="true">
     <property name="geometry">
      <rect>
       <x>140</x>
-      <y>186</y>
-      <width>171</width>
-      <height>21</height>
+      <y>190</y>
+      <width>231</width>
+      <height>111</height>
      </rect>
     </property>
-    <property name="font">
-     <font>
-      <pointsize>8</pointsize>
-      <weight>75</weight>
-      <bold>true</bold>
-     </font>
+    <property name="autoFillBackground">
+     <bool>false</bool>
     </property>
-    <property name="text">
-     <string>X-ray eye exp time (s)</string>
+    <property name="styleSheet">
+     <string notr="true">background-color: rgb(229, 229, 229);</string>
     </property>
-    <property name="alignment">
-     <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-    </property>
+    <widget class="QLabel" name="lbl_xeExp_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>141</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>X-ray eye</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_xeExp_label_2">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>30</y>
+       <width>81</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>exp time (s)</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_xeExp_RBVlbl">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>50</y>
+       <width>41</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>RBV</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_xeExp_RBV">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>74</y>
+       <width>51</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>0.002</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="ed_xeExp">
+     <property name="geometry">
+      <rect>
+       <x>60</x>
+       <y>70</y>
+       <width>61</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 255, 255);</string>
+     </property>
+     <property name="text">
+      <string>0.002</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_xeExp_RBVlbl_2">
+     <property name="geometry">
+      <rect>
+       <x>60</x>
+       <y>50</y>
+       <width>41</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Drive</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_xeExp_stepUp">
+     <property name="geometry">
+      <rect>
+       <x>185</x>
+       <y>70</y>
+       <width>41</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: #ab47bc; color: white;</string>
+     </property>
+     <property name="text">
+      <string>10x</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pb_xeExp_stepDown">
+     <property name="geometry">
+      <rect>
+       <x>135</x>
+       <y>70</y>
+       <width>41</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: #ab47bc; color: white;</string>
+     </property>
+     <property name="text">
+      <string>0.1x</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pushButton_xe_takeshot">
+     <property name="geometry">
+      <rect>
+       <x>135</x>
+       <y>10</y>
+       <width>91</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="text">
+      <string>takeshot</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pushButton_xe_start">
+     <property name="geometry">
+      <rect>
+       <x>135</x>
+       <y>40</y>
+       <width>41</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>Start</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pushButton_xe_stop">
+     <property name="geometry">
+      <rect>
+       <x>185</x>
+       <y>40</y>
+       <width>41</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(255, 180, 255);</string>
+     </property>
+     <property name="text">
+      <string>Stop</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="lbl_xeExp_label_3">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>25</y>
+       <width>31</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Acq</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
    </widget>
-   <widget class="QLabel" name="lbl_xeExp_RBVlbl">
+   <widget class="QPushButton" name="pushButton_slits_define_SAXS">
     <property name="geometry">
      <rect>
-      <x>140</x>
-      <y>215</y>
-      <width>41</width>
-      <height>20</height>
+      <x>380</x>
+      <y>200</y>
+      <width>81</width>
+      <height>61</height>
      </rect>
     </property>
-    <property name="text">
-     <string>RBV</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="lbl_xeExp_RBV">
-    <property name="geometry">
-     <rect>
-      <x>180</x>
-      <y>215</y>
-      <width>51</width>
-      <height>20</height>
-     </rect>
+    <property name="styleSheet">
+     <string notr="true"/>
     </property>
     <property name="text">
-     <string>0.002</string>
+     <string>Define
+SAXS
+slits</string>
     </property>
    </widget>
   </widget>
@@ -690,8 +817,8 @@ zone plate</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>506</width>
-     <height>23</height>
+     <width>472</width>
+     <height>20</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -701,6 +828,7 @@ zone plate</string>
     <addaction name="actionImportPositions"/>
     <addaction name="separator"/>
     <addaction name="actionEnable_zone_plate_choice"/>
+    <addaction name="actionEnable_SAXS_slit_definition"/>
     <addaction name="actionOpen_full_GUI"/>
    </widget>
    <addaction name="menuFile"/>
@@ -719,6 +847,14 @@ zone plate</string>
   <action name="actionEnable_zone_plate_choice">
    <property name="text">
     <string>Enable zone plate choice</string>
+   </property>
+  </action>
+  <action name="actionEnable_SAXS_slit_definition">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Enable SAXS slit definition</string>
    </property>
   </action>
  </widget>

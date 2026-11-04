@@ -13,9 +13,11 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
     QAction,
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
+    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -25,6 +27,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSlider,
+    QStatusBar,
     QVBoxLayout,
     QWidget,
 )
@@ -56,6 +59,7 @@ from gui.widgets.pv_lineedit import PVLineEdit
 from gui.common.resize_utils import ProportionalResizer
 from gui.common.ui_levels import LevelSwitcher
 from gui.optics.xray_eye import EYE_CMD_PV, EYE_EXPOSURE_PV, EYE_EXPOSURE_RBV_PV, XrayEye
+from gui.optics.eye_camera import EyeCamera
 
 _GUI_DIR = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(_GUI_DIR, "ui")
@@ -104,8 +108,9 @@ VIEW_LEVELS = [FULL_VIEW, "optics_motors_small.ui", "optics_motors_tiny.ui",
 #   saxs_z     12idcACS1:m1
 #   beamstop   12ideSFT:m4, m5
 #
-# The CL slits are deliberately absent: this panel neither drives nor stops
-# them, so Stop All must leave them alone.
+# The slits are deliberately absent from MOTORS: they are not optics
+# controller axes, and Stop All must leave them alone. Their widths are set
+# through plain record writes instead -- see SLITS below.
 # ---------------------------------------------------------------------------
 
 
@@ -168,6 +173,53 @@ MM_RESOLUTION_MOTORS = {"SAXS_Z"}
 
 _DEFAULT_ZP_POSITIONS = {"test position 1": [None, None]}
 
+# Slit widths the Slits registry drives, key -> record base (.VAL to drive,
+# .RBV to read back). The two slit sets follow different naming conventions
+# on purpose -- these are the real record names. Only widths are offered;
+# centres are left to whoever set them. CL comes first because every slit
+# display lists it on the left. Keys are "<slit>_<axis>".
+SLITS = OrderedDict([
+    ("CL_H",  "12idc:CL_SlitHsize"),
+    ("CL_V",  "12idc:CL_SlitVsize"),
+    ("MH2_H", "12ida2:MH2_Slit_Hsize"),
+    ("MH2_V", "12ida2:MH2_Slit_Vsize"),
+])
+SLIT_PRESETS = ("ptycho", "SAXS")
+SLITS_TOL_MM = 0.010   # 10 um: within this, a slit counts as at its preset
+SLITS_SECTION = "slits"
+
+
+def _slit_ini_key(preset, key):
+    # configparser lowercases keys anyway; spelling them lowercase here
+    # keeps the file and the code agreeing about what is stored.
+    return ("%s_%s" % (preset, key)).lower()
+
+
+def _slit_groups():
+    """OrderedDict slit name -> its SLITS keys, e.g. "CL" -> [CL_H, CL_V]."""
+    groups = OrderedDict()
+    for key in SLITS:
+        groups.setdefault(key.split("_")[0], []).append(key)
+    return groups
+
+
+def classify_slits(rbvs, presets, tol=SLITS_TOL_MM):
+    """Which preset the slits are at: "ptycho", "SAXS" or "----".
+
+    `rbvs` is {SLITS key: readback mm or None}; `presets` is {preset: {SLITS
+    key: width mm or None}}. A preset only matches with every width defined
+    and every readback within `tol` of it -- an unset width or an unreadable
+    slit can never be "at" anything. Ptycho is tried first, so two presets
+    defined identically read as ptycho.
+    """
+    for preset in SLIT_PRESETS:
+        targets = presets.get(preset, {})
+        if all(targets.get(key) is not None and rbvs.get(key) is not None
+               and abs(rbvs[key] - targets[key]) <= tol + 1e-9
+               for key in SLITS):
+            return preset
+    return "----"
+
 
 def _position_defaults():
     """{section: {key: default}} for every block's saved in/out positions.
@@ -194,6 +246,8 @@ INI_DEFAULTS = dict(
             for p in AXIS_BLOCKS for axis in ("ver", "hor")},
     options={"saxsbs_in_all": "0"},
 )
+INI_DEFAULTS[SLITS_SECTION] = {_slit_ini_key(p, k): ""
+                               for p in SLIT_PRESETS for k in SLITS}
 
 
 def ensure_default_ini(path=_OPTICS_INI):
@@ -216,17 +270,64 @@ def write_saxsbs_in_all(enabled, path=_OPTICS_INI):
     _write_ini_value("options", "saxsbs_in_all", "1" if enabled else "0", path)
 
 
+def read_slit_presets(path=_OPTICS_INI):
+    """{preset: {SLITS key: width mm or None}} from the [slits] section."""
+    cfg = configparser.ConfigParser()
+    try:
+        cfg.read(path)
+    except (configparser.Error, OSError):
+        pass
+    presets = {}
+    for preset in SLIT_PRESETS:
+        presets[preset] = {}
+        for key in SLITS:
+            text = cfg.get(SLITS_SECTION, _slit_ini_key(preset, key),
+                           fallback="").strip()
+            try:
+                presets[preset][key] = float(text) if text else None
+            except ValueError:
+                presets[preset][key] = None   # a corrupt entry is just unset
+    return presets
+
+
+def write_slit_presets(presets, path=_OPTICS_INI):
+    """Store every preset width in one write. Unset widths are stored blank."""
+    _write_ini_values(SLITS_SECTION, {
+        _slit_ini_key(preset, key): ("" if value is None else "%.6f" % value)
+        for preset, widths in presets.items() for key, value in widths.items()},
+        path)
+
+
 def _write_ini_value(section, key, value, path=_OPTICS_INI):
+    _write_ini_values(section, {key: value}, path)
+
+
+def _write_ini_values(section, values, path=_OPTICS_INI):
     cfg = configparser.ConfigParser()
     cfg.read(path)
     if not cfg.has_section(section):
         cfg.add_section(section)
-    cfg[section][key] = value
+    for key, value in values.items():
+        cfg[section][key] = value
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
         cfg.write(f)
     os.replace(tmp, path)   # atomic, so a concurrent reader never sees a
                             # half-written file -- see _save_ini
+
+
+# The registries' enable checkboxes. A plain "background-color: transparent"
+# (the fix the slider and labels get) also blanks Fusion's indicator, leaving
+# an unchecked box invisible, and restyling only the indicator loses the
+# tick -- so the indicator is drawn here outright: an empty box when off,
+# filled the move-set slider's blue when on.
+ENABLE_BOX_STYLE = (
+    "QCheckBox { background-color: transparent; }"
+    " QCheckBox::indicator { width: 12px; height: 12px;"
+    " border: 1px solid #707070; border-radius: 2px; background-color: white; }"
+    " QCheckBox::indicator:checked { background-color: #2196f3;"
+    " border-color: #1769aa; }"
+    " QCheckBox::indicator:disabled { border-color: #b0b0b0; }")
 
 
 class _SliderToggle(QObject):
@@ -243,7 +344,8 @@ class PresetBlock:
     """Enable toggle plus In/Out recall for one group of motors.
 
     Every widget it touches is named after `prefix`, so a block needs no
-    per-widget configuration: pb_<p>_enable / _in / _out, slider_<p>_moveSet,
+    per-widget configuration: checkBox_<p>_enable, pb_<p>_in / _out,
+    slider_<p>_moveSet,
     lbl_<p>_status, frame_<p>_reg, and lbl_<p>_in_<i> / lbl_<p>_out_<i> for
     each motor.
 
@@ -285,7 +387,7 @@ class PresetBlock:
         self._out_values = [None] * len(self.motors)
 
         self._list = self.ui.findChild(QWidget, "listWidget_%sList" % prefix)
-        self.enable_button = self._w(QPushButton, "pb_%s_enable" % prefix)
+        self.enable_button = self._w(QCheckBox, "checkBox_%s_enable" % prefix)
         self._connect()
         self._load_ini()
         self.refresh_display()
@@ -320,7 +422,10 @@ class PresetBlock:
     def _connect(self):
         p = self.prefix
         if self.enable_button is not None:
-            self.enable_button.clicked.connect(self._toggle)
+            # Unstyled, the checkbox paints the column's grey over the
+            # registry's pale yellow -- see ENABLE_BOX_STYLE.
+            self.enable_button.setStyleSheet(ENABLE_BOX_STYLE)
+            self.enable_button.toggled.connect(self._apply_enabled)
         for name, slot in (("pb_%s_in" % p, self.on_in),
                            ("pb_%s_out" % p, self.on_out)):
             button = self._w(QPushButton, name)
@@ -353,9 +458,11 @@ class PresetBlock:
                 widget.setEnabled(enabled)
 
         if self.enable_button is not None:
-            self.enable_button.setText("Yes" if enabled else "No")
-            self.enable_button.setStyleSheet(
-                "background-color: %s;" % ("#ccffcc" if enabled else "#ffcccc"))
+            # Signals blocked: this is also how the box gets its initial
+            # state, which must not re-enter here through toggled.
+            self.enable_button.blockSignals(True)
+            self.enable_button.setChecked(enabled)
+            self.enable_button.blockSignals(False)
 
         # Grey the whole registry out, status pill excepted -- it keeps its
         # own In/Out colouring. The explicit transparent background overrides
@@ -372,9 +479,6 @@ class PresetBlock:
 
         self.enabled = enabled
         self.panel.update_all_buttons()
-
-    def _toggle(self):
-        self._apply_enabled(not self.enabled)
 
     def _move_set_mode(self):
         """0 = the In/Out buttons move motors, 1 = they save positions.
@@ -635,6 +739,280 @@ class PresetBlock:
         return "----"
 
 
+class SlitsBlock:
+    """The Slits registry: ptycho and SAXS width presets for every SLITS key.
+
+    Unlike PresetBlock this drives no optics-controller motors. A preset is
+    a set of widths written straight to the slits' .VAL records, and the
+    status comes from their .RBV records -- so it lives off the PV mirror
+    (panel._pv / panel.pv_value) rather than the server's position events.
+
+    Widgets, all optional: checkBox_slits_enable, pushButton_slits_define,
+    pushButton_slits_ptycho / _SAXS, lbl_slits_status, frame_slits_reg. The
+    user view has none of them, so a block built there is permanently
+    enabled and only moved by the mode sequences, same as PresetBlock.
+
+    Widths are always mm, whatever unit the panel shows positions in: they
+    are a different kind of number from the stage positions, and the slit
+    records' own unit is mm.
+    """
+
+    FMT = "%.3f"
+    MATCH_STYLE = "background-color: #00cc00; color: white;"
+    BUTTONS = ("pushButton_slits_define", "pushButton_slits_ptycho",
+               "pushButton_slits_SAXS")
+
+    def __init__(self, panel, initial_state=None):
+        self.panel = panel
+        self.ui = panel.ui
+        self.presets = read_slit_presets(_OPTICS_INI)
+        self.status = "----"
+        self.enabled = False
+        # Set while a Define dialog is open, so the panel's PV refresh keeps
+        # its readbacks live -- see define().
+        self._dialog_refresh = None
+
+        self.enable_box = self._w(QCheckBox, "checkBox_slits_enable")
+        if self.enable_box is not None:
+            self.enable_box.setStyleSheet(ENABLE_BOX_STYLE)
+            self.enable_box.toggled.connect(self._apply_enabled)
+        for preset, name in (("ptycho", "pushButton_slits_ptycho"),
+                             ("SAXS", "pushButton_slits_SAXS")):
+            button = self._w(QPushButton, name)
+            if button is not None:
+                button.clicked.connect(
+                    lambda _c=False, p=preset: self.move_to(p, confirm=True))
+        define = self._w(QPushButton, "pushButton_slits_define")
+        if define is not None:
+            define.clicked.connect(lambda: self.define(SLIT_PRESETS))
+
+        state = initial_state or {}
+        self._apply_enabled(True if self.enable_box is None
+                            else state.get("enabled", False))
+
+    def _w(self, cls, name):
+        return self.ui.findChild(cls, name)
+
+    # -- enable ------------------------------------------------------------
+
+    def _apply_enabled(self, enabled):
+        """Gate everything in the registry: Define, Ptycho, SAXS and the
+        status, which goes grey rather than blank -- it still says where
+        the slits are, it just stops looking like a control."""
+        for name in self.BUTTONS:
+            button = self._w(QPushButton, name)
+            if button is not None:
+                button.setEnabled(enabled)
+        if self.enable_box is not None:
+            self.enable_box.blockSignals(True)
+            self.enable_box.setChecked(enabled)
+            self.enable_box.blockSignals(False)
+
+        status = self._w(QLabel, "lbl_slits_status")
+        colour = "black" if enabled else PresetBlock.DISABLED_TEXT_COLOR
+        reg = self._w(QWidget, "frame_slits_reg")
+        if reg is not None:
+            for lbl in reg.findChildren(QLabel):
+                if lbl is not status:
+                    lbl.setStyleSheet(
+                        "color: %s; background-color: transparent;" % colour)
+        self.enabled = enabled
+        self._paint_status()
+
+    # -- presets -----------------------------------------------------------
+
+    def has_target(self, preset):
+        """Whether every width of `preset` is defined, so move_to can go."""
+        return all(v is not None for v in self.presets[preset].values())
+
+    def describe(self, preset):
+        """One line per slit, e.g. "CL:  H 0.100 mm   V 0.050 mm"."""
+        lines = []
+        for slit, keys in _slit_groups().items():
+            parts = []
+            for key in keys:
+                value = self.presets[preset][key]
+                parts.append("%s %s mm" % (key.split("_")[1],
+                                           "unset" if value is None
+                                           else self.FMT % value))
+            lines.append("%s:  %s" % (slit, "   ".join(parts)))
+        return "\n".join(lines)
+
+    def move_to(self, preset, confirm=False):
+        """Write `preset`'s widths to the slits. True if all four went out.
+
+        With `confirm` (the registry's own buttons) the operator is shown
+        the widths and asked first; the mode sequences pass False, having
+        checked has_target themselves. Write failures are always reported.
+        """
+        if not self.has_target(preset):
+            if confirm:
+                QMessageBox.warning(
+                    self.ui, "Slits",
+                    "The %s slit sizes are not all defined:\n\n%s\n\n"
+                    "Use Define first. Nothing has been moved."
+                    % (preset, self.describe(preset)))
+            return False
+        if confirm:
+            reply = QMessageBox.question(
+                self.ui, "Slits",
+                "Move slits to %s?\n\n%s" % (preset, self.describe(preset)),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply != QMessageBox.Yes:
+                return False
+        failures = []
+        for key, base in SLITS.items():
+            try:
+                self.panel._pv(base + ".VAL").put(self.presets[preset][key])
+            except Exception as exc:
+                failures.append("%s.VAL: %s" % (base, exc))
+        if failures:
+            QMessageBox.warning(self.ui, "Slits",
+                                "Could not move the slits:\n" + "\n".join(failures))
+            return False
+        return True
+
+    # -- status ------------------------------------------------------------
+
+    def readbacks(self):
+        return {key: self.panel.pv_value(base + ".RBV")
+                for key, base in SLITS.items()}
+
+    def update_status(self):
+        """Reclassify from the .RBV records. Called on every PV push."""
+        self.status = classify_slits(self.readbacks(), self.presets)
+        self._paint_status()
+        if self._dialog_refresh is not None:
+            self._dialog_refresh()
+
+    def _paint_status(self):
+        label = self._w(QLabel, "lbl_slits_status")
+        if label is None:
+            return
+        label.setText(self.status)
+        if not self.enabled:
+            label.setStyleSheet("color: %s; background-color: transparent;"
+                                % PresetBlock.DISABLED_TEXT_COLOR)
+        elif self.status in SLIT_PRESETS:
+            label.setStyleSheet(self.MATCH_STYLE)
+        else:
+            label.setStyleSheet(PresetBlock.NEUTRAL_STYLE)
+
+    # -- Define dialog -------------------------------------------------
+
+    def define(self, presets=SLIT_PRESETS):
+        """Edit the widths of `presets` -- both from the staff views, SAXS
+        only from the user view.
+
+        Rows: live readback, a caqtdm-style Drive box (Enter writes .VAL
+        and moves that slit now), then one row of editable widths per
+        preset. Define saves them; Cancel leaves the stored ones alone.
+        """
+        dlg = QDialog(self.ui)
+        dlg.setWindowTitle("Define slits")
+        grid = QGridLayout(dlg)
+        fmt = lambda value: self.FMT % value
+
+        col = 1
+        for slit, keys in _slit_groups().items():
+            header = QLabel(slit)
+            header.setAlignment(QtCore.Qt.AlignCenter)
+            f = header.font()
+            f.setBold(True)
+            header.setFont(f)
+            grid.addWidget(header, 0, col, 1, len(keys))
+            for key in keys:
+                axis = QLabel("%s width (mm)" % key.split("_")[1])
+                axis.setAlignment(QtCore.Qt.AlignCenter)
+                grid.addWidget(axis, 1, col)
+                col += 1
+
+        row_names = ["RBV", "Drive"] + ["Define %s" % ("Ptycho" if p == "ptycho" else p)
+                                        for p in presets]
+        for row, text in enumerate(row_names, start=2):
+            grid.addWidget(QLabel(text), row, 0)
+
+        rbv_labels, drives, edits = {}, [], {}
+        for col, (key, base) in enumerate(SLITS.items(), start=1):
+            rbv = QLabel("")
+            rbv.setAlignment(QtCore.Qt.AlignCenter)
+            rbv.setToolTip("Readback: %s.RBV" % base)
+            grid.addWidget(rbv, 2, col)
+            rbv_labels[key] = rbv
+
+            drive = QLineEdit()
+            drive.setToolTip("Drive: %s.VAL" % base)
+            grid.addWidget(drive, 3, col)
+            drives.append(PVLineEdit(
+                drive, [self.panel._pv(base + ".VAL")], fmt, float,
+                on_error=lambda text: QMessageBox.warning(
+                    dlg, "Drive", "%r is not a number." % text)))
+
+            for row, preset in enumerate(presets, start=4):
+                value = self.presets[preset][key]
+                edit = QLineEdit("" if value is None else fmt(value))
+                edit.setToolTip("%s width, mm. Blank leaves it undefined." % preset)
+                grid.addWidget(edit, row, col)
+                edits[(preset, key)] = edit
+
+        buttons = QHBoxLayout()
+        ok, cancel = QPushButton("Define"), QPushButton("Cancel")
+        # Enter belongs to the Drive boxes. As a QDialog's auto-default
+        # buttons these would also take it, and a Drive commit would save
+        # (or throw away) the half-typed definitions along with it.
+        for button in (ok, cancel):
+            button.setAutoDefault(False)
+            button.setDefault(False)
+        buttons.addStretch(1)
+        buttons.addWidget(ok)
+        buttons.addWidget(cancel)
+        grid.addLayout(buttons, 4 + len(presets), 0, 1, len(SLITS) + 1)
+
+        def refresh():
+            for key, base in SLITS.items():
+                value = self.panel.pv_value(base + ".RBV")
+                if value is not None:
+                    rbv_labels[key].setText(fmt(value))
+            for binding in drives:
+                binding.poll()
+
+        def accept():
+            new = {preset: dict(self.presets[preset]) for preset in presets}
+            bad = []
+            for (preset, key), edit in edits.items():
+                text = edit.text().strip()
+                if not text:
+                    new[preset][key] = None
+                    continue
+                try:
+                    value = float(text)
+                except ValueError:
+                    value = -1.0
+                if value < 0:
+                    bad.append("%s %s: %r" % (preset, key, text))
+                else:
+                    new[preset][key] = value
+            if bad:
+                QMessageBox.warning(dlg, "Define slits",
+                                    "Widths must be blank or a number >= 0:\n"
+                                    + "\n".join(bad))
+                return
+            self.presets.update(new)
+            write_slit_presets(self.presets, _OPTICS_INI)
+            dlg.accept()
+
+        ok.clicked.connect(accept)
+        cancel.clicked.connect(dlg.reject)
+        refresh()
+        apply_saved_font_size(dlg)
+        self._dialog_refresh = refresh
+        try:
+            dlg.exec_()
+        finally:
+            self._dialog_refresh = None
+        self.update_status()
+
+
 def _choice_dialog(parent, title, options, combo=False):
     """Pick one of `options`. Returns the chosen string, or None if cancelled."""
     dlg = QDialog(parent)
@@ -709,6 +1087,13 @@ class motor_control(QMainWindow):
         # shows up here.
         self.xray_eye = XrayEye(self.client.pvs.pv, debug=debug_mode)
 
+        # takeshot / Start / Stop for the eye camera. Panel-lifetime, so a
+        # More/Less switch in the middle of a takeshot does not cut it short
+        # with the shutter open; its messages go to whichever view is up.
+        self.eye_camera = EyeCamera(self.client.pvs.pv, debug=debug_mode, parent=self)
+        self.eye_camera.message.connect(self._show_status)
+        self.eye_camera.connect_records()
+
         # Carried across a view switch: a block the incoming view does not
         # show (the SAXS beamstop outside the full and user views) keeps
         # whatever state it last had instead of resetting to
@@ -717,6 +1102,12 @@ class motor_control(QMainWindow):
         # (_snapshot_block_state) and merged in, never replaced, so a block
         # already missing before that snapshot keeps its last-known state.
         self._block_state = {}
+        # The same, for the Slits registry, which is not a PresetBlock.
+        self._slits_state = {}
+        # One round trip for every slit record rather than one per first
+        # read; the registry's status and Define dialog read them all.
+        self.client.pvs.subscribe_many(
+            [base + field for base in SLITS.values() for field in (".VAL", ".RBV")])
 
         # Ptycho / X-ray Eye / SAXS mode. Panel-lifetime rather than
         # per-view: it holds no widgets, only a reference to this panel.
@@ -782,6 +1173,9 @@ class motor_control(QMainWindow):
         self._building = True
         self._build_blocks()
         self._building = False
+        # Built in every view, including the user view that shows none of
+        # its widgets: the mode sequences set the slits through it.
+        self.slits = SlitsBlock(self, initial_state=self._slits_state)
 
         self._connect_motor_widgets()
         self._connect_exposure()
@@ -815,6 +1209,9 @@ class motor_control(QMainWindow):
             if block.enable_button is not None:
                 state["enabled"] = block.enabled
             self._block_state.setdefault(prefix, {}).update(state)
+        slits = getattr(self, "slits", None)
+        if slits is not None and slits.enable_box is not None:
+            self._slits_state["enabled"] = slits.enabled
 
     def _show_view(self):
         """Show self.ui, size it to its designed layout, then apply this
@@ -948,11 +1345,11 @@ class motor_control(QMainWindow):
 
     # -- construction ------------------------------------------------------
 
-    # A view "has" a block if it shows any of these for it. The enable button
+    # A view "has" a block if it shows any of these for it. The enable box
     # is what small and tiny use to drop the SAXS beamstop column entirely;
     # the status pill is what the user view keeps when it drops every control
     # but still has to say where the optic is, and be driven by a mode button.
-    BLOCK_MARKERS = [(QPushButton, "pb_%s_enable"),
+    BLOCK_MARKERS = [(QCheckBox, "checkBox_%s_enable"),
                      (QLabel, "lbl_%s_status"),
                      (QWidget, "listWidget_%sList")]
 
@@ -1214,6 +1611,7 @@ class motor_control(QMainWindow):
         self._connect(QAction, "actionOpen_full_GUI", "triggered",
                       lambda: self._open_view(FULL_VIEW))
         self._connect_zp_choice()
+        self._connect_slits_define_choice()
 
         # Label flips between the two phrasings in _update_units_display;
         # self._units_action is None wherever this view has no Edit menu.
@@ -1269,6 +1667,23 @@ class motor_control(QMainWindow):
             listing.setEnabled(False)
             action.toggled.connect(listing.setEnabled)
 
+    def _connect_slits_define_choice(self):
+        """The user view's Define SAXS slits button, locked like the ZP list.
+
+        Redefining the SAXS slits changes what every later SAXS Mode does,
+        so the button starts disabled and the File menu arms it.
+        """
+        button = self._connect(QPushButton, "pushButton_slits_define_SAXS",
+                               "clicked", lambda: self.slits.define(("SAXS",)))
+        if button is None:
+            return
+        button.setEnabled(False)
+        action = self._w(QAction, "actionEnable_SAXS_slit_definition")
+        if action is not None:
+            action.setCheckable(True)
+            action.setChecked(False)
+            action.toggled.connect(button.setEnabled)
+
     def _connect_buttons(self):
         eye_in = self._connect(QPushButton, "pushButton_xrayEyeIn", "clicked",
                                self.put_xrayeye_in)
@@ -1296,6 +1711,23 @@ class motor_control(QMainWindow):
                       self.modes.xray_eye_mode)
         self._connect(QPushButton, "pushButton_saxsMode", "clicked",
                       self.modes.saxs_mode)
+
+        # Eye camera acquisition. The lambdas discard clicked()'s bool.
+        self._connect(QPushButton, "pushButton_xe_takeshot", "clicked",
+                      lambda: self.eye_camera.take_shot())
+        self._connect(QPushButton, "pushButton_xe_start", "clicked",
+                      lambda: self.eye_camera.start())
+        self._connect(QPushButton, "pushButton_xe_stop", "clicked",
+                      lambda: self.eye_camera.stop())
+
+    def _show_status(self, text, timeout_ms=5000):
+        """Status bar message in the current view, if it has a status bar."""
+        try:
+            bar = self._w(QStatusBar, "statusbar")
+        except (AttributeError, RuntimeError):
+            return  # mid More/Less switch: no live window to show it in
+        if bar is not None:
+            bar.showMessage(text, timeout_ms)
 
     def _update_title_fonts(self, size):
         """Re-apply the sizes that sit above the panel-wide font size.
@@ -1366,7 +1798,7 @@ class motor_control(QMainWindow):
 
     # -- interface for optics_modes.OpticsModes ----------------------------
     #
-    # The mode sequences reach the hardware only through these five, so they
+    # The mode sequences reach the hardware only through these methods, so they
     # stay independent of which .ui is loaded and of how a block is built.
 
     def has_block(self, key):
@@ -1407,6 +1839,14 @@ class motor_control(QMainWindow):
         finally:
             self._eye_guard_suppressed = False
         return True
+
+    def slits_has_target(self, preset):
+        return self.slits.has_target(preset)
+
+    def move_slits(self, preset):
+        """Set the slits to a preset without asking -- the mode sequence
+        has already checked slits_has_target and does its own confirming."""
+        return self.slits.move_to(preset)
 
     def pv_value(self, name):
         """A PV as a float, or None when it cannot be read."""
@@ -1684,6 +2124,7 @@ class motor_control(QMainWindow):
         for binding in self._bindings + self._unitless_bindings:
             binding.poll()
         self._update_exposure_rbv()
+        self.slits.update_status()
         # Picks up an eye command issued by the main panel or the sample
         # alignment window, which share this state through the command PV.
         self._refresh_xrayeye_ui()
