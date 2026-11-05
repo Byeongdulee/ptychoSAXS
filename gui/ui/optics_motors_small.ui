@@ -339,7 +339,7 @@ QSlider::add-page:horizontal {
      <property name="frameShadow">
       <enum>QFrame::Raised</enum>
      </property>
-     <widget class="QCheckBox" name="checkBox_osa_enable">
+     <widget class="QPushButton" name="pb_osa_enable">
       <property name="geometry">
        <rect>
         <x>6</x>
@@ -348,8 +348,11 @@ QSlider::add-page:horizontal {
         <height>26</height>
        </rect>
       </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
       <property name="text">
-       <string/>
+       <string>No</string>
       </property>
      </widget>
      <widget class="QPushButton" name="pb_osa_in">
@@ -1126,7 +1129,7 @@ QSlider::add-page:horizontal {
      <property name="frameShadow">
       <enum>QFrame::Raised</enum>
      </property>
-     <widget class="QCheckBox" name="checkBox_zp_enable">
+     <widget class="QPushButton" name="pb_zp_enable">
       <property name="geometry">
        <rect>
         <x>6</x>
@@ -1135,8 +1138,11 @@ QSlider::add-page:horizontal {
         <height>26</height>
        </rect>
       </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
       <property name="text">
-       <string/>
+       <string>No</string>
       </property>
      </widget>
      <widget class="QPushButton" name="pb_zp_in">
@@ -1624,7 +1630,7 @@ QSlider::add-page:horizontal {
      <property name="frameShadow">
       <enum>QFrame::Raised</enum>
      </property>
-     <widget class="QCheckBox" name="checkBox_bs_enable">
+     <widget class="QPushButton" name="pb_bs_enable">
       <property name="geometry">
        <rect>
         <x>6</x>
@@ -1633,8 +1639,11 @@ QSlider::add-page:horizontal {
         <height>26</height>
        </rect>
       </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 180, 255);</string>
+      </property>
       <property name="text">
-       <string/>
+       <string>No</string>
       </property>
      </widget>
      <widget class="QPushButton" name="pb_bs_in">

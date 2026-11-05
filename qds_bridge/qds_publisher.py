@@ -3,7 +3,8 @@ Windows side: read the quDIS interferometer over USB and publish every sample.
 
 Run this on the machine with the USB connection (sec12mic). It polls the
 device in a tight loop, stamps each reading with a monotonically increasing
-sequence number, and publishes it immediately as one ZMQ message.
+sequence number and the wall-clock time it was read, and publishes it
+immediately as one ZMQ message.
 
     python qds_publisher.py                 # real hardware
     python qds_publisher.py --simulate      # no hardware, synthetic samples
@@ -196,9 +197,15 @@ def run(source, port, report_interval):
     try:
         while True:
             ch0, ch1, ch2 = source.read()
+            # Stamped straight after the read, so it marks when the device
+            # was sampled rather than when the message left. Before Python
+            # 3.13, time.time() on Windows ticks every ~15.6 ms, so
+            # consecutive samples can share a timestamp; consumers allow
+            # for that.
+            t = time.time()
             try:
                 sock.send_multipart(
-                    [config.TOPIC, pack_sample(seq, ch0, ch1, ch2)],
+                    [config.TOPIC, pack_sample(seq, ch0, ch1, ch2, t)],
                     zmq.NOBLOCK,
                 )
             except zmq.Again:

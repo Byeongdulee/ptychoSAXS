@@ -21,6 +21,10 @@ get_position() matches the (rel, abs) shape ptycho_qudis/_QDSDebug return
 one-device list `[[ch0, ch1, ch2]]`, `abs` is always None (the bridge only
 ever carries relative positions - see qds_bridge/README.md).
 
+get_timestamped_position() returns the same sample as (t, ch0, ch1, ch2),
+where t is the publisher's wall-clock time in Unix-epoch seconds (see
+qds_bridge/wire.py), or None when the publisher predates timestamps.
+
 This is the one place in ptychosaxs/ that imports from qds_bridge/: the wire
 format and host/port must not drift between the two copies that run on
 separate machines. qds_bridge/ never imports back.
@@ -85,6 +89,15 @@ class QDSBridgeClient:
             self._thread = None
 
     def get_position(self):
+        ch0, ch1, ch2, _t = self._checked_latest()
+        return [[ch0, ch1, ch2]], None
+
+    def get_timestamped_position(self):
+        """Latest sample as (t, ch0, ch1, ch2). Raises like get_position()."""
+        ch0, ch1, ch2, t = self._checked_latest()
+        return t, ch0, ch1, ch2
+
+    def _checked_latest(self):
         with self._lock:
             if self._connect_error is not None:
                 raise RuntimeError(
@@ -95,8 +108,7 @@ class QDSBridgeClient:
                 raise RuntimeError(
                     f"QDS bridge: no samples received yet from {self._endpoint}"
                 )
-            ch0, ch1, ch2 = self._latest
-        return [[ch0, ch1, ch2]], None
+            return self._latest
 
     def _run(self):
         ctx = zmq.Context()
@@ -146,7 +158,8 @@ class QDSBridgeClient:
                     if len(frames) != 2:
                         continue
                     try:
-                        _seq, ch0, ch1, ch2 = _bridge_wire.unpack_sample(frames[1])
+                        _seq, ch0, ch1, ch2, t = _bridge_wire.unpack_sample_ts(
+                            frames[1])
                     except struct.error:
                         continue
 
@@ -156,7 +169,7 @@ class QDSBridgeClient:
                               f"({self._endpoint})")
                         silent = False
                     with self._lock:
-                        self._latest = (ch0, ch1, ch2)
+                        self._latest = (ch0, ch1, ch2, t)
                         self._have_data = True
         finally:
             sock.close()

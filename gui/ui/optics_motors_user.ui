@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>472</width>
-    <height>351</height>
+    <height>346</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -828,7 +828,6 @@ slits</string>
     <addaction name="actionImportPositions"/>
     <addaction name="separator"/>
     <addaction name="actionEnable_zone_plate_choice"/>
-    <addaction name="actionEnable_SAXS_slit_definition"/>
     <addaction name="actionOpen_full_GUI"/>
    </widget>
    <addaction name="menuFile"/>
@@ -847,14 +846,6 @@ slits</string>
   <action name="actionEnable_zone_plate_choice">
    <property name="text">
     <string>Enable zone plate choice</string>
-   </property>
-  </action>
-  <action name="actionEnable_SAXS_slit_definition">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>Enable SAXS slit definition</string>
    </property>
   </action>
  </widget>

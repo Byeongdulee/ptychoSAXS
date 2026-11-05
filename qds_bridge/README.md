@@ -87,8 +87,14 @@ The subscriber prints a gap the moment it sees one:
 and a summary every few seconds:
 
 ```
-[sub] received=48231 expected=48250 lost=19 (0.039%) rate=9,641/s lost-since-last=4
+[sub] received=48231 expected=48250 lost=19 (0.039%) rate=9,641/s lost-since-last=4 lag=+1.83ms
 ```
+
+`lag` is this machine's clock minus the publisher's sample timestamp,
+averaged over the summary window: transit time plus any offset between the
+two clocks. It is the starting value for a consumer that matches samples
+against timestamps taken on the Linux side (the object accumulator's
+"Detector-position timestamp offset").
 
 The publisher prints its own view:
 
@@ -109,10 +115,18 @@ anyone is listening.
 
 ## Design notes
 
-**Sequence numbers, not timestamps.** Every sample carries a `uint64` counter
-that increments forever. Alignment is done by matching those numbers, so the
-two machines never need synchronised clocks — which removes NTP skew from the
-problem entirely rather than correcting for it.
+**Sequence numbers for loss, timestamps for matching.** Every sample carries
+a `uint64` counter that increments forever. Gap detection uses only those
+numbers, so it never depends on the two machines agreeing on the time.
+
+Every sample also carries `t`, the publisher's `time.time()` taken right after
+the device read, in Unix-epoch seconds. That is the same epoch as an EPICS PVA
+`timeStamp` (`secondsPastEpoch + nanoseconds * 1e-9`), so a sample can be
+matched to a detector frame directly. The match is only as good as the two
+clocks' NTP sync; consumers correct any residual offset themselves. Before
+Python 3.13, `time.time()` on Windows advances only every ~15.6 ms, so at
+100 Hz consecutive samples can share a timestamp. Consumers must allow for
+that; the object accumulator picks the earliest of a tied group.
 
 **Acquisition is independent of the client.** The publisher *binds*; the
 subscriber *connects*. Sends are `NOBLOCK`, and a PUB socket at its send HWM
@@ -128,9 +142,14 @@ publisher ships what it measured and leaves scaling to the consumer.
 **Channels** are the three *relative* positions of one device, matching what
 the GUI actually consumes.
 
-**Wire format** is a 32-byte `struct` — `<Qddd` — defined once in
-[`wire.py`](wire.py). Binary rather than JSON because encoding sits on the
-acquisition hot path.
+**Wire format** is a 40-byte `struct` — `<Qdddd`, i.e. `seq, ch0, ch1, ch2,
+t` — defined once in [`wire.py`](wire.py). Binary rather than JSON because
+encoding sits on the acquisition hot path.
+
+Readers still accept the original 32-byte `<Qddd` form (with `t` reported as
+`None`), so a new subscriber works against an old publisher. An *old*
+subscriber rejects every 40-byte frame as malformed, so **update the Linux
+side first, then the publisher on sec12mic**.
 
 ## Known wart
 

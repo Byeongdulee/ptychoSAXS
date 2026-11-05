@@ -13,6 +13,11 @@ socket (because this subscriber was too slow, or absent) as well as anything
 the network lost. The publisher prints its own drop count, so comparing the
 two tells you which end gave up.
 
+The summary also reports `lag`: this machine's clock minus the publisher's
+timestamp, averaged over the window. It is transit time plus whatever offset
+lies between the two clocks, which makes it the natural starting value for
+any consumer that matches samples against timestamps taken here.
+
 This module imports nothing from the ptychoSAXS package. Its only dependency
 is pyzmq.
 """
@@ -29,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config  # noqa: E402
 import shutdown  # noqa: E402
-from wire import SEQ_MODULUS, unpack_sample  # noqa: E402
+from wire import SEQ_MODULUS, unpack_sample_ts  # noqa: E402
 
 
 class SequenceTracker:
@@ -124,6 +129,9 @@ def run(endpoint, report_interval, quiet):
     total_at_report = 0
     lost_at_report = 0
     last_data = None
+    lag_sum = 0.0
+    lag_n = 0
+    untimed = 0
 
     try:
         while True:
@@ -146,10 +154,18 @@ def run(endpoint, report_interval, quiet):
                     tracker.malformed += 1
                     continue
                 try:
-                    seq, ch0, ch1, ch2 = unpack_sample(frames[1])
+                    seq, ch0, ch1, ch2, t = unpack_sample_ts(frames[1])
                 except struct.error:
                     tracker.malformed += 1
                     continue
+
+                if t is None:
+                    untimed += 1
+                    stamp = "t=none"
+                else:
+                    lag_sum += time.time() - t
+                    lag_n += 1
+                    stamp = f"t={t:.6f}"
 
                 first = tracker.first_seq is None
                 gap = tracker.observe(seq)
@@ -159,13 +175,13 @@ def run(endpoint, report_interval, quiet):
                     started = now
 
                 if first:
-                    print(f"[sub] baseline seq={seq} "
+                    print(f"[sub] baseline seq={seq} {stamp} "
                           f"({ch0:.1f}, {ch1:.1f}, {ch2:.1f}) nm")
                 elif gap is not None:
                     lo, hi = gap
                     print(f"[sub] MISSING {lo}-{hi} ({hi - lo + 1})")
                 elif not quiet:
-                    print(f"[sub] seq={seq} "
+                    print(f"[sub] seq={seq} {stamp} "
                           f"({ch0:.1f}, {ch1:.1f}, {ch2:.1f}) nm")
 
             now = time.perf_counter()
@@ -176,26 +192,31 @@ def run(endpoint, report_interval, quiet):
                 # zeroes the window; without this the line after a restart
                 # reports a negative loss.
                 lost = max(0, tracker.lost - lost_at_report)
+                lag = (f"{lag_sum / lag_n * 1e3:+.2f}ms" if lag_n
+                       else "n/a (publisher sends no timestamps)")
                 print(
                     f"[sub] received={tracker.received} "
                     f"expected={tracker.expected} "
                     f"lost={tracker.lost} "
                     f"({tracker.loss_fraction * 100:.3f}%) "
                     f"rate={got / elapsed:,.0f}/s "
-                    f"lost-since-last={lost}"
+                    f"lost-since-last={lost} "
+                    f"lag={lag}"
                 )
+                lag_sum = 0.0
+                lag_n = 0
                 last_report = now
                 total_at_report = tracker.total_received
                 lost_at_report = tracker.lost
     except KeyboardInterrupt:
         print()
     finally:
-        _summary(tracker, started)
+        _summary(tracker, started, untimed)
         sock.close()
         ctx.term()
 
 
-def _summary(tracker, started):
+def _summary(tracker, started, untimed=0):
     print("---- final ----")
     if tracker.first_seq is None:
         print("no samples received")
@@ -220,6 +241,8 @@ def _summary(tracker, started):
               f"({tracker.total_received / duration:,.0f} received/s)")
     if tracker.malformed:
         print(f"malformed     : {tracker.malformed}")
+    if untimed:
+        print(f"no timestamp  : {untimed} (publisher predates timestamps)")
 
 
 def main(argv=None):
