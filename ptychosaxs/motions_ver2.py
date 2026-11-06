@@ -107,6 +107,10 @@ class _SimulatedController:
     def set_pos(self, axis, pos=0):
         self._pos[axis] = float(pos)
 
+    def get_drive(self, *args):
+        """Moves here arrive instantly, so the target is the position."""
+        return self.get_pos(*args)
+
     def connect(self):
         pass
 
@@ -473,6 +477,23 @@ class motors(object):
             pos = con.get_pos(axis)
         return round(pos, 6)
     
+    def get_drive(self, axis):
+        """The axis's target position (its record's .VAL), or None.
+
+        None when the controller has no motor record to ask -- the SmarAct
+        SDK, acspy and direct GCS transports -- or the record is not
+        answering. Callers fall back to the readback.
+        """
+        indx = self.motornames.index(axis)
+        controller = self.controller[indx]
+        get_drive = getattr(self.control[controller], "get_drive", None)
+        if get_drive is None:
+            return None
+        target = get_drive() if controller == 'phi' else get_drive(axis)
+        if target is None or target != target:  # None or nan
+            return None
+        return round(float(target), 6)
+
     def mv(self, axis, target, wait=True):
         indx = self.motornames.index(axis)
         controller = self.controller[indx]

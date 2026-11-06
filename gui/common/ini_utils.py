@@ -15,6 +15,11 @@ import os
 INI_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ini")
 
+# The main panel's per-motor drive targets, tweak steps and scan ranges
+# (rows of [pos, tweak, L, R, N, t]), kept as a numpy array beside the .ini
+# files. -999999 marks a field left blank.
+NUMBERS_PATH = os.path.join(INI_DIR, "_numbers.npy")
+
 
 def ensure_ini_defaults(path, defaults):
     """Create `path` from `defaults` if missing, and add any absent entry.

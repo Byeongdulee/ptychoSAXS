@@ -707,6 +707,10 @@ class InstrumentsStub:
     def get_pos(self, axis) -> float:
         return self._pos.get(axis, 0.0)
 
+    def get_drive(self, axis) -> float:
+        """Moves here arrive instantly, so the target is the position."""
+        return self.get_pos(axis)
+
     def set_pos(self, axis, pos=0) -> None:
         if axis in self._pos:
             self._pos[axis] = float(pos)

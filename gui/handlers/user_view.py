@@ -37,6 +37,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ptychosaxs.api.scan_traj import FLY, STEP, TAKESHOT, TrajectoryError
+from gui.widgets.pv_lineedit import sync_drive
 from gui.handlers.traj_handler import (
     DEFAULT_DIM_TEXT,
     DIM_CHOICES,
@@ -182,7 +183,12 @@ class UserViewHandler:
             if saved:
                 edit.setText(saved)
             edit.textChanged.connect(self.refresh_form_feedback)
-            edit.editingFinished.connect(
+            # The step boxes are caqtdm-style (see rungui.CAQTDM_EDIT_NAMES):
+            # only Enter sets them, so only Enter saves them -- focus leaving
+            # can still hold an unsent, about-to-revert number.
+            saved_on = edit.returnPressed if name.startswith("lineEdit_step_") \
+                else edit.editingFinished
+            saved_on.connect(
                 lambda e=edit, n=name: _settings().setValue(SETTINGS_PREFIX + n, e.text()))
 
         dim.currentIndexChanged.connect(self._on_scan_shape_changed)
@@ -460,9 +466,18 @@ class UserViewHandler:
         self.w.mv(self.w.motornames.index(name), target)
 
     def show_rbv(self, name, value):
+        if value is None:
+            return
         label = self._own(QLabel, "label_RBV_%s" % name)
-        if label is not None and value is not None:
+        if label is not None:
             label.setText("%0.4f" % float(value))
+        get_drive = getattr(self.w.pts, "get_drive", None)
+        try:
+            target = get_drive(name) if get_drive is not None else None
+        except Exception:
+            target = None  # transient read failure; the box keeps its text
+        sync_drive(self._own(QLineEdit, "lineEdit_drive_%s" % name), target,
+                   float(value), lambda v: "%0.4f" % float(v))
 
     # ------------------------------------------------------------------
     # Working folder and status messages

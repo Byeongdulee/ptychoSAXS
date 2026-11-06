@@ -20,6 +20,8 @@ back, and a commit writes all of them. The dpad tweak boxes need that --
 one box drives two motors, and both motors' .TWV must follow it.
 """
 
+from PyQt5.QtCore import QEvent, QObject
+
 # caqtdm paints writable text entries a pale blue; readbacks stay plain. The
 # same cue here tells an operator at a glance which boxes accept typing.
 CAQTDM_EDIT_BG = "#c8dcf0"
@@ -29,6 +31,9 @@ CAQTDM_EDIT_BG = "#c8dcf0"
 # a number the IOC has from a number only the screen has -- which is exactly
 # the mistake an operator makes when they type a value and walk away.
 CAQTDM_DIRTY_BG = "#ffff99"
+
+# A value the owner refused, e.g. a move outside the soft limits.
+CAQTDM_INVALID_BG = "#ffcccc"
 
 _UNSET = object()
 
@@ -71,32 +76,21 @@ class PVLineEdit:
         self.on_commit = on_commit
         self.on_error = on_error
         self._last = _UNSET
-        self._colour = colour
-        self._dirty_colour = dirty_colour
-        self._dirty = False
-        self._paint(False)
-        # textEdited, not textChanged: it fires only for typing, so the
-        # box does not mark itself dirty when poll() or write() rewrites it.
-        edit.textEdited.connect(lambda _text: self._paint(True))
         edit.returnPressed.connect(self.commit)
-
-    def _paint(self, dirty):
-        """Show the box as holding a sent value, or an unsent typed one."""
-        colour = self._dirty_colour if dirty else self._colour
-        self._dirty = bool(dirty)
-        if colour:
-            self.edit.setStyleSheet("background-color: %s;" % colour)
+        # Colours and the drop-an-unsent-number-when-the-mouse-leaves rule
+        # are CaqtdmStyleEdit's, shared with the boxes no record backs.
+        self.style = CaqtdmStyleEdit(edit, colour, dirty_colour)
 
     # -- reading -----------------------------------------------------------
 
     def poll(self):
-        """Redraw from the PV unless the operator is typing in this box.
+        """Redraw from the PV unless the box holds an unsent number.
 
-        Rewriting whenever the text disagrees with the field -- not only
-        when the field changes -- is what reverts a half-typed value the
-        operator abandoned by clicking away, same as caqtdm.
+        An unsent number is CaqtdmStyleEdit's to keep or drop (it goes when
+        the mouse leaves the box); everything else follows the field, even
+        with the cursor in the box, as in caqtdm.
         """
-        if not self.pvs or self.edit.hasFocus():
+        if not self.pvs or self.edit.isModified():
             return
         try:
             value = self.pvs[0].get()
@@ -109,11 +103,6 @@ class PVLineEdit:
         text = self.fmt(value)
         if text != self.edit.text():
             self.edit.setText(text)
-        # Focus has left, so whatever was typed here is either sent or about
-        # to be overwritten by the line above -- either way it is no longer
-        # an unsent edit.
-        if self._dirty:
-            self._paint(False)
 
     def refresh(self):
         """Re-render the last known value, e.g. after a display-unit change.
@@ -125,8 +114,12 @@ class PVLineEdit:
         if self._last is _UNSET:
             return False
         self.edit.setText(self.fmt(self._last))
-        self._paint(False)
+        self.style.mark_set()
         return True
+
+    def has_value(self):
+        """True once the field has been read, or a value written to it."""
+        return self._last is not _UNSET
 
     def value(self):
         """What the box currently holds, in PV units. None if unparseable."""
@@ -163,7 +156,7 @@ class PVLineEdit:
         """Push `value` (PV units) to the field and show it immediately."""
         self._last = value
         self.edit.setText(self.fmt(value))
-        self._paint(False)   # sent, so no longer an unsent edit
+        self.style.mark_set()   # sent, so no longer an unsent edit
         if self.on_commit is not None:
             self.on_commit(value)
             return
@@ -172,3 +165,128 @@ class PVLineEdit:
                 pv.put(value)
             except Exception as exc:
                 print("Could not write %s: %s" % (getattr(pv, "pvname", pv), exc))
+
+
+
+class CaqtdmStyleEdit(QObject):
+    """The caqtdm look and feel of an entry box, with or without a record.
+
+    PVLineEdit uses it for boxes bound to a record field. On its own it
+    serves the boxes that move motors through a controller rather than a
+    record field (the main panel's, CRL_3dprint's, sample alignment's), so
+    there is nothing to poll. Either way: pale blue at rest, yellow once
+    typed into, and Enter is what sets the value.
+
+    As in caqtdm, an unsent number survives only while the pointer is over
+    the box: moving the mouse off it puts back the last value that was set,
+    and so does focus leaving while the pointer is elsewhere (a click on
+    another widget). Tabbing away with the pointer still on the box keeps
+    the typing. Both triggers are events on this one widget -- nothing
+    polls -- so this costs nothing per tick.
+
+    Whatever the box is wired to do on Enter stays wired; this only paints
+    and reverts. Text set from code (copy current positions, x10 / x0.1, a
+    restored setting) counts as set, which is why the tracking keys off
+    QLineEdit.isModified -- true only for typing -- rather than a store of
+    its own.
+
+    Parented to the box, so it lives exactly as long as the box does.
+    """
+
+    def __init__(self, edit, colour=CAQTDM_EDIT_BG, dirty_colour=CAQTDM_DIRTY_BG):
+        super().__init__(edit)
+        self.edit = edit
+        self._colour = colour
+        self._dirty_colour = dirty_colour
+        self._invalid = False
+        self._set_text = edit.text()
+        self._paint(False)
+        edit.textEdited.connect(lambda _text: self._paint(True))
+        edit.textChanged.connect(self._on_text_changed)
+        edit.returnPressed.connect(self._on_return)
+        edit.editingFinished.connect(self._on_editing_finished)
+        edit.installEventFilter(self)
+
+    def _paint(self, dirty):
+        if dirty:
+            colour = self._dirty_colour
+        elif self._invalid:
+            colour = CAQTDM_INVALID_BG
+        else:
+            colour = self._colour
+        if colour:
+            self.edit.setStyleSheet("background-color: %s;" % colour)
+
+    def set_invalid(self, invalid):
+        """Pale red at rest, for a value the owner refused (a move outside
+        the soft limits), until the owner clears it. Typing still shows
+        yellow on top of it."""
+        self._invalid = bool(invalid)
+        self._paint(self.edit.isModified())
+
+    def mark_set(self):
+        """Take what the box shows now as set, whether or not it changed."""
+        self._set_text = self.edit.text()
+        self.edit.setModified(False)
+        self._paint(False)
+
+    def _on_text_changed(self, text):
+        if not self.edit.isModified():
+            self._set_text = text
+            self._paint(False)
+
+    def _on_return(self):
+        self.mark_set()
+
+    def _on_editing_finished(self):
+        # Enter has already cleared the modified flag, so this only acts on
+        # focus leaving with an unsent number in it.
+        if not self.edit.underMouse():
+            self.revert()
+
+    def eventFilter(self, obj, event):
+        if obj is self.edit and event.type() == QEvent.Leave:
+            self.revert()
+        return False
+
+    def revert(self):
+        """Drop an unsent number, if the box holds one."""
+        if not self.edit.isModified():
+            return
+        # Painted here too: setText emits nothing when the typing ended up
+        # back at the same text.
+        self.edit.setText(self._set_text)
+        self.mark_set()
+
+
+def sync_drive(edit, target, readback, fmt):
+    """Show a motor's target (.VAL) in its drive box, as caqtdm does.
+
+    The box follows `target` -- where the motor was last told to go, by
+    anyone -- except while it holds an unsent number. When the backend has
+    no target to report (None: no motor record behind it), the box takes
+    the first readback instead, once, so it does not sit blank.
+    """
+    if edit is None or edit.isModified():
+        return
+    if target is not None:
+        text = fmt(target)
+        if text != edit.text():
+            edit.setText(text)
+        edit.setProperty("caqtdmSeeded", True)
+    elif readback is not None:
+        seed_once(edit, fmt(readback))
+
+
+def seed_once(edit, text):
+    """Fill a drive box with its motor's first readback.
+
+    For a box with no target to show (see sync_drive). The first readback
+    after it is built fills it, once: after that it holds whatever was last
+    sent. An operator already typing there is left alone, and seeded on the
+    next readback instead.
+    """
+    if edit is None or edit.property("caqtdmSeeded") or edit.isModified():
+        return
+    edit.setText(text)
+    edit.setProperty("caqtdmSeeded", True)

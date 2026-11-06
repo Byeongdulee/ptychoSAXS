@@ -33,6 +33,7 @@ from PyQt5.QtWidgets import (
 )
 
 from gui.common.font_utils import DEFAULT_FONT_SIZE, apply_font_size_to_tree
+from gui.widgets.pv_lineedit import CaqtdmStyleEdit
 
 # Scaler channels this codebase already treats as "the scalars" for NeXus
 # master files (see ptychosaxs/api/nexus_metadata.py SHARED_METADATA_MAP).
@@ -485,7 +486,10 @@ class ScalarScanWindow(QObject):
 
             edit_step = self.win.findChild(QLineEdit, f"scalarscan_edit_step_{axis}")
             edit_step.setText(_ini_get(f"{axis.lower()}_step", "0.01"))
-            edit_step.editingFinished.connect(lambda a=axis: _ini_set(f"{a.lower()}_step", self._edit_step[a].text()))
+            # caqtdm-style (see CaqtdmStyleEdit): only Enter sets a step, so
+            # only Enter saves it -- focus leaving can still hold an unsent one.
+            CaqtdmStyleEdit(edit_step)
+            edit_step.returnPressed.connect(lambda a=axis: _ini_set(f"{a.lower()}_step", self._edit_step[a].text()))
             self._edit_step[axis] = edit_step
 
             self._lbl_npos[axis] = self.win.findChild(QLabel, f"scalarscan_lbl_npos_{axis}")

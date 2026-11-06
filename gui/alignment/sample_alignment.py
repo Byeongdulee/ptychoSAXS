@@ -1268,7 +1268,9 @@ class SampleAlignmentWindow(QObject):
                 if axis is None or not self._is_connected(key):
                     continue
                 try:
-                    table.set_current(key, self.main.pts.get_pos(axis))
+                    get_drive = getattr(self.main.pts, "get_drive", None)
+                    table.set_current(key, self.main.pts.get_pos(axis),
+                                      get_drive(axis) if get_drive else None)
                 except Exception:
                     pass  # transient read failure; try again next tick
         finally:

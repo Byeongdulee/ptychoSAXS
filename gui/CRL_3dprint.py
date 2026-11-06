@@ -34,6 +34,7 @@ from PyQt5.QtWidgets import (
 from gui.common.font_utils import DEFAULT_FONT_SIZE, apply_font_size_to_tree
 from gui.common.ini_utils import INI_DIR, ensure_ini_defaults
 from gui.common.resize_utils import ProportionalResizer
+from gui.widgets.pv_lineedit import CaqtdmStyleEdit, PVLineEdit, seed_once
 from gui.handlers.scalar_scan import INI_DEFAULTS as SCALAR_SCAN_INI_DEFAULTS
 from gui.handlers.scalar_scan import ScalarScanWindow
 
@@ -585,28 +586,28 @@ class CRL3DPrintControl(QObject):
             slot["unit"] = self.controller.get_unit(slot["name"])
 
     def _wire_motor_widgets(self):
-        for slot in self.MOTOR_SLOTS:
-            name = slot["name"]
+        """Move-to boxes show each record's .VAL, as the optics panel's
+        drive boxes do, and Enter moves through _dispatch_move so the soft
+        limits still apply. update_positions polls them."""
+        self._moveto = {}
+        for name, prefix, _unit in _RAW_MOTOR_SLOTS:
             ed_moveto = self.ui.findChild(QLineEdit, f"edit_moveto_{name}")
-            if ed_moveto:
-                ed_moveto.returnPressed.connect(lambda n=name: self._move_to(n))
-
-    def _move_to(self, name):
-        ed = self.ui.findChild(QLineEdit, f"edit_moveto_{name}")
-        try:
-            val = float(ed.text())
-        except ValueError:
-            return
-        self._dispatch_move(name, val, relative=False)
+            if not ed_moveto:
+                continue
+            ed_moveto.setToolTip(f"Drive: {prefix}.VAL")
+            self._moveto[name] = PVLineEdit(
+                ed_moveto, [self.client.pvs.pv(prefix + ".VAL")],
+                lambda v: self.MOTOR_PREC % v, float,
+                on_commit=lambda v, n=name: self._dispatch_move(n, v, relative=False))
 
     # -- soft limits ------------------------------------------------------------
 
     def _flag_invalid(self, name, invalid: bool):
         """Turn the motor's move-to field pale red when a move was rejected
         for being outside SOFT_LIMITS; clear it on the next valid move."""
-        ed = self.ui.findChild(QLineEdit, f"edit_moveto_{name}")
-        if ed:
-            ed.setStyleSheet("background-color: #ffcccc;" if invalid else "")
+        binding = self._moveto.get(name)
+        if binding is not None:
+            binding.style.set_invalid(invalid)
 
     def _dispatch_move(self, name, value, relative: bool):
         """Single choke point for every move path (move-to, tweak, jog):
@@ -697,7 +698,10 @@ class CRL3DPrintControl(QObject):
             if not ed:
                 return
             ed.setText(sec.get(key, ed.text()))
-            ed.editingFinished.connect(lambda w=widget_name: self._on_pad_step_edited(w))
+            # caqtdm-style: only Enter sets a step, so only Enter saves and
+            # publishes it -- focus leaving can still hold an unsent number.
+            CaqtdmStyleEdit(ed)
+            ed.returnPressed.connect(lambda w=widget_name: self._on_pad_step_edited(w))
             self._push_pad_step(widget_name)
 
         for widget_name, key in PAD_STEP_INI_KEYS.items():
@@ -874,6 +878,13 @@ class CRL3DPrintControl(QObject):
             lbl = self.ui.findChild(QLabel, f"lbl_pos_{name}")
             if lbl:
                 lbl.setText(NO_READBACK_TEXT if val is None else self.MOTOR_PREC % val)
+            binding = self._moveto.get(name)
+            if binding is not None:
+                binding.poll()
+                if not binding.has_value() and val is not None:
+                    # No .VAL to show (the record has not answered yet):
+                    # start from the readback rather than blank.
+                    seed_once(binding.edit, self.MOTOR_PREC % val)
             self._set_axis_enabled(name, name not in dead)
 
         self.ui.statusbar.showMessage(

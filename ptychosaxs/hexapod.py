@@ -154,6 +154,12 @@ class HexapodFacade:
             return {name: self._axes_controller.get_pos(name) for name in self.axes}
         return self._axes_controller.get_pos(axis)
 
+    def get_drive(self, axis):
+        """One axis's target (.VAL), or None when the axis controller has no
+        motor record behind it (the direct GCS transport)."""
+        get_drive = getattr(self._axes_controller, "get_drive", None)
+        return None if get_drive is None else get_drive(axis)
+
     def set_pos(self, axis, pos=0) -> None:
         return self._axes_controller.set_pos(axis, pos)
 

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1247</width>
-    <height>740</height>
+    <height>728</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -1384,26 +1384,6 @@ Optics</string>
 position</string>
       </property>
      </widget>
-     <zorder>lineEdit_step_2</zorder>
-     <zorder>lineEdit_from_2</zorder>
-     <zorder>lineEdit_step_3</zorder>
-     <zorder>lineEdit_to_2</zorder>
-     <zorder>lineEdit_from_3</zorder>
-     <zorder>lineEdit_step_1</zorder>
-     <zorder>lineEdit_to_3</zorder>
-     <zorder>lineEdit_to_1</zorder>
-     <zorder>lineEdit_from_1</zorder>
-     <zorder>label_to</zorder>
-     <zorder>label_from</zorder>
-     <zorder>label_step</zorder>
-     <zorder>label_scan_ax1</zorder>
-     <zorder>label_scan_ax2</zorder>
-     <zorder>label_scan_ax3</zorder>
-     <zorder>label_18</zorder>
-     <zorder>lineEdit_expt</zorder>
-     <zorder>verticalLayoutWidget</zorder>
-     <zorder>label_center</zorder>
-     <zorder>label_center_2</zorder>
     </widget>
     <widget class="QFrame" name="frame_scan_traj_feedback">
      <property name="geometry">
@@ -2139,7 +2119,7 @@ scan type:</string>
        <x>440</x>
        <y>5</y>
        <width>121</width>
-       <height>20</height>
+       <height>18</height>
       </rect>
      </property>
      <property name="text">

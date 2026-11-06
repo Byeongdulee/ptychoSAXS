@@ -4,12 +4,15 @@ Handles all motor movement, position reading, hardware connect/disconnect,
 and motor tweak button interactions for the ptychoSAXS GUI.
 """
 from __future__ import annotations
+import os
 import re
 import time
 from typing import TYPE_CHECKING
 
 from PyQt5.QtWidgets import QLabel, QLineEdit, QMenu
 from PyQt5.QtCore import Qt, QPoint
+
+from gui.common.ini_utils import INI_DIR, NUMBERS_PATH
 
 if TYPE_CHECKING:
     from gui.rungui import ptyco_main_control  # avoid circular import at runtime
@@ -81,18 +84,20 @@ class MotorHandler:
 
             # Save the array to a file
         import numpy as np
-        np.save('_numbers.npy', numbers)
+        os.makedirs(INI_DIR, exist_ok=True)
+        np.save(NUMBERS_PATH, numbers)
 
     def read_motor_scan_range(self):
         import os
         import numpy as np
-        # _numbers.npy is untracked per-installation state: create it filled
-        # with the "field left blank" sentinel on first start.
-        if not os.path.exists('_numbers.npy'):
-            np.save('_numbers.npy', np.full((len(self.w.motornames), 6), -999999.0))
+        # _numbers.npy is untracked per-installation state in gui/ini/:
+        # create it filled with the "field left blank" sentinel on first start.
+        if not os.path.exists(NUMBERS_PATH):
+            os.makedirs(INI_DIR, exist_ok=True)
+            np.save(NUMBERS_PATH, np.full((len(self.w.motornames), 6), -999999.0))
 
         # Load the array from the file
-        numbers = np.load('_numbers.npy')
+        numbers = np.load(NUMBERS_PATH)
 
         for i, name in enumerate(self.w.motornames):
             n = i + 1

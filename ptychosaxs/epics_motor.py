@@ -38,8 +38,9 @@ FIELDS = {
 }
 
 # Fields worth a monitor: read often, and pushed by the IOC when they change.
-# Everything else is write-only and gets a plain PV.
-MONITORED = ("readback", "done", "velocity", "unit")
+# Everything else is write-only and gets a plain PV. "drive" is read too:
+# GUI drive boxes show the target (.VAL) every refresh tick, as caqtdm does.
+MONITORED = ("readback", "drive", "done", "velocity", "unit")
 
 # .SPMG enumeration. Stopping latches the axis - it ignores further moves
 # until SPMG returns to Go - so stop() restores Go immediately afterwards.
@@ -135,6 +136,14 @@ class EpicsMotorController:
     def get_pos(self, axis):
         """Current readback in the axis's own unit, or None if unreachable."""
         return self._read(axis, "readback")
+
+    def get_drive(self, axis):
+        """The target (.VAL) in the axis's own unit, or None if unreachable.
+
+        What a drive box shows: where the motor was last told to go, by this
+        process or any other EPICS client, as opposed to get_pos's readback.
+        """
+        return self._read(axis, "drive")
 
     def mv(self, axis, target: float, wait: bool = False) -> None:
         """Move to an absolute position.

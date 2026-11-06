@@ -113,6 +113,10 @@ class PhiAxisController(EpicsMotorController):
         pos = super().get_pos(self.AXIS)
         return float("nan") if pos is None else pos
 
+    def get_drive(self, axis=0):
+        """Target (.VAL) in deg, or None. Takes no axis, like get_pos."""
+        return super().get_drive(self.AXIS)
+
     # -- motion ----------------------------------------------------------------
 
     def mv(self, target: float, relative: bool = False) -> None:

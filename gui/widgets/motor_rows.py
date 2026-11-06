@@ -29,6 +29,8 @@ from PyQt5.QtWidgets import (
     QStackedWidget,
 )
 
+from gui.widgets.pv_lineedit import CaqtdmStyleEdit, sync_drive
+
 ALL_COLUMNS = ("name", "current", "moveto", "tweak")
 
 _HEADER_TEXT = {
@@ -180,6 +182,7 @@ class MotorRowTable(object):
             widget.setToolTip("Absolute position. Hit enter to move.")
             widget.returnPressed.connect(
                 lambda key=row.key: self._emit_moveto(key))
+            CaqtdmStyleEdit(widget)
             self._grid.addWidget(widget, grid_row, self._column_of("moveto"))
             made["moveto"] = widget
 
@@ -211,6 +214,7 @@ class MotorRowTable(object):
             stack.setObjectName(self._name("tweakstack", row.key))
             editor = QLineEdit(text)
             editor.setObjectName(self._name("tweakedit", row.key))
+            CaqtdmStyleEdit(editor)
             fixed = QLabel(text)
             fixed.setObjectName(self._name("tweaklbl", row.key))
             fixed.setToolTip("Fixed step size for this step of the workflow.")
@@ -226,6 +230,7 @@ class MotorRowTable(object):
         if row.tweak == "edit":
             editor = QLineEdit(text, self.container)
             editor.setObjectName(self._name("tweakedit", row.key))
+            CaqtdmStyleEdit(editor)
             self._grid.addWidget(editor, grid_row, column)
             made["tweakedit"] = editor
         else:
@@ -277,10 +282,17 @@ class MotorRowTable(object):
         """The widget for one cell, or None when that column is absent."""
         return self._widgets.get(key, {}).get(slot)
 
-    def set_current(self, key, value):
+    def set_current(self, key, value, target=None):
+        """Show a readback, and the motor's target (.VAL) in Move to.
+
+        Without a target (no motor record behind the axis) Move to takes the
+        first readback instead, so it never starts blank.
+        """
+        fmt = lambda v: "%0.6f" % float(v)
         widget = self.widget(key, "current")
         if widget is not None:
-            widget.setText("%0.6f" % float(value))
+            widget.setText(fmt(value))
+        sync_drive(self.widget(key, "moveto"), target, value, fmt)
 
     def step(self, key):
         """The active step size, reading whichever tweak widget is showing."""

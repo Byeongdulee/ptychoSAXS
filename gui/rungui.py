@@ -296,6 +296,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
     QMenu,
     QVBoxLayout,
+    QComboBox,
 )
 from PyQt5.QtGui import QIntValidator
 from PyQt5.QtCore import (
@@ -315,11 +316,29 @@ from asyncqt import QEventLoop
 
 from gui.common.font_scaling import FontScaler
 from gui.common.font_utils import apply_saved_font_size
-from gui.common.ini_utils import INI_DIR
+from gui.common.ini_utils import INI_DIR, NUMBERS_PATH
 from gui.common import motor_signals
 from gui.common.resize_utils import ProportionalResizer
 from gui.common.ui_levels import LevelSwitcher
 from gui.widgets.layered_window import LayeredMainWindow
+from gui.widgets.pv_lineedit import CaqtdmStyleEdit
+
+# Boxes that set a motor value -- drive targets, tweak and dpad steps, and
+# the scan form's step sizes -- get the optics panel's caqtdm look: pale
+# blue, yellow until Enter sets them (see CaqtdmStyleEdit). Every other line
+# edit and combo box is plain white, against the grey the panel frames'
+# stylesheets would otherwise cascade onto them, except the sample name,
+# which stays purple.
+CAQTDM_EDIT_NAMES = re.compile(
+    r"ed_\d+(_tweak)?|ed_hp_tweak|ed_pos_step|lineEdit_drive_\w+|lineEdit_tweak_\w+"
+    r"|lineEdit_step_\d+")
+SAMPLE_NAME_EDIT = "edit_scanname"
+SAMPLE_NAME_STYLE = "background-color: rgb(255, 180, 255);"
+WHITE_EDIT_STYLE = "background-color: white;"
+WHITE_COMBO_STYLE = ("QComboBox, QComboBox QAbstractItemView"
+                     " { background-color: white; }")
+WHITE_STATUSBAR_STYLE = "QStatusBar { background-color: white; }"
+
 from ptychosaxs.api.scan_traj import FLY, STEP, TAKESHOT
 
 import pyqtgraph as pg
@@ -1234,6 +1253,7 @@ class ptyco_main_control(QObject):
         # living there while the user view is on screen.
         self._large_plots = (self.plot_widget, self.ax, self.ax2, self.ax3)
         self._large_resizer = None
+        self._style_view(self._large_ui)
         self._levels = LevelSwitcher(
             [LARGE_UI, USER_UI], self._build_view, "mainPanel",
             persistent=lambda ui: ui is self._large_ui)
@@ -1289,6 +1309,26 @@ class ptyco_main_control(QObject):
         ui.pushButton_checkUpOptics.clicked.connect(self._open_optics_status_window)
         ui.pushButton_exit.clicked.connect(self.exit_gui)
         ui.pbar_scan.setValue(0)
+
+    @staticmethod
+    def _style_view(ui) -> None:
+        """Entry-box colours for a freshly built view (see CAQTDM_EDIT_NAMES).
+
+        Searched under the central widget only, so windows parented to the
+        large view (setup, macros, ...) keep their own look.
+        """
+        central = ui.centralWidget()
+        for edit in central.findChildren(QLineEdit):
+            name = edit.objectName()
+            if CAQTDM_EDIT_NAMES.fullmatch(name):
+                CaqtdmStyleEdit(edit)   # parented to the box
+            elif name == SAMPLE_NAME_EDIT:
+                edit.setStyleSheet(SAMPLE_NAME_STYLE)
+            else:
+                edit.setStyleSheet(WHITE_EDIT_STYLE)
+        for combo in central.findChildren(QComboBox):
+            combo.setStyleSheet(WHITE_COMBO_STYLE)
+        ui.statusBar().setStyleSheet(WHITE_STATUSBAR_STYLE)
 
     def _build_view(self, path):
         """LevelSwitcher's build callback: show the view at `path`."""
@@ -1363,6 +1403,7 @@ class ptyco_main_control(QObject):
         self.ui = ui
         self._wire_common_view()
         self.user_view.wire()
+        self._style_view(ui)
         if DEBUG_SCAN_BLOCKING:
             for name in ("pushButton_run_scan", "pb_helix_scan", "pb_extra_scans"):
                 widget = QObject.findChild(ui, QPushButton, name)
@@ -1901,7 +1942,6 @@ class ptyco_main_control(QObject):
                     continue  # skip disconnected placeholders (e.g. phi)
                 if val is None:
                     val = self.pts.get_pos(name)
-                # self.ui.findChild(QLineEdit, "ed_%i"%(i+1)).setText("%0.4f"%val)
                 self.ui.findChild(QLabel, "lb_%i" % (i + 1)).setText("%0.6f" % val)
                 self.user_view.show_rbv(name, val)
                 val = None
@@ -1911,7 +1951,6 @@ class ptyco_main_control(QObject):
                 return  # disconnected placeholder (e.g. phi) — nothing to update
             if val is None:
                 val = self.pts.get_pos(axis)
-            # self.ui.findChild(QLineEdit, "ed_%i"%(i+1)).setText("%0.4f"%val)
             self.ui.findChild(QLabel, "lb_%i" % (i + 1)).setText("%0.6f" % val)
             self.user_view.show_rbv(axis, val)
 
@@ -2019,16 +2058,18 @@ class ptyco_main_control(QObject):
             numbers[i] = arr
 
             # Save the array to a file
-        np.save("_numbers.npy", numbers)
+        os.makedirs(INI_DIR, exist_ok=True)
+        np.save(NUMBERS_PATH, numbers)
 
     def read_motor_scan_range(self):
-        # _numbers.npy is untracked per-installation state: create it filled
-        # with the "field left blank" sentinel on first start.
-        if not os.path.exists("_numbers.npy"):
-            np.save("_numbers.npy", np.full((len(self.motornames), 6), -999999.0))
+        # _numbers.npy is untracked per-installation state in gui/ini/:
+        # create it filled with the "field left blank" sentinel on first start.
+        if not os.path.exists(NUMBERS_PATH):
+            os.makedirs(INI_DIR, exist_ok=True)
+            np.save(NUMBERS_PATH, np.full((len(self.motornames), 6), -999999.0))
 
         # Load the array from the file
-        numbers = np.load("_numbers.npy")
+        numbers = np.load(NUMBERS_PATH)
 
         for i, name in enumerate(self.motornames):
             n = i + 1

@@ -381,6 +381,7 @@ class TrajHandler:
     def refresh_loaded(self):
         """Redraw the run panel from self.loaded."""
         if self.loaded is None:
+            self.plot_loaded(None)   # still the empty black box
             return
         path, traj = self.loaded
         label = self._own(QLabel, "label_loadSinfo")
@@ -442,21 +443,23 @@ class TrajHandler:
             if master else "")
 
     def plot_loaded(self, traj):
-        """Nominal path in verticalLayout_loaded_scan_path, styled like the
-        scan-positions window's left panel."""
+        """Nominal path in verticalLayout_loaded_scan_path, on black. traj
+        None leaves the plot empty, so the box is there before any load."""
         layout = self._own(QVBoxLayout, "verticalLayout_loaded_scan_path")
         if layout is None:
             return
         plot = self._loaded_plot
         if plot is None or plot.parent() is None:
             plot = pg.PlotWidget()
-            plot.setBackground("w")
+            plot.setBackground("k")
             for axis in ("bottom", "left"):
                 plot.getAxis(axis).enableAutoSIPrefix(False)
             layout.addWidget(plot)
             self._loaded_plot = plot
         plot.clear()
         plot.setTitle(None)
+        if traj is None:
+            return
         if traj.kind == TAKESHOT:
             plot.setTitle("takeshot - no motion")
             return
@@ -477,7 +480,7 @@ class TrajHandler:
         plot.plot(x=xs, y=ys, pen=pg.mkPen("r", width=1), symbol="o", symbolSize=4,
                   symbolBrush=pg.mkBrush("r"), symbolPen=pg.mkPen(None))
         plot.plot(x=xs[:2], y=ys[:2], pen=None, symbol="x", symbolSize=10,
-                  symbolBrush=pg.mkBrush(None), symbolPen=pg.mkPen("b", width=2))
+                  symbolBrush=pg.mkBrush(None), symbolPen=pg.mkPen("c", width=2))
 
     def show_feedback(self, prefix, traj):
         """Fill label_<prefix>_N1..3 / _Ntot / _estT, like the large view's
